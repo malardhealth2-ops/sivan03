@@ -15,6 +15,7 @@ import { Footer } from '@/components/sivan/Footer';
 import { BookingModal } from '@/components/sivan/BookingModal';
 import { AuthModal } from '@/components/sivan/AuthModal';
 import { ContactModal } from '@/components/sivan/ContactModal';
+import { AdminPanel } from '@/components/sivan/AdminPanel';
 
 export default function HomePage() {
   return (
@@ -35,6 +36,7 @@ export default function HomePage() {
       <BookingModal />
       <AuthModal />
       <ContactModal />
+      <AdminPanel />
     </div>
   );
 }

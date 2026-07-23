@@ -30,6 +30,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAppStore } from '@/lib/store';
+import { JalaliDatePicker } from '@/components/sivan/JalaliDatePicker';
 
 const steps = [
   { id: 0, title: 'مسیر', icon: MapPin },
@@ -245,15 +246,11 @@ export function BookingModal() {
                 className="space-y-5"
               >
                 <div className="space-y-2">
-                  <Label className="text-[#fafafa]">
-                    <Calendar className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
-                    تاریخ سفر
-                  </Label>
-                  <Input
-                    type="date"
+                  <JalaliDatePicker
                     value={booking.formData.date}
-                    onChange={(e) => updateBookingForm({ date: e.target.value })}
-                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa]"
+                    onChange={(val) => updateBookingForm({ date: val })}
+                    placeholder="انتخاب تاریخ سفر"
+                    label="تاریخ سفر"
                   />
                 </div>
                 <div className="space-y-2">

@@ -6,6 +6,8 @@ import { Phone, Menu, X, Crown, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { useAppStore } from '@/lib/store';
+import { formatJalaaliDate, getTehranTime, toPersianDigits } from '@/lib/jalaali';
+import { Shield } from 'lucide-react';
 
 const navLinks = [
   { label: 'خانه', href: '#hero' },
@@ -18,8 +20,23 @@ const navLinks = [
 ];
 
 export function Navbar() {
-  const { openAuth, mobileMenuOpen, setMobileMenuOpen } = useAppStore();
+  const { openAuth, mobileMenuOpen, setMobileMenuOpen, setAdminOpen } = useAppStore();
   const [scrolled, setScrolled] = useState(false);
+  const [jalaliDateStr, setJalaliDateStr] = useState('');
+  const [tehranTimeStr, setTehranTimeStr] = useState('');
+
+  useEffect(() => {
+    const updateClock = () => {
+      const now = getTehranTime();
+      setJalaliDateStr(formatJalaaliDate(now));
+      setTehranTimeStr(toPersianDigits(
+        now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0')
+      ));
+    };
+    updateClock();
+    const interval = setInterval(updateClock, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -74,8 +91,13 @@ export function Navbar() {
               ))}
             </nav>
 
-            {/* Phone & Auth */}
-            <div className="hidden sm:flex items-center gap-3">
+            {/* Phone & Auth & Clock */}
+            <div className="hidden sm:flex items-center gap-4">
+              <div className="flex flex-col items-end text-xs text-[#a1a1aa]">
+                <span className="text-[#D4AF37]/80">{tehranTimeStr}</span>
+                <span className="text-[10px]">{jalaliDateStr}</span>
+              </div>
+              <div className="w-px h-8 bg-[#333]" />
               <a
                 href="tel:09109419743"
                 className="flex items-center gap-2 text-sm text-[#a1a1aa] hover:text-[#D4AF37] transition-colors"
@@ -151,6 +173,15 @@ export function Navbar() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Admin Access Button */}
+      <button
+        onClick={() => setAdminOpen(true)}
+        className="fixed bottom-6 left-6 z-40 w-12 h-12 rounded-full bg-[#1a1a1a] border border-[#333] flex items-center justify-center hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/10 transition-all shadow-lg shadow-black/40"
+        title="پنل مدیریت"
+      >
+        <Shield className="h-5 w-5 text-[#a1a1aa]" />
+      </button>
     </>
   );
 }

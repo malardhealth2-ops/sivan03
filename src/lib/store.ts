@@ -37,6 +37,19 @@ interface AuthState {
   isVerified: boolean;
 }
 
+interface AdminState {
+  isAdminOpen: boolean;
+  isLoggedIn: boolean;
+  adminUsername: string;
+  loginError: string;
+  activeTab: 'dashboard' | 'trips' | 'users' | 'settings' | 'drivers';
+  setAdminOpen: (open: boolean) => void;
+  adminLogin: (username: string, password: string) => boolean;
+  adminLogout: () => void;
+  setLoginError: (error: string) => void;
+  setActiveTab: (tab: AdminState['activeTab']) => void;
+}
+
 interface AppState {
   // Booking
   booking: BookingState;
@@ -55,6 +68,14 @@ interface AppState {
   setAuthOtp: (otp: string) => void;
   setAuthFullName: (name: string) => void;
   setAuthVerified: (val: boolean) => void;
+
+  // Admin panel
+  admin: AdminState;
+  setAdminOpen: (open: boolean) => void;
+  adminLogin: (username: string, password: string) => boolean;
+  adminLogout: () => void;
+  setLoginError: (error: string) => void;
+  setAdminActiveTab: (tab: AdminState['activeTab']) => void;
 
   // Active section for navigation
   activeSection: string;
@@ -109,6 +130,28 @@ export const useAppStore = create<AppState>((set) => ({
   setAuthOtp: (otp) => set((s) => ({ auth: { ...s.auth, otpCode: otp } })),
   setAuthFullName: (name) => set((s) => ({ auth: { ...s.auth, fullName: name } })),
   setAuthVerified: (val) => set((s) => ({ auth: { ...s.auth, isVerified: val } })),
+
+  // Admin
+  admin: {
+    isAdminOpen: false,
+    isLoggedIn: false,
+    adminUsername: '',
+    loginError: '',
+    activeTab: 'dashboard',
+  },
+  setAdminOpen: (open) => set((s) => ({ admin: { ...s.admin, isAdminOpen: open } })),
+  adminLogin: (username, password) => {
+    // Demo admin credentials
+    if (username === 'admin' && password === 'sivan2024') {
+      set((s) => ({ admin: { ...s.admin, isLoggedIn: true, adminUsername: username, loginError: '' } }));
+      return true;
+    }
+    set((s) => ({ admin: { ...s.admin, loginError: 'نام کاربری یا رمز عبور اشتباه است' } }));
+    return false;
+  },
+  adminLogout: () => set((s) => ({ admin: { ...s.admin, isLoggedIn: false, isAdminOpen: false, adminUsername: '', activeTab: 'dashboard' } })),
+  setLoginError: (error) => set((s) => ({ admin: { ...s.admin, loginError: error } })),
+  setAdminActiveTab: (tab) => set((s) => ({ admin: { ...s.admin, activeTab: tab } })),
 
   // Active section
   activeSection: 'hero',

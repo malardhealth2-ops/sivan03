@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useAppStore } from '@/lib/store';
+import { JalaliDatePicker } from '@/components/sivan/JalaliDatePicker';
 
 const carTypes = [
   { value: 'vip', label: 'VIP - لوکس' },
@@ -115,7 +116,7 @@ export function HeroSection() {
                   <Input
                     id="origin"
                     placeholder="شهر مبدا را وارد کنید"
-                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#555] h-11 focus:border-[#D4AF37]/50"
+                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11 focus:border-[#D4AF37]/50"
                     onChange={(e) => updateBookingForm({ origin: e.target.value })}
                   />
                 </div>
@@ -129,25 +130,18 @@ export function HeroSection() {
                   <Input
                     id="destination"
                     placeholder="شهر مقصد را وارد کنید"
-                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#555] h-11 focus:border-[#D4AF37]/50"
+                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11 focus:border-[#D4AF37]/50"
                     onChange={(e) => updateBookingForm({ destination: e.target.value })}
                   />
                 </div>
 
                 {/* Date & Car Type */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="date" className="text-[#a1a1aa] text-sm">
-                      <Calendar className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
-                      تاریخ
-                    </Label>
-                    <Input
-                      id="date"
-                      type="date"
-                      className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11 focus:border-[#D4AF37]/50"
-                      onChange={(e) => updateBookingForm({ date: e.target.value })}
-                    />
-                  </div>
+                  <JalaliDatePicker
+                    value={useAppStore.getState().booking.formData.date}
+                    onChange={(val) => updateBookingForm({ date: val })}
+                    placeholder="انتخاب تاریخ"
+                  />
                   <div className="space-y-2">
                     <Label className="text-[#a1a1aa] text-sm">
                       <Car className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
