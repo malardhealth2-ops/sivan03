@@ -1,0 +1,1675 @@
+     1→     1→# 📝 **پرامپت جامع توسعه وب‌سایت تاکسی ویژه سیوان (Sivan VIP Taxi)**
+     2→     2→
+     3→     3→---
+     4→     4→
+     5→     5→## 🎯 **مشخصات کلی پروژه**
+     6→     6→
+     7→     7→```
+     8→     8→نام پروژه: Sivan VIP Taxi (تاکسی ویژه سیوان)
+     9→     9→نوع پروژه: وب‌سایت رزرو آنلاین تاکسی بین شهری VIP + اپلیکیشن تحت وب
+    10→    10→دامنه پیشنهادی: sivantaxi.com / sivanvip.ir / sivantaxi.ir
+    11→    11→زبان توسعه: فارسی (RTL) - انگلیسی (اختیاری)
+    12→    12→شعار: "سفری لوکس، راحت و ایمن با سیوان"
+    13→    13→```
+    14→    14→
+    15→    15→---
+    16→    16→
+    17→    17→## 📞 **اطلاعات تماس اصلی**
+    18→    18→
+    19→    19→```yaml
+    20→    20→شماره تماس اصلی:
+    21→    21→  - 09109419743  # خط اول - پشتیبانی و رزرو
+    22→    22→  - 09368816807  # خط دوم - اضطراری و VIP
+    23→    23→
+    24→    24→ایمیل: info@sivantaxi.com
+    25→    25→آدرس: [وارد کنید]
+    26→    26→ساعات کاری: ۲۴ ساعته - ۷ روز هفته
+    27→    27→```
+    28→    28→
+    29→    29→---
+    30→    30→
+    31→    31→## 🏗️ **معماری سیستم و تکنولوژی‌های پیشنهادی**
+    32→    32→
+    33→    33→### **الف) فرانت‌اند (Frontend):**
+    34→    34→```javascript
+    35→    35→// Stack پیشنهادی
+    36→    36→Framework: Next.js 14+ (React) یا Vue.js 3+
+    37→    37→Styling: Tailwind CSS + RTL Support
+    38→    38→State Management: Redux Toolkit / Pinia
+    39→    39→Maps: Leaflet.js + OpenStreetMap (مانند سایت مرجع)
+    40→    40→Icons: Heroicons / Lucide React
+    41→    41→Animations: Framer Motion / GSAP
+    42→    42→Form Handling: React Hook Form + Yup Validation
+    43→    43→i18n: next-i18n (برای پشتیبانی چند زبانه)
+    44→    44→```
+    45→    45→
+    46→    46→### **ب) بک‌اند (Backend):**
+    47→    47→```python
+    48→    48→# Stack پیشنهادی
+    49→    49→Runtime: Node.js (Express/Fastify) یا Python (Django/FastAPI)
+    50→    50→Database: PostgreSQL (اصلی) + Redis (کش)
+    51→    51→ORM: Prisma / Sequelize / SQLAlchemy
+    52→    52→Authentication: JWT + OAuth2 + OTP (SMS)
+    53→    53→File Storage: AWS S3 / MinIO (لوکال)
+    54→    54→Real-Time: Socket.io (برای چت زنده و ترکینگ لایو)
+    55→    55→Queue: BullMQ / Celery (برای پردازش‌های پس‌زمینه)
+    56→    56→```
+    57→    57→
+    58→    58→### **ج) زیرساخت (Infrastructure):**
+    59→    59→```yaml
+    60→    60→Hosting:
+    61→    61→  Frontend: Vercel / Cloudflare Pages
+    62→    62→  Backend: AWS EC2 / DigitalOcean / VPS ایران
+    63→    63→  Database: Supabase / Railway / Managed PostgreSQL
+    64→    64→  
+    65→    65→CDN: Cloudflare
+    66→    66→Monitoring: Sentry (Error Tracking) + Datadog (Performance)
+    67→    67→CI/CD: GitHub Actions
+    68→    68→```
+    69→    69→
+    70→    70→---
+    71→    71→
+    72→    72→## 📄 **ساختار صفحات و بخش‌ها (Sitemap)**
+    73→    73→
+    74→    74→### **۱. صفحات عمومی (Public Pages):**
+    75→    75→
+    76→    76→#### **🏠 صفحه اصلی (Home Page)**
+    77→    77→```html
+    78→    78→<!-- بخش‌های اصلی -->
+    79→    79→<section id="hero">
+    80→    80→  <!-- اسلایدر/ویدیو پس‌زمینه با خودروهای لوکس -->
+    81→    81→  <!-- لوگو + عنوان اصلی + دکمه CTA -->
+    82→    82→  <!-- فرم سریع رزرو (مبدأ، مقصد، تاریخ، نوع خودرو) -->
+    83→    83→</section>
+    84→    84→
+    85→    85→<section id="popular-routes">
+    86→    86→  <!-- کارت‌های مسیرهای پرطرفدار -->
+    87→    87→  <!-- تهران به تبریز، اصفهان، شیراز، مشهد، رشت، کرمانشاه -->
+    88→    88→</section>
+    89→    89→
+    90→    90→<section id="services">
+    91→    91→  <!-- ۳ کارت خدمات اصلی -->
+    92→    92→  <!-- ۱. تاکسی VIP لوکس -->
+    93→    93→  <!-- ۲. تاکسی اقتصادی -->
+    94→    94→  <!-- ۳. تاکسی خصوصی دربستی -->
+    95→    95→</section>
+    96→    96→
+    97→    97→<section id="fleet">
+    98→    98→  <!-- گالری خودروها -->
+    99→    99→  <!-- Sonata، Mercedes، Tesla/برقی، ون -->
+   100→   100→</section>
+   101→   101→
+   102→   102→<section id="why-us">
+   103→   103→  <!-- ۴-۶ دلیل انتخاب سیوان -->
+   104→   104→  <!-- امنیت، سرعت، کیفیت، پشتیبانی ۲۴/۷، قیمت مناسب -->
+   105→   105→</section>
+   106→   106→
+   107→   107→<section id="testimonials">
+   108→   108→  <!-- نظرات مشتریان (اسلایدر) -->
+   109→   109→</section>
+   110→   110→
+   111→   111→<section id="blog-preview">
+   112→   112→  <!-- ۳ آخرین مقاله بلاگ -->
+   113→   113→</section>
+   114→   114→
+   115→   115→<section id="cta">
+   116→   116→  <!-- دکمه تماس + فرم عضویت سریع -->
+   117→   117→</section>
+   118→   118→```
+   119→   119→
+   120→   120→#### **🚕 صفحه رزرو آنلاین (Booking System)**
+   121→   121→```javascript
+   122→   122→// مراحل رزرو (Multi-step Form)
+   123→   123→Step 1: 
+   124→   124→  - انتخاب مبدأ (با Autocomplete نقشه)
+   125→   125→  - انتخاب مقصد
+   126→   126→  - نمایش فاصله و تخمین زمان/قیمت
+   127→   127→
+   128→   128→Step 2:
+   129→   129→  - انتخاب تاریخ و ساعت حرکت
+   130→   130→  - انتخاب نوع سفر (یک طرفه، رفت و برگشت)
+   131→   131→  - تعداد مسافران
+   132→   132→
+   133→   133→Step 3:
+   134→   134→  - انتخاب نوع خودرو
+   135→   135→    * Economy (تویوتا کمری، پژو پارس)
+   136→   136→    * VIP (هیوندای سوناتا، سامند LX)
+   137→   137→    * Luxury (مرسدس بنز E-Class، BMW)
+   138→   138→    * Van (ون تویوتا، سوزوکی)
+   139→   139→    * Electric (تسلا، سایپا شهری)
+   140→   140→
+   141→   141→Step 4:
+   142→   142→  - وارد کردن اطلاعات مسافر
+   143→   143→  - نام، شماره موبایل (OTP Verification)
+   144→   144→  - آدرس دقیق pickup
+   145→   145→
+   146→   146→Step 5:
+   147→   147→  - خلاصه سفارش
+   148→   148→  - انتخاب روش پرداخت
+   149→   149→    * پرداخت آنلاین (زرین‌پال/آسان پرداخت)
+   150→   150→    * پرداخت نقدی به راننده
+   151→   151→  - تأیید نهایی و دریافت کد رزرو
+   152→   152→```
+   153→   153→
+   154→   154→#### **📰 صفحه مقالات/بلاگ (Blog Section)**
+   155→   155→```yaml
+   156→   156→دسته‌بندی مقالات:
+   157→   157→  - راهنمای سفر (#travel-guide)
+   158→   158→  - معرفی شهرها (#city-guide)
+   159→   159→  - اخبار و رویدادها (#news)
+   160→   160→  - نکات ایمنی (#safety-tips)
+   161→   161→  - معرفی خدمات (#services)
+   162→   162→
+   163→   163→ویژگی‌ها:
+   164→   164→  - سیستم جستجو و فیلتر
+   165→   165→  - اشتراک‌گذاری در شبکه‌های اجتماعی
+   166→   166→  - مقالات مرتبط (Related Posts)
+   167→   167→  - سیستم کامنت (با moderation)
+   168→   168→  - SEO Friendly URL (/blog/slug-post)
+   169→   169→  
+   170→   170→نمونه محتوا (از سایت مرجع):
+   171→   171→  - "تاکسی VIP چیست و چه تفاوتی با تاکسی معمولی دارد؟"
+   172→   172→  - "چرا تاکسی VIP سیوان بهترین انتخاب برای سفرهای بین شهری است"
+   173→   173→  - "تجربه واقعی سفر با تاکسی VIP"
+   174→   174→  - "مزایای استفاده از تاکسی برقی"
+   175→   175→```
+   176→   176→
+   177→   177→#### **📄 صفحات ثابت (Static Pages):**
+   178→   178→- **درباره ما:** تاریخچه، مأموریت، چشم‌انداز، تیم مدیریتی
+   179→   179→- **تماس با ما:** فرم تماس، نقشه، اطلاعات تماس، ساعات کاری
+   180→   180→- **سوالات متداول (FAQ):** Accordion-style با دسته‌بندی
+   181→   181→- **قوانین و مقررات:** شرایط استفاده، حریم خصوصی، لغو رزرو
+   182→   182→- **حریم خصوصی:** GDPR Compliance (اختیاری)
+   183→   183→
+   184→   184→---
+   185→   185→
+   186→   186→### **۲. سیستم احراز هویت و ثبت نام (Authentication System)**
+   187→   187→
+   188→   188→#### **🔐 ثبت نام و ورود مسافران (Passenger Portal)**
+   189→   189→```typescript
+   190→   190→interface PassengerRegistration {
+   191→   191→  // مرحله ۱: شماره موبایل + OTP
+   192→   192→  phone: string; // 09XXXXXXXXX format
+   193→   193→  otp_code: string;
+   194→   194→  
+   195→   195→  // مرحله ۲: اطلاعات شخصی
+   196→   196→  full_name: string;
+   197→   197→  email?: string;
+   198→   198→  national_id?: string; // کد ملی (اختیاری ولی توصیه شده)
+   199→   199→  gender: 'male' | 'female';
+   200→   200→  birth_date?: Date;
+   201→   201→  
+   202→   202→  // مرحله ۳: تنظیم رمز عبور
+   203→   203→  password: string; // min 8 chars, 1 uppercase, 1 number
+   204→   204→  confirm_password: string;
+   205→   205→  
+   206→   206→  // مرحله ۴: تأیید شماره موبایل (SMS verification)
+   207→   207→}
+   208→   208→
+   209→   209→interface PassengerProfile {
+   210→   210→  id: UUID;
+   211→   211→  phone: string;
+   212→   212→  full_name: string;
+   213→   213→  email: string;
+   214→   214→  avatar_url?: string;
+   215→   215→  rating: number; // 0-5
+   216→   216→  total_trips: number;
+   217→   217→  wallet_balance: number; // موجودی کیف پول
+   218→   218→  saved_addresses: Address[];
+   219→   219→  payment_methods: PaymentMethod[];
+   220→   220→  created_at: Date;
+   221→   221→  status: 'active' | 'suspended' | 'banned';
+   222→   222→}
+   223→   223→```
+   224→   224→
+   225→   225→#### **🚗 ثبت نام و ورود رانندگان (Driver Portal)**
+   226→   226→```typescript
+   227→   227→interface DriverRegistration {
+   228→   228→  // مرحله ۱: شماره موبایل + OTP
+   229→   229→  phone: string;
+   230→   230→  
+   231→   231→  // مرحله ۲: اطلاعات شخصی
+   232→   232→  full_name: string;
+   233→   233→  father_name: string;
+   234→   234→  national_id: string; // اجباری
+   235→   235→  birth_date: Date;
+   236→   236→  gender: 'male' | 'female';
+   237→   237→  marital_status: 'single' | 'married';
+   238→   238→  
+   239→   239→  // مرحله ۳: مدارک شناسایی (Upload)
+   240→   240→  national_card_image: File; // تصویر کارت ملی (جلو و پشت)
+   241→   241→  license_image: File; // گواهینامه رانندگی
+   242→   242→  health_certificate?: File; // گواهی سلامت
+   243→   243→  criminal_record?: File; // عدم سوءپیشینه
+   244→   244→  
+   245→   245→  // مرحله ۴: اطلاعات خودرو
+   246→   246→  car_type: 'sedan' | 'suv' | 'van';
+   247→   247→  car_brand: string; // مثلاً Hyundai
+   248→   248→  car_model: string; // مثلاً Sonata
+   249→   249→  car_year: number; // سال ساخت
+   250→   250→  car_color: string;
+   251→   251→  car_plate_number: string; // پلاک
+   252→   252→  car_insurance_expiry: Date;
+   253→   253→  technical_diagnosis_expiry: Date;
+   254→   254→  car_images: File[]; // عکس‌های خودرو (۴ زاویه)
+   255→   255→  
+   256→   256→  // مرحله ۵: حساب بانکی
+   257→   257→  sheba_number: string; // شبا (IRXXXXXXXXXXXXXXX)
+   258→   258→  bank_name: string;
+   259→   259→  account_owner: string;
+   260→   260→  
+   261→   261→  // مرحله ۶: تنظیم رمز و تأیید نهایی
+   262→   262→  password: string;
+   263→   263→  accept_terms: boolean;
+   264→   264→}
+   265→   265→
+   266→   266→interface DriverProfile {
+   267→   267→  id: UUID;
+   268→   268→  user_id: UUID;
+   269→   269→  phone: string;
+   270→   270→  full_name: string;
+   271→   271→  avatar_url?: string;
+   272→   272→  rating: number; // 0-5
+   273→   273→  total_trips: number;
+   274→   274→  acceptance_rate: number; // درصد پذیرش سفر
+   275→   275→  completion_rate: number; // درصد تکمیل سفر
+   276→   276→  online_status: 'online' | 'offline' | 'busy';
+   277→   277→  current_location: GeoJSON.Point;
+   278→   278→  vehicle: VehicleInfo;
+   279→   279→  documents: DocumentStatus; // approved/pending/rejected
+   280→   280→  earnings: {
+   281→   281→    today: number;
+   282→   282→    this_week: number;
+   283→   283→    this_month: number;
+   284→   284→    total: number;
+   285→   285→  };
+   286→   286→  joined_at: Date;
+   287→   287→  verification_status: 
+   288→   288→    | 'pending_review'
+   289→   289→    | 'approved'
+   290→   290→    | 'rejected'
+   291→   291→    | 'suspended';
+   292→   292→}
+   293→   293→```
+   294→   294→
+   295→   295→---
+   296→   296→
+   297→   297→### **۳. پنل‌های کاربری (User Dashboards)**
+   298→   298→
+   299→   299→#### **👤 پنل مسافران (Passenger Dashboard)**
+   300→   300→```yaml
+   301→   301→داشبورد اصلی:
+   302→   302→  - خلاصه حساب (اعتبار کیف پول، سفرهای اخیر)
+   303→   303→  - دکمه رزرو سریع جدید
+   304→   304→  - آمار سفرها (این ماه، امسال)
+   305→   305→
+   306→   306→منوی کناری:
+   307→   307→  📋 رزروهای من:
+   308→   308→    - لیست همه سفرها (جدید، در حال انجام، تکمیل شده، لغو شده)
+   309→   309→    - فیلتر بر اساس وضعیت، تاریخ، مبدا/مقصد
+   310→   310→    - جزئیات هر سفر (رسید دیجیتال)
+   311→   311→    - امکان لغو سفر (طبق قوانین)
+   312→   312→
+   313→   313→  💳 مالی:
+   314→   314→    - کیف پول (شارژ، برداشت، تراکنش‌ها)
+   315→   315→    - روش‌های پرداخت ذخیره شده
+   316→   316→    - فاکتورها و صورتحساب‌ها
+   317→   317→    - درخواست بازپرداخت (Refund)
+   318→   318→
+   319→   319→  👤 پروفایل:
+   320→   320→    - ویرایش اطلاعات شخصی
+   321→   321→    - تغییر رمز عبور
+   322→   322→    - آدرس‌های ذخیره شده (خانه، محل کار، ...)
+   323→   323→    - تنظیمات نوتیفیکیشن (SMS، Email، Push)
+   324→   324→    - تنظیمات حریم خصوصی
+   325→   325→
+   326→   326→  ⭐ نظرات و امتیازات:
+   327→   327→    - دادن امتیاز به رانندگان (۱-۵ ستاره)
+   328→   328→    - نوشتن نظر درباره سفر
+   329→   329→    - مشاهده نظرات قبلی خود
+   330→   330→
+   331→   331→  🎫 کدهای تخفیف:
+   332→   332→    - وارد کردن کد تخفیف
+   333→   333→    - تاریخچه کدهای استفاده شده
+   334→   334→    - اشتراک‌گذاری کد معرفی (Referral Code)
+   335→   335→
+   336→   336→  💬 پشتیبانی:
+   337→   337→    - تیکت پشتیبانی (چت آنلاین)
+   338→   338→    - گزارش مشکلات سفر
+   339→   339→    - سوالات متداول
+   340→   340→```
+   341→   341→
+   342→   342→#### **🚗 پنل رانندگان (Driver Dashboard)**
+   343→   343→```yaml
+   344→   344→داشبورد اصلی:
+   345→   345→  - وضعیت آنلاین/آفلاین (Toggle Switch)
+   346→   346→  - درآمد امروز/این هفته/این ماه
+   347→   347→  - سفرهای فعال (در حال انجام)
+   348→   348→  - درخواست‌های جدید (Accept/Reject)
+   349→   349→
+   350→   350→منوی کناری:
+   351→   351→  📍 وضعیت کاری:
+   352→   352→    - آنلاین/آفلاین
+   353→   353→    - نمایش موقعیت فعلی روی نقشه
+   354→   354→    - حالت‌های کاری:
+   355→   355→      * آماده دریافت سفر
+   356→   356→      * در سفر
+   357→   357→      * استراحت
+   358→   358→      * خارج از سرویس
+   359→   359→
+   360→   360→  📋 مدیریت سفرها:
+   361→   361→    - لیست سفرهای انجام شده
+   362→   362→    - جزئیات هر سفر (مسیر، زمان، مبلغ)
+   363→   363→    - تاریخچه کامل سفرها
+   364→   364→    - گزارشات روزانه/هفتگی/ماهانه
+   365→   365→
+   366→   366→  💰 درآمد و مالی:
+   367→   367→    - موجودی حساب (تسویه نشده)
+   368→   368→    - درخواست تسویه حساب (به حساب بانکی)
+   369→   369→    - تاریخچه تسویه‌ها
+   370→   370→    - گزارش مالی تفصیلی
+   371→   371→    - مالیات و کمیسیون‌ها
+   372→   372→
+   373→   373→  👤 پروفایل راننده:
+   374→   374→    - ویرایش اطلاعات شخصی
+   375→   375→    - مدیریت مدارks (تاریخ انقضا، تمدید)
+   376→   376→    - اطلاعات خودرو
+   377→   377→    - تغییر رمز عبور
+   378→   378→    - تنظیمات برنامه
+   379→   379→
+   380→   380→  ⭐ ارزیابی عملکرد:
+   381→   381→    - میانگین امتیاز دریافتی
+   382→   382→    - نظرات مسافران
+   383→   383→    - نرخ پذیرش و تکمیل سفر
+   384→   384→    - نشان‌ها و افتخارات (Badges)
+   385→   385→
+   386→   386→  📚 آموزش و راهنما:
+   387→   387→    - آموزش‌های اجباری (Video/PDF)
+   388→   388→    - قوانین و مقررات رانندگی
+   389→   389→    - نکات ایمنی و رفتار با مسافر
+   390→   390→    - اخبار و اطلاعیه‌ها
+   391→   391→
+   392→   392→  🛠️ ابزارها:
+   393→   393→    - مسیریاب هوشمند (Google Maps/Waze Integration)
+   394→   394→    - ماشین‌حساب درآمد
+   395→   395→      * تقسیم هزینه سوخت
+   396→   396→      * محاسبه سود خالص
+   397→   397→      * پیش‌بینی درآمد ماهانه
+   398→   398→    - تقویم کاری (برنامه‌ریزی شیفت‌ها)
+   399→   399→```
+   400→   400→
+   401→   401→#### **🔐 پنل مدیریت ادمین (Admin Dashboard)**
+   402→   402→```yaml
+   403→   403→داشبورد اصلی (Overview):
+   404→   404→  - آمار کلی سیستم:
+   405→   405→    * تعداد کل کاربران (مسافران، رانندگان)
+   406→   406→    * سفرهای امروز/این ماه
+   407→   407→    * درآمد کل (کمیسیون سیستم)
+   408→   408→    * نرخ رشد (Growth Rate)
+   409→   409→  - نمودارهای تعاملی:
+   410→   410→    * نمودار خطی: رشد کاربران در ۳۰ روز گذشته
+   411→   411→    * نمودار میله‌ای: درآمد ماهانه
+   412→   412→    * نمودار دایره‌ای: توزیع سفرها بر اساس شهر
+   413→   413→    * Real-time Map: موقعیت رانندگان فعال
+   414→   414→
+   415→   415→مدیریت کاربران (User Management):
+   416→   416→  🔹 مدیریت مسافران:
+   417→   417→    - لیست همه مسافران (جدول با جستجو و فیلتر)
+   418→   418→    - مشاهده پروفایل کامل
+   419→   419→    - ویرایش/حذف/مسدود کردن کاربر
+   420→   420→    - مشاهده تاریخچه سفرها
+   421→   421→    - ارسال نوتیفیکیشن دستی (SMS/Push)
+   422→   422→    
+   423→   423→  🔹 مدیریت رانندگان:
+   424→   424→    - لیست رانندگان با وضعیت تأیید
+   425→   425→    - بررسی مدارks (Approve/Reject)
+   426→   426→    - مشاهده عملکرد هر راننده
+   427→   427→    - مدیریت انضباطی (اخطار، تعلیق، اخراج)
+   428→   428→    - گزارش تخلفات
+   429→   429→
+   430→   430→مدیرت سفرها (Trip Management):
+   431→   431→  - لیست همه سفرها (Real-time updates)
+   432→   432→  - فیلتر پیشرفته (وضعیت، تاریخ، مبدا، مقصد، راننده)
+   433→   433→  - جزئیات هر سفر (Tracking history)
+   434→   434→  - مدیریت سفرهای لغو شده
+   435→   435→  - رسیدگی به اختلافات (Dispute Resolution)
+   436→   436→
+   437→   437→مدیریت مالی (Financial Management):
+   438→   438→  💰 درآمدها:
+   439→   439→    - گزارش درآمدهای کلی
+   440→   440→    - کمیسیون‌های دریافتی از رانندگان
+   441→   441→    - تراکنش‌های پرداختی
+   442→   442→    
+   443→   443→  💸 پرداخت‌ها:
+   444→   444→    - مدیریت درخواست‌های تسویه رانندگان
+   445→   445→    - تأیید/رد پرداخت‌ها
+   446→   446→    - گزارش مالیاتی
+   447→   447→    
+   448→   448→  📊 گزارشات مالی:
+   449→   449→    - گزارش سود و زیان (P&L)
+   450→   450→    - جریان نقدی (Cash Flow)
+   451→   451→    - بدهکاری‌ها و طلبکاری‌ها
+   452→   452→
+   453→   453→مدیرت محتوا (Content Management):
+   454→   454→  📝 مدیریت بلاگ:
+   455→   455→    - ایجاد/ویرایش/حذف مقالات
+   456→   456→    - مدیریت دسته‌بندی‌ها و تگ‌ها
+   457→   457→    - زمان‌بندی انتشار
+   458→   458→    - SEO Settings (Meta tags, Slug)
+   459→   459→    
+   460→   460→  📄 مدیریت صفحات:
+   461→   461→    - ویرایش صفحات ثابت (درباره ما، تماس، FAQ)
+   462→   462→    - مدیریت بنرها و اسلایدرها
+   463→   463→    - مدیریت متن‌های ترجمه (i18n)
+   464→   464→
+   465→   465→تنظیمات سیستم (System Settings):
+   466→   466→  ⚙️ تنظیمات عمومی:
+   467→   467→    - اطلاعات پایه سایت (نام، لوگو، توضیحات)
+   468→   468→    - تنظیمات تماس و پشتیبانی
+   469→   469→    - تنظیمات SMTP (Email)
+   470→   470→    - تنظیمات SMS Gateway
+   471→   471→    
+   472→   472→  💵 تنظیمات مالی:
+   473→   473→    - نرخ کمیسیون (Percentage)
+   474→   474→    - حداقل مبلغ تسویه
+   475→   475→    - مالیات بر ارزش افزوده
+   476→   476→    - تخفیف‌ها و کمپین‌ها
+   477→   477→    
+   478→   478→  🚗 تنظیمات ناوگان:
+   479→   479→    - تعرفه‌های قیمت‌گذاری (Per KM, Base Fare)
+   480→   480→    - مدیریت انواع خودرو
+   481→   481→    - تنظیمات surge pricing (قیمت‌گذاری شناور)
+   482→   482→    
+   483→   483→  🔔 تنظیمات نوتیفیکیشن:
+   484→   484→    - قالب‌های SMS
+   485→   485→    - قالب‌های Email
+   486→   486→    - Push Notification Settings
+   487→   487→
+   488→   488→گزارشات و آنالیتیکس (Reports & Analytics):
+   489→   489→  📊 گزارشات کاربران:
+   490→   490→    - رشد کاربران (Daily/Weekly/Monthly)
+   491→   491→    - نرخ نگهداری (Retention Rate)
+   492→   492→    - Cohort Analysis
+   493→   493→    
+   494→   494→  📈 گزارشات سفرها:
+   495→   495→    - تعداد سفرها در بازه زمانی
+   496→   496→    - میانگین قیمت سفر
+   497→   497→    - مسیرهای پرتردد
+   498→   498→    - Peak Hours Analysis
+   499→   499→    
+   500→   500→  🎯 گزارشات عملکرد:
+   501→   501→    - بهترین رانندگان (Leaderboard)
+   502→   502→    - نرخ رضایت مشتریان (CSAT)
+   503→   503→    - زمان پاسخگویی رانندگان
+   504→   504→
+   505→   505→امنیت و لاگ‌ها (Security & Logs):
+   506→   506→  🔒 مدیریت دسترسی‌ها (RBAC):
+   507→   507→    - نقش‌ها (Roles): Super Admin, Admin, Moderator, Support, Accountant
+   508→   508→    - مجوزها (Permissions): CRUD operations per module
+   509→   509→    - ایجاد کاربران ادمین جدید
+   510→   510→    
+   511→   511→  📋 لاگ فعالیت‌ها (Activity Logs):
+   512→   512→    - لاگ تمام اقدامات ادمین‌ها
+   513→   513→    - لاگ ورود/خروج
+   514→   514→    - لاگ تغییرات حساس
+   515→   515→    - Export to CSV/PDF
+   516→   516→
+   517→   517→پشتیبان‌گیری (Backup & Maintenance):
+   518→   518→  💾 پشتیبان‌گیری:
+   519→   519→    - Backup خودکار (Daily/Weekly)
+   520→   520→    - Backup دستی
+   521→   521→    - بازیابی از Backup
+   522→   522→  
+   523→   523→  🔧 نگهداری:
+   524→   524→    - وضعیت سرور (CPU, RAM, Disk)
+   525→   525→    - Health Check APIs
+   526→   526→    - Clear Cache
+   527→   527→    - Queue Monitor
+   528→   528→```
+   529→   529→
+   530→   530→---
+   531→   531→
+   532→   532→## 🗄️ **طراحی دیتابیس (Database Schema)**
+   533→   533→
+   534→   534→### **جداول اصلی (Core Tables):**
+   535→   535→
+   536→   536→```sql
+   537→   537→-- جدول کاربران (Users)
+   538→   538→CREATE TABLE users (
+   539→   539→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   540→   540→    phone VARCHAR(11) UNIQUE NOT NULL,
+   541→   541→    email VARCHAR(255) UNIQUE,
+   542→   542→    password_hash VARCHAR(255) NOT NULL,
+   543→   543→    full_name VARCHAR(100) NOT NULL,
+   544→   544→    role ENUM('passenger', 'driver', 'admin') NOT NULL,
+   545→   545→    avatar_url TEXT,
+   546→   546→    is_active BOOLEAN DEFAULT true,
+   547→   547→    is_verified BOOLEAN DEFAULT false,
+   548→   548→    last_login_at TIMESTAMP WITH TIME ZONE,
+   549→   549→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+   550→   550→    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   551→   551→);
+   552→   552→
+   553→   553→-- جدول مسافران (Passengers)
+   554→   554→CREATE TABLE passengers (
+   555→   555→    id UUID PRIMARY KEY REFERENCES users(id),
+   556→   556→    national_id VARCHAR(10) UNIQUE,
+   557→   557→    gender ENUM('male', 'female'),
+   558→   558→    birth_date DATE,
+   559→   559→    wallet_balance DECIMAL(12, 2) DEFAULT 0,
+   560→   560→    rating DECIMAL(2, 1) DEFAULT 5.0,
+   561→   561→    total_trips INTEGER DEFAULT 0,
+   562→   562→    referral_code VARCHAR(10) UNIQUE,
+   563→   563→    referred_by UUID REFERENCES passengers(id)
+   564→   564→);
+   565→   565→
+   566→   566→-- جدول رانندگان (Drivers)
+   567→   567→CREATE TABLE drivers (
+   568→   568→    id UUID PRIMARY KEY REFERENCES users(id),
+   569→   569→    national_id VARCHAR(10) UNIQUE NOT NULL,
+   570→   570→    father_name VARCHAR(50),
+   571→   571→    license_number VARCHAR(20),
+   572→   572→    license_expiry DATE,
+   573→   573→    health_cert_expiry DATE,
+   574→   574→    verification_status ENUM('pending', 'approved', 'rejected', 'suspended') DEFAULT 'pending',
+   575→   575→    rating DECIMAL(2, 1) DEFAULT 5.0,
+   576→   576→    total_trips INTEGER DEFAULT 0,
+   577→   577→    acceptance_rate DECIMAL(5, 2) DEFAULT 100.00,
+   578→   578→    completion_rate DECIMAL(5, 2) DEFAULT 100.00,
+   579→   579→    current_latitude DECIMAL(10, 8),
+   580→   580→    current_longitude DECIMAL(11, 8),
+   581→   581→    online_status ENUM('online', 'offline', 'busy') DEFAULT 'offline',
+   582→   582→    balance DECIMAL(12, 2) DEFAULT 0, -- موجودی قابل تسویه
+   583→   583→    sheba_number VARCHAR(26), -- IRXXXXXXXXXXXXXXX
+   584→   584→    bank_name VARCHAR(50),
+   585→   585→    account_owner VARCHAR(100),
+   586→   586→    joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   587→   587→);
+   588→   588→
+   589→   589→-- جدول خودروها (Vehicles)
+   590→   590→CREATE TABLE vehicles (
+   591→   591→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   592→   592→    driver_id UUID NOT NULL REFERENCES drivers(id),
+   593→   593→    type ENUM('sedan', 'suv', 'van', 'electric') NOT NULL,
+   594→   594→    brand VARCHAR(50) NOT NULL,
+   595→   595→    model VARCHAR(50) NOT NULL,
+   596→   596→    year INTEGER NOT NULL,
+   597→   597→    color VARCHAR(30) NOT NULL,
+   598→   598→    plate_number VARCHAR(10) UNIQUE NOT NULL,
+   599→   599→    insurance_expiry DATE,
+   600→   600→    tech_diagnosis_expiry DATE,
+   601→   601→    status ENUM('active', 'inactive', 'under_maintenance') DEFAULT 'active',
+   602→   602→    images JSONB, -- array of image URLs
+   603→   603→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   604→   604→);
+   605→   605→
+   606→   606→-- جدول سفرها (Trips)
+   607→   607→CREATE TABLE trips (
+   608→   608→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   609→   609→    passenger_id UUID NOT NULL REFERENCES passengers(id),
+   610→   610→    driver_id UUID REFERENCES drivers(id),
+   611→   611→    
+   612→   612→    -- اطلاعات مسیر
+   613→   613→    origin_address TEXT NOT NULL,
+   614→   614→    origin_lat DECIMAL(10, 8) NOT NULL,
+   615→   615→    origin_lng DECIMAL(11, 8) NOT NULL,
+   616→   616→    destination_address TEXT NOT NULL,
+   617→   617→    destination_lat DECIMAL(10, 8) NOT NULL,
+   618→   618→    destination_lng DECIMAL(11, 8) NOT NULL,
+   619→   619→    
+   620→   620→    -- جزئیات سفر
+   621→   621→    trip_type ENUM('economy', 'vip', 'luxury', 'van', 'electric') NOT NULL,
+   622→   622→    status ENUM(
+   623→   623→        'pending',        -- منتظر پذیرش راننده
+   624→   624→        'accepted',       -- پذیرفته شده توسط راننده
+   625→   625→        'driver_arrived', -- راننده رسید
+   626→   626→        'in_progress',    -- در حال حرکت
+   627→   627→        'completed',      -- تکمیل شده
+   628→   628→        'cancelled',      -- لغو شده
+   629→   629→        'no_show'         -- مسافر حاضر نشد
+   630→   630→    ) DEFAULT 'pending',
+   631→   631→    
+   632→   632→    -- زمان‌بندی
+   633→   633→    requested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+   634→   634→    accepted_at TIMESTAMP WITH TIME ZONE,
+   635→   635→    picked_up_at TIMESTAMP WITH TIME ZONE,
+   636→   636→    completed_at TIMESTAMP WITH TIME ZONE,
+   637→   637→    cancelled_at TIMESTAMP WITH TIME ZONE,
+   638→   638→    scheduled_for TIMESTAMP WITH TIME ZONE, -- برای رزرو آینده
+   639→   639→    
+   640→   640→    -- مالی
+   641→   641→    base_fare DECIMAL(10, 2),
+   642→   642→    distance_fare DECIMAL(10, 2),
+   643→   643→    time_fare DECIMAL(10, 2),
+   644→   644→    discount_amount DECIMAL(10, 2) DEFAULT 0,
+   645→   645→    total_fare DECIMAL(10, 2) NOT NULL,
+   646→   646→    commission_amount DECIMAL(10, 2), -- سهم سیستم
+   647→   647→    driver_earnings DECIMAL(10, 2),   -- سهم راننده
+   648→   648→    payment_method ENUM('cash', 'online', 'wallet') DEFAULT 'cash',
+   649→   649→    payment_status ENUM('pending', 'paid', 'refunded') DEFAULT 'pending',
+   650→   650→    
+   651→   651→    -- اطلاعات اضافی
+   652→   652→    distance_km DECIMAL(8, 2),
+   653→   653→    duration_minutes INTEGER,
+   654→   654→    passenger_count INTEGER DEFAULT 1,
+   655→   655→    notes TEXT,
+   656→   656→    cancel_reason TEXT,
+   657→   657→    cancelled_by UUID REFERENCES users(id),
+   658→   658→    
+   659→   659→    -- امتیازدهی
+   660→   660→    passenger_rating DECIMAL(2, 1),
+   661→   661→    driver_rating DECIMAL(2, 1),
+   662→   662→    passenger_review TEXT,
+   663→   663→    driver_review TEXT,
+   664→   664→    
+   665→   665→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+   666→   666→    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   667→   667→);
+   668→   668→
+   669→   669→-- جدول تراکنش‌ها (Transactions)
+   670→   670→CREATE TABLE transactions (
+   671→   671→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   672→   672→    user_id UUID NOT NULL REFERENCES users(id),
+   673→   673→    trip_id UUID REFERENCES trips(id),
+   674→   674→    type ENUM('credit', 'debit', 'commission', 'refund', 'topup', 'withdrawal') NOT NULL,
+   675→   675→    amount DECIMAL(12, 2) NOT NULL,
+   676→   676→    description TEXT,
+   677→   677→    reference_id VARCHAR(100), -- Reference from payment gateway
+   678→   678→    status ENUM('pending', 'completed', 'failed') DEFAULT 'pending',
+   679→   679→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   680→   680→);
+   681→   681→
+   682→   682→-- جدول کیف پول (Wallet)
+   683→   683→CREATE TABLE wallets (
+   684→   684→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   685→   685→    user_id UUID UNIQUE NOT NULL REFERENCES users(id),
+   686→   686→    balance DECIMAL(12, 2) DEFAULT 0,
+   687→   687→    frozen_balance DECIMAL(12, 2) DEFAULT 0, -- برای تراکنش‌های در حال پردازش
+   688→   688→    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   689→   689→);
+   690→   690→
+   691→   691→-- جدول بلاگ (Blog Posts)
+   692→   692→CREATE TABLE blog_posts (
+   693→   693→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   694→   694→    title VARCHAR(255) NOT NULL,
+   695→   695→    slug VARCHAR(255) UNIQUE NOT NULL,
+   696→   696→    excerpt TEXT,
+   697→   697→    content TEXTB NOT NULL, -- Markdown or HTML
+   698→   698→    featured_image_url TEXT,
+   699→   699→    author_id UUID REFERENCES users(id),
+   700→   700→    category_id UUID REFERENCES blog_categories(id),
+   701→   701→    tags TEXT[],
+   702→   702→    status ENUM('draft', 'published', 'archived') DEFAULT 'draft',
+   703→   703→    published_at TIMESTAMP WITH TIME ZONE,
+   704→   704→    view_count INTEGER DEFAULT 0,
+   705→   705→    like_count INTEGER DEFAULT 0,
+   706→   706→    comment_count INTEGER DEFAULT 0,
+   707→   707→    meta_title VARCHAR(255),
+   708→   708→    meta_description TEXT,
+   709→   709→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+   710→   710→    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   711→   711→);
+   712→   712→
+   713→   713→-- جدول نظرات بلاگ (Comments)
+   714→   714→CREATE TABLE blog_comments (
+   715→   715→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   716→   716→    post_id UUID NOT NULL REFERENCES blog_posts(id),
+   717→   717→    user_id UUID REFERENCES users(id), -- can be null for guest
+   718→   718→    parent_id UUID REFERENCES blog_comments(id), -- for replies
+   719→   719→    content TEXT NOT NULL,
+   720→   720→    is_approved BOOLEAN DEFAULT false,
+   721→   721→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   722→   722→);
+   723→   723→
+   724→   724→-- جدول تیکت‌های پشتیبانی (Support Tickets)
+   725→   725→CREATE TABLE support_tickets (
+   726→   726→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   727→   727→    user_id UUID NOT NULL REFERENCES users(id),
+   728→   728→    subject VARCHAR(255) NOT NULL,
+   729→   729→    description TEXT NOT NULL,
+   730→   730→    priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
+   731→   731→    status ENUM('open', 'in_progress', 'waiting', 'resolved', 'closed') DEFAULT 'open',
+   732→   732→    assigned_to UUID REFERENCES users(id), -- admin/support agent
+   733→   733→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+   734→   734→    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+   735→   735→    closed_at TIMESTAMP WITH TIME ZONE
+   736→   736→);
+   737→   737→
+   738→   738→-- جدول پیام‌های تیکت (Ticket Messages)
+   739→   739→CREATE TABLE ticket_messages (
+   740→   740→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   741→   741→    ticket_id UUID NOT NULL REFERENCES support_tickets(id),
+   742→   742→    sender_id UUID NOT NULL REFERENCES users(id),
+   743→   743→    message TEXT NOT NULL,
+   744→   744→    attachments JSONB, -- array of file URLs
+   745→   745→    is_read BOOLEAN DEFAULT false,
+   746→   746→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   747→   747→);
+   748→   748→
+   749→   749→-- جدول کدهای OTP (One Time Passwords)
+   750→   750→CREATE TABLE otp_codes (
+   751→   751→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   752→   752→    phone VARCHAR(11) NOT NULL,
+   753→   753→    code VARCHAR(6) NOT NULL,
+   754→   754→    purpose ENUM('registration', 'login', 'password_reset', 'transaction') NOT NULL,
+   755→   755→    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+   756→   756→    used_at TIMESTAMP WITH TIME ZONE,
+   757→   757→    attempts INTEGER DEFAULT 0,
+   758→   758→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   759→   759→);
+   760→   760→
+   761→   761→-- جدول نوتیفیکیشن‌ها (Notifications)
+   762→   762→CREATE TABLE notifications (
+   763→   763→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   764→   764→    user_id UUID NOT NULL REFERENCES users(id),
+   765→   765→    title VARCHAR(255) NOT NULL,
+   766→   766→    message TEXT NOT NULL,
+   767→   767→    type ENUM('info', 'success', 'warning', 'error') DEFAULT 'info',
+   768→   768→    channel ENUM('sms', 'email', 'push', 'in_app') DEFAULT 'in_app',
+   769→   769→    data JSONB, -- additional metadata
+   770→   770→    is_read BOOLEAN DEFAULT false,
+   771→   771→    sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+   772→   772→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   773→   773→);
+   774→   774→
+   775→   775→-- جدول تخفیف‌ها (Coupons/Discounts)
+   776→   776→CREATE TABLE coupons (
+   777→   777→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   778→   778→    code VARCHAR(20) UNIQUE NOT NULL,
+   779→   779→    description TEXT,
+   780→   780→    discount_type ENUM('percentage', 'fixed') NOT NULL,
+   781→   781→    discount_value DECIMAL(10, 2) NOT NULL,
+   782→   782→    min_order_amount DECIMAL(10, 2) DEFAULT 0,
+   783→   783→    max_discount_amount DECIMAL(10, 2),
+   784→   784→    usage_limit INTEGER,
+   785→   785→    usage_count INTEGER DEFAULT 0,
+   786→   786→    valid_from TIMESTAMP WITH TIME ZONE NOT NULL,
+   787→   787→    valid_until TIMESTAMP WITH TIME ZONE NOT NULL,
+   788→   788→    is_active BOOLEAN DEFAULT true,
+   789→   789→    applicable_to ENUM('all', 'new_users', 'specific_trip_type'),
+   790→   790→    created_by UUID REFERENCES users(id),
+   791→   791→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   792→   792→);
+   793→   793→
+   794→   794→-- جدول لاگ فعالیت‌ها (Activity Logs)
+   795→   795→CREATE TABLE activity_logs (
+   796→   796→    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   797→   797→    user_id UUID REFERENCES users(id),
+   798→   798→    action VARCHAR(100) NOT NULL,
+   799→   799→    entity_type VARCHAR(50), -- e.g., 'trip', 'user', 'post'
+   800→   800→    entity_id UUID,
+   801→   801→    old_values JSONB,
+   802→   802→    new_values JSONB,
+   803→   803→    ip_address INET,
+   804→   804→    user_agent TEXT,
+   805→   805→    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   806→   806→);
+   807→   807→```
+   808→   808→
+   809→   809→---
+   810→   810→
+   811→   811→## 🔌 **API Endpoints (RESTful API Design)**
+   812→   812→
+   813→   813→### **احراز هویت (Auth API):**
+   814→   814→```yaml
+   815→   815→POST /api/auth/send-otp:
+   816→   816→  description: ارسال کد OTP به شماره موبایل
+   817→   817→  body: { "phone": "09123456789", "purpose": "register|login" }
+   818→   818→  response: { "message": "OTP sent", "expires_in": 120 }
+   819→   819→
+   820→   820→POST /api/auth/verify-otp:
+   821→   821→  description: تأیید کد OTP
+   822→   822→  body: { "phone": "...", "code": "123456" }
+   823→   823→  response: { "token": "jwt_token", "user": {...}, "is_new_user": bool }
+   824→   824→
+   825→   825→POST /api/auth/register/passenger:
+   826→   826→  description: ثبت نام مسافر
+   827→   827→  body: { "phone", "otp", "full_name", "email?", "password" }
+   828→   828→  response: { "user": {...}, "token": "..." }
+   829→   829→
+   830→   830→POST /api/auth/register/driver:
+   831→   831→  description: ثبت نام راننده (multi-step)
+   832→   832→  body: { /* all driver registration fields */ }
+   833→   833→  response: { "message": "Registration submitted for review", "driver_id": "..." }
+   834→   834→
+   835→   835→POST /api/auth/login:
+   836→   836→  description: ورود با رمز عبور
+   837→   837→  body: { "phone/email", "password" }
+   838→   838→  response: { "token": "...", "refresh_token": "...", "user": {...} }
+   839→   839→
+   840→   840→POST /api/auth/refresh-token:
+   841→   841→  description: تازه کردن توکن
+   842→   842→  body: { "refresh_token": "..." }
+   843→   843→  response: { "token": "new_jwt" }
+   844→   844→
+   845→   845→POST /api/auth/logout:
+   846→   846→  description: خروج
+   847→   847→  headers: Authorization: Bearer <token>
+   848→   848→  response: { "message": "Logged out successfully" }
+   849→   849→
+   850→   850→POST /api/auth/forgot-password:
+   851→   851→  description: فراموشی رمز عبور
+   852→   852→  body: { "phone": "..." }
+   853→   853→  response: { "message": "Reset code sent" }
+   854→   854→
+   855→   855→PUT /api/auth/change-password:
+   856→   856→  description: تغییر رمز عبور
+   857→   857→  headers: Authorization: Bearer <token>
+   858→   858→  body: { "old_password", "new_password" }
+   859→   859→  response: { "message": "Password changed" }
+   860→   860→```
+   861→   861→
+   862→   862→### **API مسافران (Passenger API):**
+   863→   863→```yaml
+   864→   864→GET /api/passenger/profile:
+   865→   865→  description: دریافت پروفایل
+   866→   866→  response: { "user": {...}, "wallet_balance": 0 }
+   867→   867→
+   868→   868→PUT /api/passenger/profile:
+   869→   869→  description: ویرایش پروفایل
+   870→   870→  body: { "full_name", "email", "gender"? }
+   871→   871→  response: { "user": {...} }
+   872→   872→
+   873→   873→POST /api/passenger/bookings:
+   874→   874→  description: ایجاد رزرو جدید
+   875→   875→  body: {
+   876→   876→    "origin": { "address", "lat", "lng" },
+   877→   877→    "destination": { "address", "lat", "lng" },
+   878→   878→    "scheduled_for": "2024-01-15T10:00:00Z",
+   879→   879→    "trip_type": "vip",
+   880→   880→    "passenger_count": 2,
+   881→   881→    "payment_method": "online",
+   882→   882→    "coupon_code"? "SAVE20",
+   883→   883→    "notes"? "لطفاً درب اصلی ساختمان"
+   884→   884→  }
+   885→   885→  response: { "booking_id": "...", "estimated_price": 250000, "eta": "2h 30m" }
+   886→   886→
+   887→   887→GET /api/passenger/bookings:
+   888→   888→  description: لیست رزروهای من
+   889→   889→  query: ?status=pending&page=1&limit=10&sort=-created_at
+   890→   890→  response: { "data": [...], "total": 50, "page": 1 }
+   891→   891→
+   892→   892→GET /api/passenger/bookings/:id:
+   893→   893→  description: جزئیات یک رزرو
+   894→   894→  response: { "booking": {...}, "driver": {...}, "tracking_url": "..." }
+   895→   895→
+   896→   896→PATCH /api/passenger/bookings/:id/cancel:
+   897→   897→  description: لغو رزرو
+   898→   898→  body: { "reason": "تغییر برنامه" }
+   899→   899→  response: { "message": "Booking cancelled", "refund_amount": 200000 }
+   900→   900→
+   901→   901→POST /api/passenger/bookings/:id/rate:
+   902→   902→  description: امتیاز دادن به راننده
+   903→   903→  body: { "rating": 5, "review": "راننده خیلی مؤدب بود" }
+   904→   904→  response: { "message": "Rating submitted" }
+   905→   905→
+   906→   906→GET /api/passenger/wallet:
+   907→   907→  description: اطلاعات کیف پول
+   908→   908→  response: { "balance": 500000, "frozen": 50000 }
+   909→   909→
+   910→   910→POST /api/passenger/wallet/topup:
+   911→   911→  description: شارژ کیف پول
+   912→   912→  body: { "amount": 100000, "payment_gateway": "zarinpal" }
+   913→   913→  response: { "payment_url": "https://...", "transaction_id": "..." }
+   914→   914→
+   915→   915→GET /api/passenger/wallet/transactions:
+   916→   916→  description: تراکنش‌های کیف پول
+   917→   917→  query: ?type=credit&page=1
+   918→   918→  response: { "data": [...], "total": 30 }
+   919→   919→
+   920→   920→POST /api/passenger/address:
+   921→   921→  description: افزودن آدرس ذخیره شده
+   922→   922→  body: { "title": "خانه", "address": "...", "lat": ..., "lng": ... }
+   923→   923→  response: { "address": {...} }
+   924→   924→
+   925→   925→GET /api/passenger/addresses:
+   926→   926→  description: لیست آدرس‌ها
+   927→   927→  response: { "data": [...] }
+   928→   928→
+   929→   929→DELETE /api/passenger/addresses/:id:
+   930→   930→  description: حذف آدرس
+   931→   931→  response: { "message": "Address deleted" }
+   932→   932→
+   933→   933→GET /api/passenger/notifications:
+   934→   934→  description: لیست نوتیفیکیشن‌ها
+   935→   935→  query: ?unread_only=true
+   936→   936→  response: { "data": [...], "unread_count": 5 }
+   937→   937→
+   938→   938→PUT /api/passenger/notifications/:id/read:
+   939→   939→  description: علامت‌گذاری به عنوان خوانده شده
+   940→   940→  response: { "message": "Marked as read" }
+   941→   941→```
+   942→   942→
+   943→   943→### **API رانندگان (Driver API):**
+   944→   944→```yaml
+   945→   945→GET /api/driver/profile:
+   946→   946→  description: دریافت پروفایل کامل راننده
+   947→   947→  response: { "driver": {...}, "vehicle": {...}, "stats": {...} }
+   948→   948→
+   949→   949→PUT /api/driver/profile:
+   950→   950→  description: ویرایش پروفایل
+   951→   951→  body: { "avatar_url"?, ...editable fields }
+   952→   952→  response: { "driver": {...} }
+   953→   953→
+   954→   954→PUT /api/driver/status:
+   955→   955→  description: تغییر وضعیت آنلاین/آفلاین
+   956→   956→  body: { "status": "online|offline|busy" }
+   957→   957→  response: { "message": "Status updated" }
+   958→   958→
+   959→   959→POST /api/driver/location:
+   960→   960→  description: ارسال موقعیت لحظه‌ای (هر ۵ ثانیه)
+   961→   961→  body: { "latitude": 35.6892, "longitude": 51.3890 }
+   962→   962→  response: { "message": "Location updated" }
+   963→   963→
+   964→   964→GET /api/driver/trips/available:
+   965→   965→  description: دریافت درخواست‌های سفر نزدیک
+   966→   966→  query: ?radius=5km
+   967→   967→  response: { "trips": [{...}], "count": 3 }
+   968→   968→
+   969→   969→POST /api/driver/trips/:id/accept:
+   970→   970→  description: پذیرش درخواست سفر
+   971→   971→  response: { "trip": {...}, "passenger_info": {...} }
+   972→   972→
+   973→   973→POST /api/driver/trips/:id/reject:
+   974→   974→  description: رد درخواست سفر
+   975→   975→  body: { "reason"? "خیلی دور است" }
+   976→   976→  response: { "message": "Trip rejected" }
+   977→   977→
+   978→   978→POST /api/driver/trips/:id/arrived:
+   979→   979→  description: اعلام رسیدن به محل مسافر
+   980→   980→  response: { "message": "Arrival confirmed" }
+   981→   981→
+   982→   982→POST /api/driver/trips/:id/start:
+   983→   983→  description: شروع سفر
+   984→   984→  response: { "message": "Trip started", "start_time": "..." }
+   985→   985→
+   986→   986→POST /api/driver/trips/:id/complete:
+   987→   987→  description: پایان سفر
+   988→   988→  body: { 
+   989→   989→    "actual_distance_km": 450.5,
+   990→   990→    "actual_duration_minutes": 315,
+   991→   991→    "final_fare": 2450000
+   992→   992→  }
+   993→   993→  response: { "message": "Trip completed", "earnings": 2205000 }
+   994→   994→
+   995→   995→GET /api/driver/trips/history:
+   996→   996→  description: تاریخچه سفرها
+   997→   997→  query: ?status=completed&from_date=2024-01-01&to_date=2024-01-31
+   998→   998→  response: { "data": [...], "total": 45, "earnings_total": 50000000 }
+   999→   999→
+  1000→  1000→GET /api/driver/earnings:
+  1001→  1001→  description: گزارش درآمد
+  1002→  1002→  query: ?period=today|week|month|custom&from=&to=
+  1003→  1003→  response: {
+  1004→  1004→    "today": { "trips": 3, "earnings": 1500000, "commission": 150000 },
+  1005→  1005→    "week": { "trips": 18, "earnings": 9000000, "commission": 900000 },
+  1006→  1006→    "month": { "trips": 72, "earnings": 36000000, "commission": 3600000 }
+  1007→  1007→  }
+  1008→  1008→
+  1009→  1009→POST /api/driver/withdrawals:
+  1010→  1010→  description: درخواست تسویه حساب
+  1011→  1011→  body: { "amount": 5000000, "bank_account": "sheba_number" }
+  1012→  1012→  response: { "withdrawal_id": "...", "message": "Request submitted", "processing_time": "24h" }
+  1013→  1013→
+  1014→  1014→GET /api/driver/withdrawals:
+  1015→  1015→  description: تاریخچه تسویه‌ها
+  1016→  1016→  response: { "data": [...], "pending": 1 }
+  1017→  1017→
+  1018→  1018→GET /api/driver/ratings:
+  1019→  1019→  description: امتیازات و نظرات دریافتی
+  1020→  1020→  query: ?min_rating=3
+  1021→  1021→  response: { "average": 4.8, "total": 120, "distribution": {5: 100, 4: 15, 3: 5} }
+  1022→  1022→
+  1023→  1023→POST /api/driver/documents:
+  1024→  1024→  description: آپلود/تجدید مدارک
+  1025→  1025→  body: FormData { document_type, file, expiry_date }
+  1026→  1026→  response: { "document": {...}, "status": "pending_review" }
+  1027→  1027→```
+  1028→  1028→
+  1029→  1029→### **API ادمین (Admin API):**
+  1030→  1030→```yaml
+  1031→  1031→# All endpoints require: Authorization: Bearer <admin_token> + Role: Admin
+  1032→  1032→
+  1033→  1033→GET /api/admin/dashboard/stats:
+  1034→  1034→  description: آمار داشبورد
+  1035→  1035→  response: {
+  1036→  1036→    "total_passengers": 5000,
+  1037→  1037→    "total_drivers": 500,
+  1038→  1038→    "active_drivers": 120,
+  1039→  1039→    "today_trips": 350,
+  1040→  1040→    "today_revenue": 85000000,
+  1041→  1041→    "monthly_growth": 15.5
+  1042→  1042→  }
+  1043→  1043→
+  1044→  1044→GET /api/admin/users?role=passenger:
+  1045→  1045→  description: لیست کاربران
+  1046→  1046→  query: ?search=0912&status=active&sort=-created_at&page=1&limit=20
+  1047→  1047→  response: { "data": [...], "total": 5000, "pages": 250 }
+  1048→  1048→
+  1049→  1049→GET /api/admin/users/:id:
+  1050→  1050→  description: جزئیات کاربر
+  1051→  1051→  response: { "user": {...}, "profile": {...}, "activity": [...] }
+  1052→  1052→
+  1053→  1053→PUT /api/admin/users/:id:
+  1054→  1054→  description: ویرایش کاربر
+  1055→  1055→  body: { /* editable fields */ }
+  1056→  1056→  response: { "user": {...} }
+  1057→  1057→
+  1058→  1058→DELETE /api/admin/users/:id:
+  1059→  1059→  description: حذف/مسدود کردن کاربر
+  1060→  1060→  body: { "reason": "تخلف از قوانین" }
+  1061→  1061→  response: { "message": "User suspended" }
+  1062→  1062→
+  1063→  1063→GET /api/admin/drivers/pending:
+  1064→  1064→  description: رانندگان منتظر تأیید
+  1065→  1065→  response: { "data": [...], "count": 25 }
+  1066→  1066→
+  1067→  1067→PUT /api/admin/drivers/:id/approve:
+  1068→  1068→  description: تأیید راننده
+  1069→  1069→  body: { "notes"? "مدارک کامل بود" }
+  1070→  1070→  response: { "message": "Driver approved" }
+  1071→  1071→
+  1072→  1072→PUT /api/admin/drivers/:id/reject:
+  1073→  1073→  description: رد درخواست راننده
+  1074→  1074→  body: { "reason": "گواهینامه منقضی" }
+  1075→  1075→  response: { "message": "Driver rejected" }
+  1076→  1076→
+  1077→  1077→GET /api/admin/trips:
+  1078→  1078→  description: مدیریت سفرها
+  1079→  1079→  query: ?status=in_progress&date=2024-01-15
+  1080→  1080→  response: { "data": [...], "total": 350 }
+  1081→  1081→
+  1082→  1082→GET /api/admin/trips/:id/live-tracking:
+  1083→  1083→  description: ترکینگ زنده سفر
+  1084→  1084→  response: { "current_location": {...}, "route": [...], "eta": "15 min" }
+  1085→  1085→
+  1086→  1086→GET /api/admin/reports/financial:
+  1087→  1087→  description: گزارش مالی
+  1088→  1088→  query: ?from=2024-01-01&to=2024-01-31&type=daily
+  1089→  1089→  response: { "revenue": [...], "expenses": [...], "profit": [...] }
+  1090→  1090→
+  1091→  1091→GET /api/admin/content/posts:
+  1092→  1092→  description: مدیریت مقالات بلاگ
+  1093→  1093→  query: ?status=published&category=travel-guide
+  1094→  1094→  response: { "data": [...] }
+  1095→  1095→
+  1096→  1096→POST /api/admin/content/posts:
+  1097→  1097→  description: ایجاد مقاله جدید
+  1098→  1098→  body: { "title", "content", "category_id", "tags", "featured_image", "status" }
+  1099→  1099→  response: { "post": {...} }
+  1100→  1100→
+  1101→  1101→PUT /api/admin/content/posts/:id:
+  1102→  1102→  description: ویرایش مقاله
+  1103→  1103→  body: { /* editable fields */ }
+  1104→  1104→  response: { "post": {...} }
+  1105→  1105→
+  1106→  1106→DELETE /api/admin/content/posts/:id:
+  1107→  1107→  description: حذف مقاله
+  1108→  1108→  response: { "message": "Post deleted" }
+  1109→  1109→
+  1110→  1110→GET /api/admin/settings:
+  1111→  1111→  description: دریافت تنظیمات سیستم
+  1112→  1112→  response: { "settings": {...} }
+  1113→  1113→
+  1114→  1114→PUT /api/admin/settings:
+  1115→  1115→  description: بروزرسانی تنظیمات
+  1116→  1116→  body: { "site_name", "commission_rate", "support_phone", ... }
+  1117→  1117→  response: { "settings": {...} }
+  1118→  1118→
+  1119→  1119→POST /api/admin/notifications/broadcast:
+  1120→  1120→  description: ارسال نوتیفیکیشن دستی
+  1121→  1121→  body: {
+  1122→  1122→    "target": "all|passengers|drivers|specific_user",
+  1123→  1123→    "user_ids"?: ["uuid"],
+  1124→  1124→    "title": "تخفیف ویژه",
+  1125→  1125→    "message": "۲۰٪ تخفیف برای سفرهای این هفته",
+  1126→  1126→    "channels": ["sms", "push"]
+  1127→  1127→  }
+  1128→  1128→  response: { "sent_count": 3000, "message": "Broadcast sent" }
+  1129→  1129→
+  1130→  1130→GET /api/admin/logs/activity:
+  1131→  1131→  description: لاگ فعالیت‌ها
+  1132→  1132→  query: ?user_id=uuid&action=login&from_date=...
+  1133→  1133→  response: { "data": [...], "total": 1000 }
+  1134→  1134→
+  1135→  1135→EXPORT /api/admin/export/data:
+  1136→  1136→  description: خروجی داده‌ها
+  1137→  1137→  query: ?format=csv|xlsx&entity=trips&from_date=&to_date=
+  1138→  1138→  response: File Download (CSV/Excel)
+  1139→  1139→```
+  1140→  1140→
+  1141→  1141→---
+  1142→  1142→
+  1143→  1143→## 🎨 **راهنمای طراحی UI/UX (Design Guidelines)**
+  1144→  1144→
+  1145→  1145→### **الف) سیستم طراحی (Design System):**
+  1146→  1146→```css
+  1147→  1147→/* رنگ‌های اصلی */
+  1148→  1148→:root {
+  1149→  1149→  /* Primary Colors - مشکی و طلایی (مانند سایت مرجع) */
+  1150→  1150→  --color-primary-900: #0a0a0a;      /* مشکی عمیق */
+  1151→  1151→  --color-primary-800: #1a1a1a;
+  1152→  1152→  --color-primary-700: #2d2d2d;
+  1153→  1153→  --color-gold-500: #D4AF37;          /* طلایی */
+  1154→  1154→  --color-gold-400: #E5C76B;
+  1155→  1155→  --color-gold-300: #F0D98A;
+  1156→  1156→  
+  1157→  1157→  /* Secondary Colors */
+  1158→  1158→  --color-white: #FFFFFF;
+  1159→  1159→  --color-gray-50: #F9FAFB;
+  1160→  1160→  --color-gray-100: #F3F4F6;
+  1161→  1161→  --color-gray-200: #E5E7EB;
+  1162→  1162→  --color-gray-600: #4B5563;
+  1163→  1163→  
+  1164→  1164→  /* Accent Colors */
+  1165→  1165→  --color-success: #10B981;
+  1166→  1166→  --color-warning: #F59E0B;
+  1167→  1167→  --color-error: #EF4444;
+  1168→  1168→  --color-info: #3B82F6;
+  1169→  1169→  
+  1170→  1170→  /* Typography */
+  1171→  1171→  --font-family-persian: 'Vazirmatn', 'IRANSans', sans-serif;
+  1172→  1172→  --font-family-english: 'Inter', sans-serif;
+  1173→  1173→  
+  1174→  1174→  /* Spacing Scale */
+  1175→  1175→  --space-1: 0.25rem;  /* 4px */
+  1176→  1176→  --space-2: 0.5rem;   /* 8px */
+  1177→  1177→  --space-4: 1rem;     /* 16px */
+  1178→  1178→  --space-6: 1.5rem;   /* 24px */
+  1179→  1179→  --space-8: 2rem;     /* 32px */
+  1180→  1180→  --space-12: 3rem;    /* 48px */
+  1181→  1181→  --space-16: 4rem;    /* 64px */
+  1182→  1182→  
+  1183→  1183→  /* Border Radius */
+  1184→  1184→  --radius-sm: 0.375rem;
+  1185→  1185→  --radius-md: 0.5rem;
+  1186→  1186→  --radius-lg: 1rem;
+  1187→  1187→  --radius-xl: 1.5rem;
+  1188→  1188→  --radius-full: 9999px;
+  1189→  1189→  
+  1190→  1190→  /* Shadows */
+  1191→  1191→  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  1192→  1192→  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  1193→  1193→  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  1194→  1194→  --shadow-gold: 0 4px 14px rgba(212, 175, 55, 0.3);
+  1195→  1195→}
+  1196→  1196→```
+  1197→  1197→
+  1198→  1198→### **ب) کامپوننت‌های اصلی (Components):**
+  1199→  1199→
+  1200→  1200→#### **۱. Hero Section:**
+  1201→  1201→```jsx
+  1202→  1202→<HeroSection>
+  1203→  1203→  {/* Background: Image/Video with dark overlay */}
+  1204→  1204→  <Background src="/images/hero-luxury-car.jpg" overlay="rgba(0,0,0,0.6)" />
+  1205→  1205→  
+  1206→  1206→  <Content>
+  1207→  1207→    <Logo src="/logo-sivan-vip.png" alt="Sivan VIP Taxi" />
+  1208→  1208→    <Tagline>تجربه‌ای متفاوت از سفر بین شهری</Tagline>
+  1209→  1209→    <Subtext>راحتی، امنیت و لوکس بودن در یک سفر</Subtext>
+  1210→  1210→    
+  1211→  1211→    <QuickBookingForm>
+  1212→  1212→      <Input label="مبدا" placeholder="محل_CURRENT" icon={<MapPin />} autocomplete />
+  1213→  1213→      <Input label="مقصد" placeholder="مقصد مورد نظر" icon={<Flag />} autocomplete />
+  1214→  1214→      <DatePicker label="تاریخ حرکت" />
+  1215→  1215→      <Select label="نوع خودرو" options={['VIP', 'اقتصادی', 'لوکس', 'ون']} />
+  1216→  1216→      <Button variant="primary" size="lg">رزرو فوری</Button>
+  1217→  1217→    </QuickBookingForm>
+  1218→  1218→    
+  1219→  1219→    <TrustBadges>
+  1220→  1220→      <Badge icon={<Shield />} text="بیمه مسافرتی" />
+  1221→  1221→      <Badge icon={<Clock />} text="۲۴ ساعته" />
+  1222→  1222→      <Badge icon={<Star />} text="امتیاز ۴.۹ از ۵" />
+  1223→  1223→    </TrustBadges>
+  1224→  1224→  </Content>
+  1225→  1225→  
+  1226→  1226→  <ContactBar>
+  1227→  1227→    <PhoneNumbers>
+  1228→  1228→      <a href="tel:09109419743">۰۹۱۰۹۴۱۹۷۴۳</a>
+  1229→  1229→      <a href="tel:09368816807">۰۹۳۶۸۸۱۶۸۰۷</a>
+  1230→  1230→    </PhoneNumbers>
+  1231→  1231→    <WhatsAppButton href="https://wa.me/989109419743" />
+  1232→  1232→  </ContactBar>
+  1233→  1233→</HeroSection>
+  1234→  1234→```
+  1235→  1235→
+  1236→  1236→#### **۲. Popular Routes Card:**
+  1237→  1237→```jsx
+  1238→  1238→<RouteCard route={{ from: 'تهران', to: 'تبریز' }}>
+  1239→  1239→  <RouteIcon><Car /></RouteIcon>
+  1240→  1240→  <RouteText>
+  1241→  1241→    <From>{from}</From>
+  1242→  1242→    <ArrowRight />
+  1243→  1243→    <To>{to}</To>
+  1244→  1244→  </RouteText>
+  1245→  1245→  <Price>شروع قیمت از ۱,۲۰۰,۰۰۰ تومان</Price>
+  1246→  1246→  <Duration>~۶ ساعت</Duration>
+  1247→  1247→  <CTAButton>رزرو کنید</CTAButton>
+  1248→  1248→</RouteCard>
+  1249→  1249→```
+  1250→  1250→
+  1251→  1251→#### **۳. Booking Steps Wizard:**
+  1252→  1252→```jsx
+  1253→  1253→<BookingWizard>
+  1254→  1254→  <StepIndicator steps={['مسیر', 'زمان', 'خودرو', 'اطلاعات', 'پرداخت']} currentStep={2} />
+  1255→  1255→  
+  1256→  1256→  <StepContent>
+  1257→  1257→    {/* Dynamic step content based on currentStep */}
+  1258→  1258→  </StepContent>
+  1259→  1259→  
+  1260→  1260→  <Navigation>
+  1261→  1261→    <Button variant="outline" onClick={prevStep}>قبلی</Button>
+  1262→  1262→    <Button variant="primary" onClick={nextStep}>بعدی</Button>
+  1263→  1263→  </Navigation>
+  1264→  1264→</BookingWizard>
+  1265→  1265→```
+  1266→  1266→
+  1267→  1267→#### **۴. Driver Card (for dashboard):**
+  1268→  1268→```jsx
+  1269→  1269→<DriverCard driver={driverData}>
+  1270→  1270→  <Avatar src={driver.avatar} rating={driver.rating} />
+  1271→  1271→  <Info>
+  1272→  1272→    <Name>{driver.full_name}</Name>
+  1273→  1273→    <Vehicle>{driver.vehicle.brand} {driver.vehicle.model}</Vehicle>
+  1274→  1274→    <Stats>
+  1275→  1275→      <Stat label="سفر" value={driver.total_trips} />
+  1276→  1276→      <Stat label="امتیاز" value={driver.rating} />
+  1277→  1277→      <Stat label="پذیرش" value={`${driver.acceptance_rate}%`} />
+  1278→  1278→    </Stats>
+  1279→  1279→  </Info>
+  1280→  1280→  <Actions>
+  1281→  1281→    <Button size="sm" variant="outline">پروفایل</Button>
+  1282→  1282→    <Button size="sm" variant="primary">تماس</Button>
+  1283→  1283→  </Actions>
+  1284→  1284→</DriverCard>
+  1285→  1285→```
+  1286→  1286→
+  1287→  1287→---
+  1288→  1288→
+  1289→  1289→## 🔒 **امنیت (Security Implementation)**
+  1290→  1290→
+  1291→  1291→### **الف) Authentication & Authorization:**
+  1292→  1292→```javascript
+  1293→  1293→// JWT Configuration
+  1294→  1294→const jwtConfig = {
+  1295→  1295→  accessToken: {
+  1296→  1296→    expiresIn: '15m',           // Access token: 15 دقیقه
+  1297→  1297→    algorithm: 'HS256'
+  1298→  1298→  },
+  1299→  1299→  refreshToken: {
+  1300→  1300→    expiresIn: '7d',            // Refresh token: 7 روز
+  1301→  1301→    algorithm: 'HS256'
+  1302→  1302→  },
+  1303→  1303→  secret: process.env.JWT_SECRET
+  1304→  1304→};
+  1305→  1305→
+  1306→  1306→// RBAC Roles
+  1307→  1307→const roles = {
+  1308→  1308→  PASSENGER: ['booking:read', 'booking:create', 'profile:read', 'profile:update'],
+  1309→  1309→  DRIVER: [
+  1310→  1310→    'trip:accept', 'trip:reject', 'trip:start', 'trip:complete',
+  1311→  1311→    'location:update', 'earning:view', 'withdraw:create',
+  1312→  1312→    'profile:read', 'profile:update'
+  1313→  1313→  ],
+  1314→  1314→  ADMIN: ['*'], // Full access
+  1315→  1315→  SUPER_ADMIN: ['*'] + ['admin:user:delete', 'settings:manage']
+  1316→  1316→};
+  1317→  1317→
+  1318→  1318→// Middleware Example
+  1319→  1319→const authorize = (requiredPermission) => async (req, res, next) => {
+  1320→  1320→  const user = req.user;
+  1321→  1321→  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  1322→  1322→  
+  1323→  1323→  const userRoles = await getUserRoles(user.id);
+  1324→  1324→  const hasPermission = userRoles.some(role => 
+  1325→  1325→    roles[role].includes(requiredPermission) || roles[role].includes('*')
+  1326→  1326→  );
+  1327→  1327→  
+  1328→  1328→  if (!hasPermission) return res.status(403).json({ error: 'Forbidden' });
+  1329→  1329→  next();
+  1330→  1330→};
+  1331→  1331→```
+  1332→  1332→
+  1333→  1333→### **ب) Validation & Sanitization:**
+  1334→  1334→```javascript
+  1335→  1335→// Input Validation with Joi/Zod
+  1336→  1336→const passengerSchema = z.object({
+  1337→  1337→  phone: z.string().regex(/^09[0-9]{9}$/).length(11),
+  1338→  1338→  full_name: z.string().min(3).max(100).trim(),
+  1339→  1339→  email: z.string().email().optional(),
+  1340→  1340→  password: z.string()
+  1341→  1341→    .min(8)
+  1342→  1342→    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+  1343→  1343→    .message('Password must contain uppercase, lowercase and number')
+  1344→  1344→});
+  1345→  1345→
+  1346→  1346→// SQL Injection Prevention (via ORM/Parameterized Queries)
+  1347→  1347→// Always use parameterized queries or ORM methods
+  1348→  1348→await db.users.findMany({
+  1349→  1349→  where: {
+  1350→  1350→    phone: sanitizedPhone, // Never concatenate strings!
+  1351→  1351→    isActive: true
+  1352→  1352→  }
+  1353→  1353→});
+  1354→  1354→
+  1355→  1355→// XSS Prevention
+  1356→  1356→const sanitizeHTML = (input) => {
+  1357→  1357→  return DOMPurify.sanitize(input, {
+  1358→  1358→    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br'],
+  1359→  1359→    ALLOWED_ATTR: []
+  1360→  1360→  });
+  1361→  1361→};
+  1362→  1362→```
+  1363→  1363→
+  1364→  1364→### **ج) Rate Limiting:**
+  1365→  1365→```javascript
+  1366→  1366→// Express rate limit configuration
+  1367→  1367→const limiter = rateLimit({
+  1368→  1368→  windowMs: 15 * 60 * 1000, // 15 minutes
+  1369→  1369→  max: 100, // Limit each IP to 100 requests per windowMs
+  1370→  1370→  message: { error: 'Too many requests, please try again later.' }
+  1371→  1371→});
+  1372→  1372→
+  1373→  1373→// Specific limits for sensitive endpoints
+  1374→  1374→const authLimiter = rateLimit({
+  1375→  1375→  windowMs: 60 * 60 * 1000, // 1 hour
+  1376→  1376→  max: 5, // Max 5 attempts per hour for login/OTP
+  1377→  1377→  message: { error: 'Too many authentication attempts' }
+  1378→  1378→});
+  1379→  1379→```
+  1380→  1380→
+  1381→  1381→---
+  1382→  1382→
+  1383→  1383→## 🧪 **تست و QA (Testing Strategy)**
+  1384→  1384→
+  1385→  1385→### **Unit Tests:**
+  1386→  1386→```javascript
+  1387→  1387→// Example Jest test for booking service
+  1388→  1388→describe('BookingService', () => {
+  1389→  1389→  test('should create a new booking successfully', async () => {
+  1390→  1390→    const bookingData = {
+  1391→  1391→      passengerId: 'uuid',
+  1392→  1392→      origin: { lat: 35.6892, lng: 51.3890, address: 'Tehran' },
+  1393→  1393→      destination: { lat: 38.0962, lng: 46.2737, address: 'Tabriz' },
+  1394→  1394→      tripType: 'vip'
+  1395→  1395→    };
+  1396→  1396→    
+  1397→  1397→    const result = await BookingService.create(bookingData);
+  1398→  1398→    
+  1399→  1399→    expect(result).toHaveProperty('id');
+  1400→  1400→    expect(result.status).toBe('pending');
+  1401→  1401→    expect(result.totalFare).toBeGreaterThan(0);
+  1402→  1402→  });
+  1403→  1403→  
+  1404→  1404→  test('should reject booking if passenger is suspended', async () => {
+  1405→  1405→    const suspendedPassenger = await createSuspendedPassenger();
+  1406→  1406→    
+  1407→  1407→    await expect(
+  1408→  1408→      BookingService.create({ passengerId: suspendedPassenger.id, ...validData })
+  1409→  1409→    ).rejects.toThrow('Passenger account is suspended');
+  1410→  1410→  });
+  1411→  1411→});
+  1412→  1412→```
+  1413→  1413→
+  1414→  1414→### **Integration Tests:**
+  1415→  1415→```javascript
+  1416→  1416→// API endpoint testing with Supertest
+  1417→  1417→describe('POST /api/auth/register', () => {
+  1418→  1418→  test('should register new passenger and send OTP', async () => {
+  1419→  1419→    const response = await request(app)
+  1420→  1420→      .post('/api/auth/register')
+  1421→  1421→      .send({
+  1422→  1422→        phone: '09123456789',
+  1423→  1423→        full_name: 'Test User',
+  1424→  1424→        password: 'SecurePass123'
+  1425→  1425→      })
+  1426→  1426→      .expect(201);
+  1427→  1427→      
+  1428→  1428→    expect(response.body.message).toContain('OTP sent');
+  1429→  1429→    expect(response.body.user.phone).toBe('09123456789');
+  1430→  1430→  });
+  1431→  1431→});
+  1432→  1432→```
+  1433→  1433→
+  1434→  1434→### **E2E Tests (Playwright/Cypress):**
+  1435→  1435→```javascript
+  1436→  1436→// E2E test for complete booking flow
+  1437→  1437→test('complete booking flow as passenger', async ({ page }) => {
+  1438→  1438→  await page.goto('/');
+  1439→  1439→  
+  1440→  1440→  // Fill booking form
+  1441→  1441→  await page.fill('[name="origin"]', 'تهران، میدان آزادی');
+  1442→  1442→  await page.fill('[name="destination"]', 'اصفهان، میدان نقش جهان');
+  1443→  1443→  await page.selectOption('[name="tripType"]', 'vip');
+  1444→  1444→  await page.click('button[type="submit"]');
+  1445→  1445→  
+  1446→  1446→  // Verify redirect to login/register
+  1447→  1447→  await page.waitForURL('/auth/login');
+  1448→  1448→  
+  1449→  1449→  // Login with OTP
+  1450→  1450→  await page.fill('[name="phone"]', '09123456789');
+  1451→  1451→  await page.click('button:has-text("دریافت کد")');
+  1452→  1452→  await page.fill('[name="otp"]', '123456'); // In test environment
+  1453→  1453→  await page.click('button:has-text("ورود")');
+  1454→  1454→  
+  1455→  1455→  // Complete booking
+  1456→  1456→  await page.waitForURL('/booking/*');
+  1457→  1457→  await page.fill('[name="fullName']', 'Test User');
+  1458→  1458→  await page.click('button:has-text("پرداخت و تأیید")');
+  1459→  1459→  
+  1460→  1460→  // Verify success
+  1461→  1461→  await page.waitForSelector('text=رزرو شما با موفقیت ثبت شد');
+  1462→  1462→});
+  1463→  1463→```
+  1464→  1464→
+  1465→  1465→---
+  1466→  1466→
+  1467→  1467→## 🚀 **استقرار و Deployment (Deployment Guide)**
+  1468→  1468→
+  1469→  1469→### **Docker Compose Setup:**
+  1470→  1470→```yaml
+  1471→  1471→# docker-compose.yml
+  1472→  1472→version: '3.8'
+  1473→  1473→
+  1474→  1474→services:
+  1475→  1475→  frontend:
+  1476→  1476→    build: ./frontend
+  1477→  1477→    ports:
+  1478→  1478→      - "3000:3000"
+  1479→  1479→    environment:
+  1480→  1480→      - NEXT_PUBLIC_API_URL=http://backend:4000
+  1481→  1481→    depends_on:
+  1482→  1482→      - backend
+  1483→  1483→
+  1484→  1484→  backend:
+  1485→  1485→    build: ./backend
+  1486→  1486→    ports:
+  1487→  1487→      - "4000:4000"
+  1488→  1488→    environment:
+  1489→  1489→      - DATABASE_URL=postgresql://user:pass@postgres:5432/sivantaxi
+  1490→  1490→      - REDIS_URL=redis://redis:6379
+  1491→  1491→      - JWT_SECRET=${JWT_SECRET}
+  1492→  1492→      - SMS_API_KEY=${SMS_API_KEY}
+  1493→  1493→    depends_on:
+  1494→  1494→      - postgres
+  1495→  1495→      - redis
+  1496→  1496→
+  1497→  1497→  postgres:
+  1498→  1498→    image: postgres:15-alpine
+  1499→  1499→    volumes:
+  1500→  1500→      - postgres_data:/var/lib/postgresql/data
+  1501→  1501→    environment:
+  1502→  1502→      POSTGRES_DB: sivantaxi
+  1503→  1503→      POSTGRES_USER: user
+  1504→  1504→      POSTGRES_PASSWORD: ${DB_PASSWORD}
+  1505→  1505→    ports:
+  1506→  1506→      - "5432:5432"
+  1507→  1507→
+  1508→  1508→  redis:
+  1509→  1509→    image: redis:7-alpine
+  1510→  1510→    volumes:
+  1511→  1511→      - redis_data:/data
+  1512→  1512→    ports:
+  1513→  1513→      - "6379:6379"
+  1514→  1514→
+  1515→  1515→volumes:
+  1516→  1516→  postgres_data:
+  1517→  1517→  redis_data:
+  1518→  1518→```
+  1519→  1519→
+  1520→  1520→### **CI/CD Pipeline (GitHub Actions):**
+  1521→  1521→```yaml
+  1522→  1522→# .github/workflows/deploy.yml
+  1523→  1523→name: Deploy Sivan VIP Taxi
+  1524→  1524→
+  1525→  1525→on:
+  1526→  1526→  push:
+  1527→  1527→    branches: [main]
+  1528→  1528→
+  1529→  1529→jobs:
+  1530→  1530→  test-and-deploy:
+  1531→  1531→    runs-on: ubuntu-latest
+  1532→  1532→    
+  1533→  1533→    steps:
+  1534→  1534→      - uses: actions/checkout@v3
+  1535→  1535→      
+  1536→  1536→      - name: Setup Node.js
+  1537→  1537→        uses: actions/setup-node@v3
+  1538→  1538→        with:
+  1539→  1539→          node-version: '18'
+  1540→  1540→          
+  1541→  1541→      - name: Install dependencies
+  1542→  1542→        run: npm ci
+  1543→  1543→        
+  1544→  1544→      - name: Run tests
+  1545→  1545→        run: npm test
+  1546→  1546→        
+  1547→  1547→      - name: Build application
+  1548→  1548→        run: npm run build
+  1549→  1549→        
+  1550→  1550→      - name: Deploy to production
+  1551→  1551→        run: |
+  1552→  1552→          docker compose up -d --build
+  1553→  1553→          echo "Deployed to production at $(date)"
+  1554→  1554→```
+  1555→  1555→
+  1556→  1556→---
+  1557→  1557→
+  1558→  1558→## 📱 **نسخه موبایل (PWA Considerations)**
+  1559→  1559→
+  1560→  1560→```json
+  1561→  1561→{
+  1562→  1562→  "name": "تاکسی ویژه سیوان",
+  1563→  1563→  "short_name": "سیوان",
+  1564→  1564→  "description": "رزرو آنلاین تاکسی VIP بین شهری",
+  1565→  1565→  "start_url": "/",
+  1566→  1566→  "display": "standalone",
+  1567→  1567→  "background_color": "#0a0a0a",
+  1568→  1568→  "theme_color": "#D4AF37",
+  1569→  1569→  "icons": [
+  1570→  1570→    {
+  1571→  1571→      "src": "/icons/icon-192x192.png",
+  1572→  1572→      "sizes": "192x192",
+  1573→  1573→      "type": "image/png"
+  1574→  1574→    },
+  1575→  1575→    {
+  1576→  1576→      "src": "/icons/icon-512x512.png",
+  1577→  1577→      "sizes": "512x512",
+  1578→  1578→      "type": "image/png"
+  1579→  1579→    }
+  1580→  1580→  ]
+  1581→  1581→}
+  1582→  1582→```
+  1583→  1583→
+  1584→  1584→---
+  1585→  1585→
+  1586→  1586→## ✅ **Checklist نهایی قبل از راه‌اندازی:**
+  1587→  1587→
+  1588→  1588→### **فنی:**
+  1589→  1589→- [ ] تمام API تست شده باشند
+  1590→  1590→- [ ] دیتابیس Migration اجرا شده باشد
+  1591→  1591→- [ ] SSL Certificate نصب شود (HTTPS)
+  1592→  1592→- [ ] CDN پیکربندی شود
+  1593→  1593→- [ ] Backup خودکار تنظیم شود
+  1594→  1594→- [ ] Monitoring و Alerting فعال شود
+  1595→  1595→- [ ] Performance Testing انجام شود (Load Test)
+  1596→  1596→
+  1597→  1597→### **محتوایی:**
+  1598→  1598→- [ ] تمام صفحات استاتیک پر شوند (درباره ما، تماس، FAQ)
+  1599→  1599→- [ ] حداقل ۵-۱۰ مقاله بلاگ منتشر شود
+  1600→  1600→- [ ] تصاویر باکیفیت از خودروها آپلود شوند
+  1601→  1601→- [ ] متن‌های قانونی (Terms of Service, Privacy Policy) نوشته شوند
+  1602→  1602→- [ ] SEO Meta Tags برای تمام صفحات تنظیم شود
+  1603→  1603→
+  1604→  1604→### **عملیاتی:**
+  1605→  1605→- [ ] شماره‌های تماس فعال باشند
+  1606→  1606→- [ ] سیستم SMS Gateway متصل شود
+  1607→  1607→- [ ] درگاه پرداخت (زرین‌پال/آسان پرداخت) فعال شود
+  1608→  1608→- [ ] ادمین‌های اولیه ایجاد شوند
+  1609→  1609→- [ ] مستندات API برای توسعه‌دهندگان نوشته شود
+  1610→  1610→- [ ] آموزش به پشتیبانی داده شود
+  1611→  1611→
+  1612→  1612→---
+  1613→  1613→
+  1614→  1614→## 🎁 **Bonus Features (قابلیت‌های اضافی پیشنهادی):**
+  1615→  1615→
+  1616→  1616→1. **سیستم Referral:** معرفی دوستان و کسب اعتبار
+  1617→  1617→2. **برنامه وفاداری (Loyalty Points):** جمع‌آوری امتیاز با هر سفر
+  1618→  1618→3. **چت درون‌برنامه‌ای:** ارتباط مستقیم مسافر و راننده
+  1619→  1619→4. **اشتراک ماهانه (Subscription):** برای مسافران تجاری/شرکتی
+  1620→  1620→5. **تکمیل خودکار آدرس:** با Google Places API
+  1621→  1621→6. **پشتیبانی از Voice Search:** برای رانندگان در حین رانندگی
+  1622→  1622→7. **Dashboard تحلیلی برای شرکت‌ها:** Corporate Accounts
+  1623→  1623→8. **Integrations:** با سیستم‌های حسابداری و CRM
+  1624→  1624→
+  1625→  1625→---
+  1626→  1626→
+  1627→  1627→## 📞 **پشتیبانی و نگهداری:**
+  1628→  1628→
+  1629→  1629→```yaml
+  1630→  1630→SLA (Service Level Agreement):
+  1631→  1631→  Uptime: 99.9%
+  1632→  1632→  Response Time:
+  1633→  1633→    - Critical bugs: < 1 hour
+  1634→  1634→    - High priority: < 4 hours
+  1635→  1635→    - Normal: < 24 hours
+  1636→  1636→    - Low: < 72 hours
+  1637→  1637→
+  1638→  1638→Maintenance Windows:
+  1639→  1639→  - Weekly: Sundays 2:00 AM - 4:00 AM (IST)
+  1640→  1640→  - Emergency patches: As needed with 1-hour notice
+  1641→  1641→
+  1642→  1642→Support Channels:
+  1643→  1643→  - Email: support@sivantaxi.com
+  1644→  1644→  - Phone: 09109419743 / 09368816807
+  1645→  1645→  - Ticket System: Via admin panel
+  1646→  1646→```
+  1647→  1647→
+  1648→  1648→---
+  1649→  1649→
+  1650→  1650→## 🎯 **نتیجه‌گیری:**
+  1651→  1651→
+  1652→  1652→این **پرامپت جامع** شامل تمام موارد لازم برای توسعه **وب‌سایت تاکسی ویژه سیوان** است که:
+  1653→  1653→
+  1654→  1654→✅ **تمام امکانات سایت VIP Taxi Iran** را پوشش می‌دهد  
+  1655→  1655→✅ **سیستم احراز هویت کامل** برای مسافران و رانندگان دارد  
+  1656→  1656→✅ **پنل‌های تخصصی** برای هر گروه کاربری طراحی کرده  
+  1657→  1657→✅ **سیستم رزرو آنلاین** با فرآیند چند مرحله‌ای ارائه می‌دهد  
+  1658→  1658→✅ **بلاگ/مقالات** با مدیریت کامل دارد  
+  1659→  1659→✅ **پنل ادمین قدرتمند** با تمام قابلیت‌های مدیریتی  
+  1660→  1660→✅ **طراحی دیتابیس** بهینه و مقیاس‌پذیر  
+  1661→  1661→✅ **API RESTful** کامل و مستند  
+  1662→  1662→✅ **امنیت** در سطح بالا  
+  1663→  1663→✅ **راهنمای تست و استقرار**  
+  1664→  1664→
+  1665→  1665→---
+  1666→  1666→
+  1667→  1667→**🚀 آماده شروع توسعه هستید؟**
+  1668→  1668→
+  1669→  1669→این پرامپت را می‌توانید به:
+  1670→  1670→- **توسعه‌دهنده Full-Stack** بدهید
+  1671→  1671→- **تیم توسعه** بسپارید
+  1672→  1672→- **هوش مصنوعی کدنویس** (مثل Claude، GPT-4) بدهید
+  1673→  1673→- **شرکت توسعه نرم‌افزار** ارائه دهید
+  1674→  1674→
+  1675→  1675→**موفق باشید! 🎉**

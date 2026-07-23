@@ -1,0 +1,328 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  email     String?  @unique
+  password  String?
+  fullName  String   @default("")
+  role      String   @default("passenger") // passenger, driver, admin
+  avatarUrl String?
+  isActive  Boolean  @default(true)
+  isVerified Boolean @default(false)
+  lastLoginAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  passenger Passenger?
+  driver    Driver?
+  blogPosts BlogPost[]
+  notifications Notification[]
+  transactions Transaction[]
+  supportTickets SupportTicket[]
+  activityLogs  ActivityLog[]
+}
+
+model Passenger {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  nationalId  String?
+  gender      String?
+  birthDate   String?
+  walletBalance Float   @default(0)
+  rating      Float    @default(5.0)
+  totalTrips  Int      @default(0)
+  referralCode String  @unique
+  referredBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trips  Trip[]
+  reviews Review[]
+}
+
+model Driver {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  nationalId      String   @unique
+  fatherName      String?
+  licenseNumber   String?
+  licenseExpiry   String?
+  healthCertExpiry String?
+  verificationStatus String @default("pending") // pending, approved, rejected, suspended
+  rating          Float    @default(5.0)
+  totalTrips      Int      @default(0)
+  acceptanceRate  Float    @default(100.0)
+  completionRate  Float   @default(100.0)
+  currentLat      Float?
+  currentLng      Float?
+  onlineStatus    String   @default("offline") // online, offline, busy
+  balance         Float    @default(0)
+  shebaNumber     String?
+  bankName        String?
+  accountOwner    String?
+  joinedAt        DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle  Vehicle?
+  trips    Trip[]
+  reviews  Review[]
+  earnings Earning[]
+}
+
+model Vehicle {
+  id                String   @id @default(cuid())
+  driverId          String   @unique
+  type              String   @default("sedan") // sedan, suv, van, electric
+  brand             String
+  model             String
+  year              Int
+  color             String
+  plateNumber       String   @unique
+  insuranceExpiry   String?
+  techDiagExpiry    String?
+  status            String   @default("active") // active, inactive, maintenance
+  images            String   @default("[]") // JSON array
+  createdAt         DateTime @default(now())
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+}
+
+model Trip {
+  id              String    @id @default(cuid())
+  passengerId     String
+  driverId        String?
+  originAddress   String
+  originLat       Float
+  originLng       Float
+  destAddress     String
+  destLat         Float
+  destLng         Float
+  tripType        String    @default("economy") // economy, vip, luxury, van, electric
+  status          String    @default("pending") // pending, accepted, driver_arrived, in_progress, completed, cancelled, no_show
+  requestedAt     DateTime  @default(now())
+  acceptedAt      DateTime?
+  pickedUpAt      DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  scheduledFor    DateTime?
+  baseFare        Float     @default(0)
+  distanceFare    Float     @default(0)
+  timeFare        Float     @default(0)
+  discountAmount  Float     @default(0)
+  totalFare       Float     @default(0)
+  commissionAmt   Float     @default(0)
+  driverEarnings  Float     @default(0)
+  paymentMethod   String    @default("cash") // cash, online, wallet
+  paymentStatus   String    @default("pending") // pending, paid, refunded
+  distanceKm      Float?
+  durationMin     Int?
+  passengerCount  Int       @default(1)
+  notes           String?
+  cancelReason    String?
+  cancelledBy     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  passenger Passenger @relation(fields: [passengerId], references: [id])
+  driver    Driver?   @relation(fields: [driverId], references: [id])
+  reviews   Review[]
+  transactions Transaction[]
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  tripId      String
+  reviewerId  String
+  targetId    String // driver or passenger id
+  targetType  String  @default("driver") // driver, passenger
+  rating      Int     @default(5)
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  trip      Trip      @relation(fields: [tripId], references: [id])
+  passenger Passenger? @relation(fields: [reviewerId], references: [id])
+  driver    Driver?   @relation(fields: [reviewerId], references: [id])
+}
+
+model Transaction {
+  id          String    @id @default(cuid())
+  userId      String
+  tripId      String?
+  type        String    @default("credit") // credit, debit, commission, refund, topup, withdrawal
+  amount      Float
+  description String?
+  referenceId String?
+  status      String    @default("pending") // pending, completed, failed
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  trip Trip? @relation(fields: [tripId], references: [id])
+}
+
+model Earning {
+  id          String   @id @default(cuid())
+  driverId    String
+  amount      Float
+  period      String  @default("today") // today, week, month
+  tripCount   Int     @default(0)
+  commission  Float   @default(0)
+  createdAt   DateTime @default(now())
+
+  driver Driver @relation(fields: [driverId], references: [id])
+}
+
+model BlogPost {
+  id              String   @id @default(cuid())
+  title           String
+  slug            String   @unique
+  excerpt         String?
+  content         String
+  featuredImageUrl String?
+  authorId        String?
+  categoryId      String?
+  category        BlogCategory? @relation(fields: [categoryId], references: [id])
+  tags            String   @default("[]") // JSON array
+  status          String   @default("draft") // draft, published, archived
+  publishedAt     DateTime?
+  viewCount       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  author User? @relation(fields: [authorId], references: [id])
+  comments BlogComment[]
+}
+
+model BlogCategory {
+  id   String @id @default(cuid())
+  name String @unique
+  slug String @unique
+
+  posts BlogPost[]
+}
+
+model BlogComment {
+  id       String   @id @default(cuid())
+  postId   String
+  authorId String?
+  parentId String?
+  content  String
+  isApproved Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  post BlogPost @relation(fields: [postId], references: [id])
+}
+
+model Coupon {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  description     String?
+  discountType    String   @default("percentage") // percentage, fixed
+  discountValue   Float
+  minOrderAmount  Float    @default(0)
+  maxDiscount     Float?
+  usageLimit      Int?
+  usageCount      Int      @default(0)
+  validFrom       DateTime
+  validUntil      DateTime
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+}
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  userId      String
+  subject     String
+  description String
+  priority    String   @default("medium") // low, medium, high, urgent
+  status      String   @default("open") // open, in_progress, waiting, resolved, closed
+  assignedTo  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user       User              @relation(fields: [userId], references: [id])
+  messages   TicketMessage[]
+}
+
+model TicketMessage {
+  id          String   @id @default(cuid())
+  ticketId    String
+  senderId    String
+  message     String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("info") // info, success, warning, error
+  channel   String   @default("in_app") // sms, email, push, in_app
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entityType String?
+  entityId   String?
+  ipAddress String?
+  userAgent  String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model SiteSettings {
+  id          String @id @default("main")
+  siteName    String @default("تاکسی ویژه سیوان")
+  siteUrl     String @default("https://sivantaxi.com")
+  phone1      String @default("09109419743")
+  phone2      String @default("09368816807")
+  email       String @default("info@sivantaxi.com")
+  address     String @default("")
+  aboutText   String @default("")
+  commissionRate Float @default(10.0)
+  minWithdrawal Float @default(500000)
+  workingHours String @default("۲۴ ساعته - ۷ روز هفته")
+  updatedAt   DateTime @updatedAt
+}
+
+model PopularRoute {
+  id          String @id @default(cuid())
+  origin      String
+  destination String
+  price       Int
+  duration    String
+  image       String?
+  isPopular   Boolean @default(true)
+  sortOrder   Int    @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model Testimonial {
+  id        String @id @default(cuid())
+  name      String
+  avatarUrl String?
+  rating    Int    @default(5)
+  comment   String
+  tripRoute String?
+  isApproved Boolean @default(true)
+  createdAt DateTime @default(now())
+}
