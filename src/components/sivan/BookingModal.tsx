@@ -13,7 +13,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Users,
-  Copy,
   Loader2,
   Phone,
   Route,
@@ -35,13 +34,13 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAppStore } from '@/lib/store';
 import { JalaliDatePicker } from '@/components/sivan/JalaliDatePicker';
 import { CitySelector } from '@/components/sivan/CitySelector';
+import { toast } from 'sonner';
 
 const steps = [
   { id: 0, title: 'مسیر', icon: MapPin },
   { id: 1, title: 'زمان', icon: Calendar },
   { id: 2, title: 'خودرو', icon: Car },
-  { id: 3, title: 'اطلاعات', icon: User },
-  { id: 4, title: 'خلاصه', icon: CreditCard },
+  { id: 3, title: 'اطلاعات و پرداخت', icon: User },
 ];
 
 const carOptions = [
@@ -105,9 +104,8 @@ export function BookingModal() {
   const [open, setOpen] = useState(false);
   const [distanceLoading, setDistanceLoading] = useState(false);
   const [distanceError, setDistanceError] = useState('');
-  const [priceLoading, setPriceLoading] = useState(false);
 
-  const shouldOpen = booking.currentStep >= 0 && booking.currentStep <= 4;
+  const shouldOpen = booking.currentStep >= 0 && booking.currentStep <= 3;
   const dialogOpen = open || shouldOpen;
 
   const handleClose = (val: boolean) => {
@@ -118,7 +116,7 @@ export function BookingModal() {
   };
 
   const nextStep = () => {
-    if (booking.currentStep < 4) {
+    if (booking.currentStep < 3) {
       setBookingStep(booking.currentStep + 1);
     }
   };
@@ -142,7 +140,6 @@ export function BookingModal() {
     setDistanceError('');
 
     try {
-      // Build query strings - use most specific location name for geocoding
       const originQuery = originCity.neighborhood || originCity.district || originCity.city;
       const destQuery = destCity.neighborhood || destCity.district || destCity.city;
 
@@ -176,32 +173,6 @@ export function BookingModal() {
     }
   }, [booking.formData.originCity.city, booking.formData.destCity.city, fetchDistance]);
 
-  // Fetch price when entering summary step
-  useEffect(() => {
-    if (booking.currentStep === 4 && booking.formData.distanceKm) {
-      const fetchPrice = async () => {
-        setPriceLoading(true);
-        try {
-          const res = await fetch(
-            `/api/pricing?tripType=${booking.formData.tripType}&distanceKm=${booking.formData.distanceKm}`
-          );
-          if (res.ok) {
-            const data = await res.json();
-            setEstimatedPrice(
-              booking.formData.roundTrip ? data.price * 2 : data.price,
-              data.duration
-            );
-          }
-        } catch {
-          // Silently fail - price will be null
-        } finally {
-          setPriceLoading(false);
-        }
-      };
-      fetchPrice();
-    }
-  }, [booking.currentStep, booking.formData.distanceKm, booking.formData.tripType, booking.formData.roundTrip, setEstimatedPrice]);
-
   const handleSubmit = async () => {
     setBookingSubmitting(true);
     try {
@@ -228,7 +199,7 @@ export function BookingModal() {
       }
 
       // Call booking API
-      await fetch('/api/booking', {
+      const bookingRes = await fetch('/api/booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -248,13 +219,43 @@ export function BookingModal() {
         }),
       });
 
-      const code = 'SV-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      if (!bookingRes.ok) {
+        const errData = await bookingRes.json().catch(() => ({ error: 'خطا در ثبت رزرو' }));
+        throw new Error(errData.error || 'خطا در ثبت رزرو');
+      }
+
+      const result = await bookingRes.json();
+      const code = result.bookingCode || 'SV-' + Math.random().toString(36).substring(2, 8).toUpperCase();
       setBookingCode(code);
       setEstimatedPrice(price, duration || `~${booking.formData.durationMin || 60} دقیقه`);
+
+      // Close modal immediately after success
+      setOpen(false);
+      resetBooking();
+
+      // Show success toast for 3 seconds
+      toast.success(
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2 text-green-600 font-bold text-sm">
+            <Check className="h-4 w-4" />
+            رزرو با موفقیت ثبت شد!
+          </div>
+          <div className="text-muted-foreground text-xs">
+            کد رهگیری: <span className="font-bold text-foreground" dir="ltr">{code}</span>
+          </div>
+          {distanceKm && (
+            <div className="text-muted-foreground text-xs">
+              هزینه: <span className="font-bold text-foreground">{formatPrice(price)}</span>
+            </div>
+          )}
+        </div>,
+        {
+          duration: 3000,
+          className: 'toast-success-custom',
+        }
+      );
     } catch {
-      // Fallback
-      const code = 'SV-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-      setBookingCode(code);
+      toast.error('خطا در ثبت رزرو. لطفاً دوباره تلاش کنید.', { duration: 3000 });
     } finally {
       setBookingSubmitting(false);
     }
@@ -270,8 +271,6 @@ export function BookingModal() {
         return true;
       case 3:
         return booking.formData.fullName.length > 1 && booking.formData.phone.length >= 10;
-      case 4:
-        return true;
       default:
         return false;
     }
@@ -279,32 +278,23 @@ export function BookingModal() {
 
   const canGoNext = (): boolean => {
     if (!isStepValid()) return false;
-    // Step 0: wait for distance to load if both cities are selected
     if (booking.currentStep === 0 && distanceLoading) return false;
     return true;
   };
 
   return (
     <Dialog open={dialogOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-[#1a1a1a] border-[#333] max-w-2xl max-h-[90vh] overflow-y-auto p-0" showCloseButton={booking.bookingCode === null}>
+      <DialogContent className="bg-[#1a1a1a] border-[#333] max-w-2xl max-h-[90vh] overflow-y-auto p-0">
         {/* Steps indicator */}
         <div className="bg-[#0a0a0a] border-b border-[#333] p-4 sticky top-0 z-10">
-          <div className="flex items-center justify-between mb-3">
-            <DialogHeader className="p-0">
-              <DialogTitle className="text-right text-[#fafafa] text-lg">
-                رزرو تاکسی
-              </DialogTitle>
-              <DialogDescription className="text-right text-[#a1a1aa] text-xs mt-1">
-                مراحل رزرو سفر خود را تکمیل کنید
-              </DialogDescription>
-            </DialogHeader>
-            {booking.bookingCode && (
-              <Badge className="bg-green-500/20 text-green-400 border border-green-500/30">
-                <Check className="h-3 w-3 ml-1" />
-                ثبت شد
-              </Badge>
-            )}
-          </div>
+          <DialogHeader className="p-0 mb-3">
+            <DialogTitle className="text-right text-[#fafafa] text-lg">
+              رزرو تاکسی
+            </DialogTitle>
+            <DialogDescription className="text-right text-[#a1a1aa] text-xs mt-1">
+              مراحل رزرو سفر خود را تکمیل کنید
+            </DialogDescription>
+          </DialogHeader>
           <div className="flex items-center gap-2">
             {steps.map((step, idx) => (
               <div key={step.id} className="flex-1 flex items-center gap-2">
@@ -537,7 +527,7 @@ export function BookingModal() {
               </motion.div>
             )}
 
-            {/* Step 3: Passenger Info */}
+            {/* Step 3: Passenger Info + Payment + Submit */}
             {booking.currentStep === 3 && (
               <motion.div
                 key="step-3"
@@ -547,6 +537,52 @@ export function BookingModal() {
                 transition={{ duration: 0.3 }}
                 className="space-y-5"
               >
+                {/* Trip Summary Card */}
+                <div className="bg-[#0a0a0a] rounded-xl border border-[#333] p-4 space-y-2">
+                  <h4 className="text-[#fafafa] font-bold text-sm mb-3">خلاصه سفر</h4>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between text-[#a1a1aa]">
+                      <span>مسیر:</span>
+                      <span className="text-[#fafafa] text-left max-w-[60%]">
+                        {getCityDisplayName(booking.formData.originCity)} → {getCityDisplayName(booking.formData.destCity)}
+                      </span>
+                    </div>
+                    {booking.formData.distanceKm && (
+                      <div className="flex justify-between text-[#a1a1aa]">
+                        <span>فاصله:</span>
+                        <span className="text-[#fafafa]">
+                          {new Intl.NumberFormat('fa-IR').format(booking.formData.distanceKm)} کیلومتر
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-[#a1a1aa]">
+                      <span>تاریخ:</span>
+                      <span className="text-[#fafafa]">{booking.formData.date || '---'}</span>
+                    </div>
+                    <div className="flex justify-between text-[#a1a1aa]">
+                      <span>ساعت:</span>
+                      <span className="text-[#fafafa]">{booking.formData.time || '---'}</span>
+                    </div>
+                    <div className="flex justify-between text-[#a1a1aa]">
+                      <span>خودرو:</span>
+                      <span className="text-[#fafafa]">
+                        {carOptions.find((c) => c.value === booking.formData.tripType)?.label || '---'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[#a1a1aa]">
+                      <span>مسافران:</span>
+                      <span className="text-[#fafafa]">{booking.formData.passengerCount} نفر</span>
+                    </div>
+                    {booking.formData.roundTrip && (
+                      <div className="flex justify-between text-[#a1a1aa]">
+                        <span>نوع سفر:</span>
+                        <span className="text-[#D4AF37]">رفت و برگشت</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Passenger Info */}
                 <div className="space-y-2">
                   <Label className="text-[#fafafa]">
                     <User className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
@@ -581,103 +617,6 @@ export function BookingModal() {
                     className="bg-[#0a0a0a] border-[#333] text-[#fafafa] rounded-md border px-3 py-2 text-sm min-h-[80px] w-full focus-visible:border-[#D4AF37]/50 focus-visible:ring-[#D4AF37]/50 focus-visible:ring-[3px] outline-none resize-none"
                   />
                 </div>
-              </motion.div>
-            )}
-
-            {/* Step 4: Summary */}
-            {booking.currentStep === 4 && !booking.bookingCode && (
-              <motion.div
-                key="step-4"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-5"
-              >
-                {/* Summary Card */}
-                <div className="bg-[#0a0a0a] rounded-xl border border-[#333] p-5 space-y-4">
-                  <h4 className="text-[#fafafa] font-bold">خلاصه رزرو</h4>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between text-[#a1a1aa]">
-                      <span>مسیر:</span>
-                      <span className="text-[#fafafa] text-left max-w-[60%]">
-                        {getCityDisplayName(booking.formData.originCity)} → {getCityDisplayName(booking.formData.destCity)}
-                      </span>
-                    </div>
-                    {booking.formData.distanceKm && (
-                      <div className="flex justify-between text-[#a1a1aa]">
-                        <span>فاصله:</span>
-                        <span className="text-[#fafafa]">
-                          {new Intl.NumberFormat('fa-IR').format(booking.formData.distanceKm)} کیلومتر
-                        </span>
-                      </div>
-                    )}
-                    {booking.formData.durationMin && (
-                      <div className="flex justify-between text-[#a1a1aa]">
-                        <span>زمان تقریبی:</span>
-                        <span className="text-[#fafafa]">
-                          {booking.formData.durationMin >= 60
-                            ? `${Math.floor(booking.formData.durationMin / 60)} ساعت و ${booking.formData.durationMin % 60} دقیقه`
-                            : `${booking.formData.durationMin} دقیقه`}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-[#a1a1aa]">
-                      <span>تاریخ:</span>
-                      <span className="text-[#fafafa]">{booking.formData.date || '---'}</span>
-                    </div>
-                    <div className="flex justify-between text-[#a1a1aa]">
-                      <span>ساعت:</span>
-                      <span className="text-[#fafafa]">{booking.formData.time || '---'}</span>
-                    </div>
-                    <div className="flex justify-between text-[#a1a1aa]">
-                      <span>نوع خودرو:</span>
-                      <span className="text-[#fafafa]">
-                        {carOptions.find((c) => c.value === booking.formData.tripType)?.label || '---'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-[#a1a1aa]">
-                      <span>تعداد مسافران:</span>
-                      <span className="text-[#fafafa]">{booking.formData.passengerCount} نفر</span>
-                    </div>
-                    {booking.formData.roundTrip && (
-                      <div className="flex justify-between text-[#a1a1aa]">
-                        <span>نوع سفر:</span>
-                        <span className="text-[#D4AF37]">رفت و برگشت</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Price */}
-                  <div className="border-t border-[#333] pt-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[#a1a1aa] text-sm">هزینه سفر:</span>
-                      {priceLoading ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-[#D4AF37]" />
-                      ) : booking.estimatedPrice ? (
-                        <span className="text-[#D4AF37] font-bold text-lg">
-                          {formatPrice(booking.estimatedPrice)}
-                        </span>
-                      ) : (
-                        <span className="text-[#a1a1aa]">محاسبه نشد</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Coupon */}
-                <div className="space-y-2">
-                  <Label className="text-[#fafafa]">کد تخفیف</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="کد تخفیف"
-                      value={booking.formData.couponCode}
-                      onChange={(e) => updateBookingForm({ couponCode: e.target.value })}
-                      className="bg-[#0a0a0a] border-[#333] text-[#fafafa]"
-                      dir="ltr"
-                    />
-                  </div>
-                </div>
 
                 {/* Payment Method */}
                 <div className="space-y-3">
@@ -707,50 +646,10 @@ export function BookingModal() {
                 </div>
               </motion.div>
             )}
-
-            {/* Success */}
-            {booking.currentStep === 4 && booking.bookingCode && (
-              <motion.div
-                key="success"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-8 space-y-5"
-              >
-                <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
-                  <Check className="h-10 w-10 text-green-400" />
-                </div>
-                <h3 className="text-2xl font-bold text-[#fafafa]">رزرو با موفقیت ثبت شد!</h3>
-                <p className="text-[#a1a1aa]">
-                  کد رهگیری شما:
-                </p>
-                <div className="inline-flex items-center gap-2 bg-[#0a0a0a] border border-[#D4AF37]/30 rounded-xl px-6 py-3">
-                  <span className="text-[#D4AF37] font-bold text-xl tracking-wider" dir="ltr">
-                    {booking.bookingCode}
-                  </span>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(booking.bookingCode || '')}
-                    className="text-[#a1a1aa] hover:text-[#D4AF37] transition-colors"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </button>
-                </div>
-                <p className="text-[#a1a1aa] text-sm">
-                  این کد را یادداشت کنید. از طریق پیامک نیز ارسال خواهد شد.
-                </p>
-                <Button
-                  onClick={() => {
-                    resetBooking();
-                  }}
-                  className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B]"
-                >
-                  بستن
-                </Button>
-              </motion.div>
-            )}
           </AnimatePresence>
 
           {/* Navigation buttons */}
-          {booking.bookingCode === null && booking.currentStep >= 0 && booking.currentStep < 4 && (
+          {booking.currentStep >= 0 && booking.currentStep <= 3 && (
             <div className="flex items-center justify-between mt-8 pt-6 border-t border-[#333]">
               <Button
                 variant="ghost"
@@ -772,7 +671,10 @@ export function BookingModal() {
                     در حال ثبت...
                   </>
                 ) : booking.currentStep === 3 ? (
-                  'ثبت نهایی'
+                  <>
+                    <Check className="h-4 w-4 mr-1.5" />
+                    ثبت نهایی
+                  </>
                 ) : (
                   <>
                     مرحله بعد

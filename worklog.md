@@ -90,3 +90,30 @@ Stage Summary:
 - HeroSection has full CitySelector integration with distance/price display
 - Admin can configure email notification via SMTP (Gmail compatible)
 - Booking submissions automatically send email notification to admin
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix booking modal UX - remove broken summary step, add back button, close modal after submission with toast
+
+Work Log:
+- Read and analyzed BookingModal.tsx (790 lines), store.ts, HeroSection.tsx
+- Removed step 4 (خلاصه/summary) from the booking wizard - was broken and non-functional
+- Consolidated to 4 steps: مسیر → زمان → خودرو → اطلاعات و پرداخت
+- Moved payment method and coupon from removed step 4 to step 3
+- Step 3 now shows: trip summary, name/phone/notes inputs, payment method selection, submit button
+- Added "مرحله قبل" (back) button visible on all steps except step 0
+- After successful submission: modal closes immediately, Sonner toast shows for 3 seconds with booking code and price
+- Error handling: if API fails, toast.error shows error message without closing modal
+- Fixed Prisma schema: made Trip.passengerId optional, originLat/originLng/destLat/destLng optional
+- Fixed booking API: set passengerId to null, pass null for lat/lng fields
+- Updated store: setBookingStep clamps to max step 3, resetBooking clears city selections
+- Ran ESLint: no errors
+
+Stage Summary:
+- BookingModal.tsx: 4-step wizard (was 5), toast notification on success, back button on every step
+- store.ts: step range -1 to 3, proper reset
+- schema.prisma: Trip.passengerId nullable, lat/lng nullable
+- booking/route.ts: null passengerId, null lat/lng, error logging
+- Booking API confirmed working: POST /api/booking returns 200 with bookingCode
+- Database verified: bookings saved with correct data (distanceKm, totalFare, etc.)
+

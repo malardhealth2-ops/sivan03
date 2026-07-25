@@ -168,9 +168,13 @@ export async function POST(request: NextRequest) {
 
     const trip = await db.trip.create({
       data: {
-        passengerId: 'guest',
+        passengerId: null,
         originAddress: data.originAddress,
+        originLat: null,
+        originLng: null,
         destAddress: data.destAddress,
+        destLat: null,
+        destLng: null,
         tripType: data.tripType,
         passengerCount: data.passengerCount,
         scheduledFor: data.date ? new Date(data.date) : null,
@@ -216,6 +220,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'اطلاعات نامعتبر', details: error.errors }, { status: 400 });
     }
+    console.error('Booking error:', error);
     return NextResponse.json({ error: 'خطا در ثبت رزرو' }, { status: 500 });
   }
 }

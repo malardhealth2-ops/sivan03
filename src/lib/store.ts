@@ -130,12 +130,12 @@ export const useAppStore = create<AppState>((set) => ({
     bookingCode: null,
     isSubmitting: false,
   },
-  setBookingStep: (step) => set((s) => ({ booking: { ...s.booking, currentStep: step } })),
+  setBookingStep: (step) => set((s) => ({ booking: { ...s.booking, currentStep: Math.min(Math.max(step, -1), 3) } })),
   updateBookingForm: (data) => set((s) => ({ booking: { ...s.booking, formData: { ...s.booking.formData, ...data } } })),
   setEstimatedPrice: (price, duration) => set((s) => ({ booking: { ...s.booking, estimatedPrice: price, estimatedDuration: duration } })),
   setBookingCode: (code) => set((s) => ({ booking: { ...s.booking, bookingCode: code } })),
   setBookingSubmitting: (val) => set((s) => ({ booking: { ...s.booking, isSubmitting: val } })),
-  resetBooking: () => set({ booking: { currentStep: -1, formData: initialBookingForm, estimatedPrice: null, estimatedDuration: null, bookingCode: null, isSubmitting: false } }),
+  resetBooking: () => set({ booking: { currentStep: -1, formData: { ...initialBookingForm, originCity: { province: '', city: '' }, destCity: { province: '', city: '' } }, estimatedPrice: null, estimatedDuration: null, bookingCode: null, isSubmitting: false } }),
 
   // Auth
   auth: { isOpen: false, mode: 'login', phone: '', otpCode: '', fullName: '', isVerified: false },
