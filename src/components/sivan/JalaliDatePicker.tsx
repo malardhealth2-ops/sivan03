@@ -36,8 +36,11 @@ export function JalaliDatePicker({
 }: JalaliDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  // Parse current value to Jalali
-  let initialJy = 1404, initialJm = 1, initialJd = 1;
+  // Initialize to today's Jalali date if no value provided
+  const todayJalaali = useMemo(() => getTodayJalaali(), []);
+  let initialJy = todayJalaali.jy;
+  let initialJm = todayJalaali.jm;
+  let initialJd = todayJalaali.jd;
   if (value) {
     const parts = value.split('-');
     if (parts.length === 3) {
@@ -48,7 +51,7 @@ export function JalaliDatePicker({
         initialJm = j.jm;
         initialJd = j.jd;
       } catch {
-        // use defaults
+        // keep today's date as default
       }
     }
   }
@@ -57,7 +60,7 @@ export function JalaliDatePicker({
   const [currentMonth, setCurrentMonth] = useState(initialJm);
   const [selectedDay, setSelectedDay] = useState(initialJd);
 
-  const today = useMemo(() => getTodayJalaali(), []);
+  const today = todayJalaali;
 
   const monthDays = useMemo(
     () => getMonthDaysArray(currentYear, currentMonth),

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Crown, Phone, Mail, MapPin, Instagram, Send, MessageCircle } from 'lucide-react';
+import { Phone, Mail, MapPin, Instagram, Send, MessageCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 const quickLinks = [
@@ -34,8 +34,12 @@ export function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-10">
           {/* Brand */}
           <div className="lg:col-span-1">
-            <div className="flex items-center gap-2 mb-4">
-              <Crown className="h-7 w-7 text-[#D4AF37]" />
+            <div className="flex items-center gap-2.5 mb-4">
+              <img
+                src="/logo.png"
+                alt="تاکسی ویژه سیوان"
+                className="h-9 w-9 rounded-full object-cover ring-2 ring-[#D4AF37]/30"
+              />
               <span className="text-2xl font-bold text-gold-gradient">سیوان</span>
             </div>
             <p className="text-[#a1a1aa] text-sm leading-relaxed mb-6">

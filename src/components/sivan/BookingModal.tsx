@@ -289,8 +289,9 @@ export function BookingModal() {
         {/* Steps indicator */}
         <div className="bg-[#0a0a0a] border-b border-[#333] p-4 sticky top-0 z-10">
           <DialogHeader className="p-0 mb-3">
-            <DialogTitle className="text-right text-[#fafafa] text-lg">
-              رزرو تاکسی
+            <DialogTitle className="text-right text-[#fafafa] text-lg flex items-center gap-2 justify-end">
+              <img src="/logo.png" alt="" className="h-6 w-6 rounded-full object-cover" />
+              رزرو تاکسی سیوان
             </DialogTitle>
             <DialogDescription className="text-right text-[#a1a1aa] text-xs mt-1">
               مراحل رزرو سفر خود را تکمیل کنید

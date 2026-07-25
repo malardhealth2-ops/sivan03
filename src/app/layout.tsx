@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   keywords: ["تاکسی VIP", "تاکسی بین شهری", "سیوان", "رزرو تاکسی", "سفر لوکس", "Sivan Taxi"],
   authors: [{ name: "Sivan VIP Taxi" }],
   icons: {
-    icon: "/logo.svg",
+    icon: "/logo.png",
   },
   openGraph: {
     title: "تاکسی ویژه سیوان | Sivan VIP Taxi",

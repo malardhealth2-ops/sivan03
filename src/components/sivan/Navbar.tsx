@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Phone, Menu, X, Crown, ChevronDown } from 'lucide-react';
+import { Phone, Menu, X, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { useAppStore } from '@/lib/store';
-import { formatJalaaliDate, getTehranTime, toPersianDigits } from '@/lib/jalaali';
+import { formatJalaaliDate, getTehranTimeString, getTehranTime, toPersianDigits } from '@/lib/jalaali';
 import { Shield } from 'lucide-react';
 
 const navLinks = [
@@ -27,11 +27,8 @@ export function Navbar() {
 
   useEffect(() => {
     const updateClock = () => {
-      const now = getTehranTime();
-      setJalaliDateStr(formatJalaaliDate(now));
-      setTehranTimeStr(toPersianDigits(
-        now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0')
-      ));
+      setJalaliDateStr(formatJalaaliDate(getTehranTime()));
+      setTehranTimeStr(getTehranTimeString());
     };
     updateClock();
     const interval = setInterval(updateClock, 1000);
@@ -69,14 +66,16 @@ export function Navbar() {
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 sm:h-20">
             {/* Logo */}
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Crown className="h-7 w-7 sm:h-8 sm:w-8 text-[#D4AF37]" />
-              </div>
+            <a href="#hero" className="flex items-center gap-2.5 group">
+              <img
+                src="/logo.png"
+                alt="تاکسی ویژه سیوان"
+                className="h-9 w-9 sm:h-10 sm:w-10 rounded-full object-cover ring-2 ring-[#D4AF37]/40 group-hover:ring-[#D4AF37]/70 transition-all"
+              />
               <span className="text-xl sm:text-2xl font-bold text-gold-gradient">
                 سیوان
               </span>
-            </div>
+            </a>
 
             {/* Desktop Navigation */}
             <nav className="hidden lg:flex items-center gap-1">
@@ -129,7 +128,11 @@ export function Navbar() {
         <SheetContent side="right" className="bg-[#0a0a0a] border-[#D4AF37]/20 w-72">
           <SheetHeader className="text-right">
             <SheetTitle className="text-right text-[#D4AF37] flex items-center gap-2 justify-end">
-              <Crown className="h-5 w-5" />
+              <img
+                src="/logo.png"
+                alt="سیوان"
+                className="h-5 w-5 rounded-full object-cover"
+              />
               منوی سیوان
             </SheetTitle>
           </SheetHeader>

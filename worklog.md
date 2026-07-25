@@ -135,3 +135,26 @@ Stage Summary:
 - Calendar "today" button correctly identifies current Jalali date
 - All date-related displays verified: navbar (۳ مرداد ۱۴۰۵), datepicker (۳ مرداد), summary (۳ مرداد ۱۴۰۵)
 
+---
+Task ID: 3
+Agent: Main Agent
+Task: Integrate uploaded logo and fix Jalali calendar
+
+Work Log:
+- Copied uploaded logo (fbc8960f-3283-4914-a17a-577b78e6c071.png) to /public/logo.png
+- Updated Navbar.tsx: replaced Crown icon with actual logo image in navbar and mobile menu
+- Updated Footer.tsx: replaced Crown icon with logo image in brand section
+- Updated HeroSection.tsx: replaced CrownIcon SVG with logo image in badge
+- Updated BookingModal.tsx: added logo image in dialog header
+- Updated layout.tsx: changed favicon from /logo.svg to /logo.png
+- Fixed JalaliDatePicker.tsx: initialized calendar to today's Jalali date instead of hardcoded 1404/1/1
+- Fixed jalaali.ts: rewrote getTehranTime() and getTodayJalaali() to use Intl.DateTimeFormat with timezone: 'Asia/Tehran' (timezone-independent)
+- Fixed Navbar.tsx: updated clock to use getTehranTimeString() for proper Tehran time display
+- Verified: jalaali-js and Intl.DateTimeFormat(u-ca-persian) produce identical results (Solar Hijri calendar)
+- Browser verified: navbar shows logo + "۱۲:۳۸" + "۳ مرداد ۱۴۰۵", datepicker shows "مرداد ۱۴۰۵", footer shows logo
+
+Stage Summary:
+- Uploaded logo integrated into: Navbar, Footer, HeroSection badge, BookingModal header, Mobile menu, Favicon
+- Jalali calendar fixed: uses Intl.DateTimeFormat with Asia/Tehran timezone (timezone-independent, matches Iran's official Solar Hijri calendar)
+- Calendar now opens on correct month (مرداد ۱۴۰۵) instead of hardcoded فروردین ۱۴۰۴
+- All lint checks pass

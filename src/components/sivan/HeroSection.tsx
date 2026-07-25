@@ -175,7 +175,7 @@ export function HeroSection() {
             className="text-center lg:text-right"
           >
             <Badge className="bg-[#D4AF37]/15 text-[#D4AF37] border-[#D4AF37]/30 mb-6 px-4 py-1.5 text-sm">
-              <CrownIcon className="h-3.5 w-3.5 ml-1.5" />
+              <img src="/logo.png" alt="" className="h-4 w-4 ml-1.5 rounded-full object-cover" />
               تاکسی VIP بین شهری
             </Badge>
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6">
@@ -364,10 +364,4 @@ export function HeroSection() {
   );
 }
 
-function CrownIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
-    </svg>
-  );
-}
+
