@@ -301,6 +301,11 @@ model SiteSettings {
   commissionRate Float @default(10.0)
   minWithdrawal Float @default(500000)
   workingHours String @default("۲۴ ساعته - ۷ روز هفته")
+  notifyEmail String @default("")
+  smtpHost    String @default("smtp.gmail.com")
+  smtpPort    String @default("587")
+  smtpUser    String @default("")
+  smtpPass    String @default("")
   updatedAt   DateTime @updatedAt
 }
 

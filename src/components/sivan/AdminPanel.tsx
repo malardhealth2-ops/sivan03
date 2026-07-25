@@ -490,6 +490,7 @@ function DriversTab() {
 // ─── Settings Tab ───
 function SettingsTab() {
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [form, setForm] = useState({
     siteName: 'تاکسی ویژه سیوان',
     phone1: '09109419743',
@@ -499,12 +500,53 @@ function SettingsTab() {
     commission: '10',
     minWithdrawal: '500000',
     workingHours: '۲۴ ساعته - ۷ روز هفته',
+    // Email notification settings
+    notifyEmail: '',
+    smtpHost: 'smtp.gmail.com',
+    smtpPort: '587',
+    smtpUser: '',
+    smtpPass: '',
   });
 
+  // Load settings from API on mount
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(data => {
+        if (data.notifyEmail) setForm(f => ({ ...f, notifyEmail: data.notifyEmail }));
+        if (data.smtpHost) setForm(f => ({ ...f, smtpHost: data.smtpHost }));
+        if (data.smtpPort) setForm(f => ({ ...f, smtpPort: data.smtpPort }));
+        if (data.smtpUser) setForm(f => ({ ...f, smtpUser: data.smtpUser }));
+        if (data.smtpPass) setForm(f => ({ ...f, smtpPass: data.smtpPass }));
+        if (data.siteName) setForm(f => ({ ...f, siteName: data.siteName }));
+        if (data.phone1) setForm(f => ({ ...f, phone1: data.phone1 }));
+        if (data.phone2) setForm(f => ({ ...f, phone2: data.phone2 }));
+        if (data.email) setForm(f => ({ ...f, email: data.email }));
+        if (data.address) setForm(f => ({ ...f, address: data.address }));
+        if (data.commission) setForm(f => ({ ...f, commission: String(data.commission) }));
+        if (data.minWithdrawal) setForm(f => ({ ...f, minWithdrawal: String(data.minWithdrawal) }));
+        if (data.workingHours) setForm(f => ({ ...f, workingHours: data.workingHours }));
+      })
+      .catch(() => {});
+  }, []);
+
   const handleSave = async () => {
-    await new Promise((r) => setTimeout(r, 800));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setSaveError('');
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({ error: 'خطا' }));
+        throw new Error(d.error || 'خطا در ذخیره');
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'خطا');
+    }
   };
 
   return (
@@ -534,6 +576,24 @@ function SettingsTab() {
       </Card>
 
       <Card className="bg-[#1a1a1a] border border-[#333] p-6">
+        <h3 className="text-[#fafafa] font-bold mb-2">تنظیمات اعلان ایمیلی</h3>
+        <p className="text-[#a1a1aa] text-xs mb-6">پس از ثبت رزرو جدید، ایمیل اعلان به این آدرس ارسال می‌شود</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <SettingsField label="ایمیل دریافت اعلان" value={form.notifyEmail} onChange={(v) => setForm({ ...form, notifyEmail: v })} dir="ltr" placeholder="admin@gmail.com" />
+          <SettingsField label="سرور SMTP" value={form.smtpHost} onChange={(v) => setForm({ ...form, smtpHost: v })} dir="ltr" />
+          <SettingsField label="پورت SMTP" value={form.smtpPort} onChange={(v) => setForm({ ...form, smtpPort: v })} dir="ltr" />
+          <SettingsField label="نام کاربری SMTP (ایمیل)" value={form.smtpUser} onChange={(v) => setForm({ ...form, smtpUser: v })} dir="ltr" placeholder="your@gmail.com" />
+          <SettingsField label="رمز عبور SMTP" value={form.smtpPass} onChange={(v) => setForm({ ...form, smtpPass: v })} dir="ltr" placeholder="app-password" type="password" />
+        </div>
+        <div className="mt-4 p-3 rounded-lg bg-[#0a0a0a] border border-[#333]">
+          <p className="text-[#a1a1aa] text-xs leading-relaxed">
+            <span className="text-[#D4AF37]">راهنمای Gmail:</span> برای استفاده از Gmail، باید App Password بسازید.
+            به Google Account → Security → 2-Step Verification → App passwords بروید و یک رمز جدید بسازید.
+          </p>
+        </div>
+      </Card>
+
+      <Card className="bg-[#1a1a1a] border border-[#333] p-6">
         <h3 className="text-[#fafafa] font-bold mb-6">تنظیمات مالی</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <SettingsField label="نرخ کمیسیون (%)" value={form.commission} onChange={(v) => setForm({ ...form, commission: v })} />
@@ -552,7 +612,7 @@ function SettingsTab() {
   );
 }
 
-function SettingsField({ label, value, onChange, dir, full }: { label: string; value: string; onChange: (v: string) => void; dir?: string; full?: boolean }) {
+function SettingsField({ label, value, onChange, dir, full, placeholder, type }: { label: string; value: string; onChange: (v: string) => void; dir?: string; full?: boolean; placeholder?: string; type?: string }) {
   return (
     <div className={full ? 'md:col-span-2' : ''}>
       <Label className="text-[#a1a1aa] text-sm mb-2 block">{label}</Label>
@@ -561,6 +621,8 @@ function SettingsField({ label, value, onChange, dir, full }: { label: string; v
         onChange={(e) => onChange(e.target.value)}
         className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11"
         dir={dir}
+        placeholder={placeholder}
+        type={type || 'text'}
       />
     </div>
   );

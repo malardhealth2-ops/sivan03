@@ -61,3 +61,32 @@ Stage Summary:
 - Real distance calculation via OpenStreetMap (Nominatim + OSRM)
 - Distance-based pricing in booking flow
 - Verified end-to-end: select origin → select destination → see distance → proceed with booking
+
+---
+Task ID: 13
+Agent: main
+Task: Fix distance API, update HeroSection with CitySelector, add email notifications
+
+Work Log:
+- Fixed distance API (fetch failed): added proper timeout (8s Nominatim, 10s OSRM), rate limiting (1.2s between Nominatim calls), Haversine fallback when OSRM fails, pre-loaded coordinates for 31 province capitals in src/data/city-coords.json
+- Updated HeroSection: replaced text inputs with CitySelector for origin/destination
+- HeroSection now shows distance (km), duration, and price in real-time after city selection
+- "ثبت درخواست رزرو" button opens booking modal starting from step 1 (time selection), skipping step 0 since route is already selected in hero
+- Added admin email notification settings to admin panel (Settings tab):
+  - Notify email address, SMTP host/port/user/password fields
+  - Gmail app password guide in Persian
+  - Settings saved via PUT /api/settings and stored in SiteSettings DB model
+- Updated Prisma schema: added notifyEmail, smtpHost, smtpPort, smtpUser, smtpPass fields to SiteSettings
+- Updated /api/settings to support GET (load) and PUT (save) operations
+- Installed nodemailer and @types/nodemailer
+- Updated /api/booking to send email notification after successful booking:
+  - Reads SMTP settings from SiteSettings
+  - Sends HTML email with full booking details (code, passenger, route, distance, car type, price, etc.)
+  - Email is sent non-blocking (doesn't delay booking response)
+- Browser verified: HeroSection shows CitySelector, distance calculation works (437.5km, 4h 50min), price displayed (1,812,500 تومان), modal opens at step 1
+
+Stage Summary:
+- Distance API now reliable with timeout, rate limiting, and Haversine fallback
+- HeroSection has full CitySelector integration with distance/price display
+- Admin can configure email notification via SMTP (Gmail compatible)
+- Booking submissions automatically send email notification to admin
