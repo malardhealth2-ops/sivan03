@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   MapPin,
   Calendar,
@@ -16,6 +16,9 @@ import {
   Copy,
   Loader2,
   Phone,
+  Route,
+  Navigation,
+  AlertCircle,
 } from 'lucide-react';
 import {
   Dialog,
@@ -31,6 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAppStore } from '@/lib/store';
 import { JalaliDatePicker } from '@/components/sivan/JalaliDatePicker';
+import { CitySelector } from '@/components/sivan/CitySelector';
 
 const steps = [
   { id: 0, title: 'مسیر', icon: MapPin },
@@ -70,6 +74,23 @@ function WalletIcon({ className }: { className?: string }) {
   );
 }
 
+function getCityDisplayName(city: { province: string; city: string; district?: string; neighborhood?: string }): string {
+  if (city.neighborhood) {
+    return `${city.neighborhood}، ${city.district}، ${city.province}`;
+  }
+  if (city.district) {
+    return `${city.district}، ${city.province}`;
+  }
+  if (city.city) {
+    return `${city.city}، ${city.province}`;
+  }
+  return city.province;
+}
+
+function formatPrice(price: number): string {
+  return new Intl.NumberFormat('fa-IR').format(price) + ' تومان';
+}
+
 export function BookingModal() {
   const {
     booking,
@@ -82,8 +103,10 @@ export function BookingModal() {
   } = useAppStore();
 
   const [open, setOpen] = useState(false);
+  const [distanceLoading, setDistanceLoading] = useState(false);
+  const [distanceError, setDistanceError] = useState('');
+  const [priceLoading, setPriceLoading] = useState(false);
 
-  // Derive open state from booking step
   const shouldOpen = booking.currentStep >= 0 && booking.currentStep <= 4;
   const dialogOpen = open || shouldOpen;
 
@@ -106,20 +129,141 @@ export function BookingModal() {
     }
   };
 
+  // Fetch distance when both cities are selected
+  const fetchDistance = useCallback(async () => {
+    const { originCity, destCity } = booking.formData;
+    if (!originCity.city || !destCity.city || originCity.city === destCity.city) {
+      updateBookingForm({ distanceKm: null, durationMin: null });
+      setDistanceError('');
+      return;
+    }
+
+    setDistanceLoading(true);
+    setDistanceError('');
+
+    try {
+      // Build query strings - use most specific location name for geocoding
+      const originQuery = originCity.neighborhood || originCity.district || originCity.city;
+      const destQuery = destCity.neighborhood || destCity.district || destCity.city;
+
+      const res = await fetch(
+        `/api/distance?origin=${encodeURIComponent(originQuery)}&destination=${encodeURIComponent(destQuery)}`
+      );
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'خطا در محاسبه فاصله');
+      }
+
+      const data = await res.json();
+      updateBookingForm({
+        distanceKm: data.distanceKm,
+        durationMin: data.durationMin,
+      });
+    } catch (err) {
+      setDistanceError(err instanceof Error ? err.message : 'خطا در محاسبه فاصله');
+      updateBookingForm({ distanceKm: null, durationMin: null });
+    } finally {
+      setDistanceLoading(false);
+    }
+  }, [booking.formData.originCity, booking.formData.destCity, updateBookingForm]);
+
+  useEffect(() => {
+    const { originCity, destCity } = booking.formData;
+    if (originCity.city && destCity.city && originCity.city !== destCity.city) {
+      const timer = setTimeout(fetchDistance, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [booking.formData.originCity.city, booking.formData.destCity.city, fetchDistance]);
+
+  // Fetch price when entering summary step
+  useEffect(() => {
+    if (booking.currentStep === 4 && booking.formData.distanceKm) {
+      const fetchPrice = async () => {
+        setPriceLoading(true);
+        try {
+          const res = await fetch(
+            `/api/pricing?tripType=${booking.formData.tripType}&distanceKm=${booking.formData.distanceKm}`
+          );
+          if (res.ok) {
+            const data = await res.json();
+            setEstimatedPrice(
+              booking.formData.roundTrip ? data.price * 2 : data.price,
+              data.duration
+            );
+          }
+        } catch {
+          // Silently fail - price will be null
+        } finally {
+          setPriceLoading(false);
+        }
+      };
+      fetchPrice();
+    }
+  }, [booking.currentStep, booking.formData.distanceKm, booking.formData.tripType, booking.formData.roundTrip, setEstimatedPrice]);
+
   const handleSubmit = async () => {
     setBookingSubmitting(true);
-    // Simulate API call
-    await new Promise((r) => setTimeout(r, 2000));
-    const code = 'SV-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-    setBookingCode(code);
-    setEstimatedPrice(1200000, '~۶ ساعت');
-    setBookingSubmitting(false);
+    try {
+      const { originCity, destCity, distanceKm, tripType, roundTrip } = booking.formData;
+      const originDisplay = getCityDisplayName(originCity);
+      const destDisplay = getCityDisplayName(destCity);
+
+      // Fetch price
+      let price = 500000; // fallback base
+      let duration = '';
+      if (distanceKm) {
+        try {
+          const res = await fetch(
+            `/api/pricing?tripType=${tripType}&distanceKm=${distanceKm}`
+          );
+          if (res.ok) {
+            const data = await res.json();
+            price = roundTrip ? data.price * 2 : data.price;
+            duration = data.duration;
+          }
+        } catch {
+          // use fallback
+        }
+      }
+
+      // Call booking API
+      await fetch('/api/booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originAddress: originDisplay,
+          destAddress: destDisplay,
+          distanceKm: distanceKm || 0,
+          tripType,
+          roundTrip,
+          passengerCount: booking.formData.passengerCount,
+          date: booking.formData.date,
+          time: booking.formData.time,
+          fullName: booking.formData.fullName,
+          phone: booking.formData.phone,
+          notes: booking.formData.notes,
+          paymentMethod: booking.formData.paymentMethod,
+          totalAmount: price,
+        }),
+      });
+
+      const code = 'SV-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      setBookingCode(code);
+      setEstimatedPrice(price, duration || `~${booking.formData.durationMin || 60} دقیقه`);
+    } catch {
+      // Fallback
+      const code = 'SV-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      setBookingCode(code);
+    } finally {
+      setBookingSubmitting(false);
+    }
   };
 
   const isStepValid = (): boolean => {
     switch (booking.currentStep) {
       case 0:
-        return booking.formData.origin.length > 0 && booking.formData.destination.length > 0;
+        return booking.formData.originCity.city.length > 0 && booking.formData.destCity.city.length > 0;
       case 1:
         return booking.formData.date.length > 0 && booking.formData.time.length > 0;
       case 2:
@@ -131,6 +275,13 @@ export function BookingModal() {
       default:
         return false;
     }
+  };
+
+  const canGoNext = (): boolean => {
+    if (!isStepValid()) return false;
+    // Step 0: wait for distance to load if both cities are selected
+    if (booking.currentStep === 0 && distanceLoading) return false;
+    return true;
   };
 
   return (
@@ -197,30 +348,71 @@ export function BookingModal() {
                 transition={{ duration: 0.3 }}
                 className="space-y-5"
               >
-                <div className="space-y-2">
-                  <Label className="text-[#fafafa]">
-                    <MapPin className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
-                    شهر مبدأ
-                  </Label>
-                  <Input
-                    placeholder="مثلاً: تهران"
-                    value={booking.formData.origin}
-                    onChange={(e) => updateBookingForm({ origin: e.target.value })}
-                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa]"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[#fafafa]">
-                    <MapPin className="h-3.5 w-3.5 ml-1.5 text-[#E5C76B]" />
-                    شهر مقصد
-                  </Label>
-                  <Input
-                    placeholder="مثلاً: اصفهان"
-                    value={booking.formData.destination}
-                    onChange={(e) => updateBookingForm({ destination: e.target.value })}
-                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa]"
-                  />
-                </div>
+                <CitySelector
+                  label="شهر مبدأ"
+                  iconColor="#D4AF37"
+                  value={booking.formData.originCity}
+                  onChange={(val) => {
+                    updateBookingForm({
+                      originCity: val,
+                      origin: val.neighborhood || val.district || val.city,
+                    });
+                  }}
+                  placeholder="استان و شهر مبدأ را انتخاب کنید"
+                />
+
+                <CitySelector
+                  label="شهر مقصد"
+                  iconColor="#E5C76B"
+                  value={booking.formData.destCity}
+                  onChange={(val) => {
+                    updateBookingForm({
+                      destCity: val,
+                      destination: val.neighborhood || val.district || val.city,
+                    });
+                  }}
+                  placeholder="استان و شهر مقصد را انتخاب کنید"
+                />
+
+                {/* Distance info */}
+                {(distanceLoading || booking.formData.distanceKm || distanceError) && (
+                  <div className="p-4 bg-[#0a0a0a] rounded-xl border border-[#333]">
+                    {distanceLoading && (
+                      <div className="flex items-center gap-3 text-[#D4AF37]">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span className="text-sm">در حال محاسبه فاصله از نقشه...</span>
+                      </div>
+                    )}
+                    {booking.formData.distanceKm && !distanceLoading && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-[#fafafa]">
+                          <Route className="h-5 w-5 text-[#D4AF37]" />
+                          <span className="font-bold">
+                            {new Intl.NumberFormat('fa-IR').format(booking.formData.distanceKm)} کیلومتر
+                          </span>
+                        </div>
+                        {booking.formData.durationMin && (
+                          <div className="flex items-center gap-2 text-[#a1a1aa]">
+                            <Navigation className="h-4 w-4" />
+                            <span className="text-sm">
+                              زمان تقریبی:{' '}
+                              {booking.formData.durationMin >= 60
+                                ? `${Math.floor(booking.formData.durationMin / 60)} ساعت و ${booking.formData.durationMin % 60} دقیقه`
+                                : `${booking.formData.durationMin} دقیقه`}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {distanceError && !distanceLoading && (
+                      <div className="flex items-start gap-2 text-red-400">
+                        <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">{distanceError}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-3 p-4 bg-[#0a0a0a] rounded-xl border border-[#333]">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -408,10 +600,28 @@ export function BookingModal() {
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between text-[#a1a1aa]">
                       <span>مسیر:</span>
-                      <span className="text-[#fafafa]">
-                        {booking.formData.origin} → {booking.formData.destination}
+                      <span className="text-[#fafafa] text-left max-w-[60%]">
+                        {getCityDisplayName(booking.formData.originCity)} → {getCityDisplayName(booking.formData.destCity)}
                       </span>
                     </div>
+                    {booking.formData.distanceKm && (
+                      <div className="flex justify-between text-[#a1a1aa]">
+                        <span>فاصله:</span>
+                        <span className="text-[#fafafa]">
+                          {new Intl.NumberFormat('fa-IR').format(booking.formData.distanceKm)} کیلومتر
+                        </span>
+                      </div>
+                    )}
+                    {booking.formData.durationMin && (
+                      <div className="flex justify-between text-[#a1a1aa]">
+                        <span>زمان تقریبی:</span>
+                        <span className="text-[#fafafa]">
+                          {booking.formData.durationMin >= 60
+                            ? `${Math.floor(booking.formData.durationMin / 60)} ساعت و ${booking.formData.durationMin % 60} دقیقه`
+                            : `${booking.formData.durationMin} دقیقه`}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-[#a1a1aa]">
                       <span>تاریخ:</span>
                       <span className="text-[#fafafa]">{booking.formData.date || '---'}</span>
@@ -436,6 +646,22 @@ export function BookingModal() {
                         <span className="text-[#D4AF37]">رفت و برگشت</span>
                       </div>
                     )}
+                  </div>
+
+                  {/* Price */}
+                  <div className="border-t border-[#333] pt-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[#a1a1aa] text-sm">هزینه سفر:</span>
+                      {priceLoading ? (
+                        <Loader2 className="h-5 w-5 animate-spin text-[#D4AF37]" />
+                      ) : booking.estimatedPrice ? (
+                        <span className="text-[#D4AF37] font-bold text-lg">
+                          {formatPrice(booking.estimatedPrice)}
+                        </span>
+                      ) : (
+                        <span className="text-[#a1a1aa]">محاسبه نشد</span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -537,7 +763,7 @@ export function BookingModal() {
               </Button>
               <Button
                 onClick={booking.currentStep === 3 ? handleSubmit : nextStep}
-                disabled={!isStepValid() || booking.isSubmitting}
+                disabled={!canGoNext() || booking.isSubmitting}
                 className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B]"
               >
                 {booking.isSubmitting ? (

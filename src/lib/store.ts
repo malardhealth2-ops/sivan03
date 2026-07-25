@@ -1,12 +1,23 @@
 import { create } from 'zustand';
 
+interface CitySelection {
+  province: string;
+  city: string;
+  district?: string;
+  neighborhood?: string;
+}
+
 interface BookingFormData {
   origin: string;
   destination: string;
+  originCity: CitySelection;
+  destCity: CitySelection;
   originLat?: number;
   originLng?: number;
   destLat?: number;
   destLng?: number;
+  distanceKm?: number | null;
+  durationMin?: number | null;
   date: string;
   time: string;
   tripType: 'economy' | 'vip' | 'luxury' | 'van' | 'electric';
@@ -93,6 +104,10 @@ interface AppState {
 const initialBookingForm: BookingFormData = {
   origin: '',
   destination: '',
+  originCity: { province: '', city: '' },
+  destCity: { province: '', city: '' },
+  distanceKm: null,
+  durationMin: null,
   date: '',
   time: '',
   tripType: 'vip',
