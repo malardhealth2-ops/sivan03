@@ -158,3 +158,34 @@ Stage Summary:
 - Jalali calendar fixed: uses Intl.DateTimeFormat with Asia/Tehran timezone (timezone-independent, matches Iran's official Solar Hijri calendar)
 - Calendar now opens on correct month (مرداد ۱۴۰۵) instead of hardcoded فروردین ۱۴۰۴
 - All lint checks pass
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Change login to username/password + add admin CMS (content editor + blog management)
+
+Work Log:
+- Created `/src/app/api/auth/login/route.ts` - POST endpoint for username/password login (checks DB + hardcoded admin/sivan2024)
+- Rewrote `/src/components/sivan/AuthModal.tsx` - replaced phone+OTP with username+password form (with show/hide toggle, error handling)
+- Updated Navbar: "ورود / ثبت‌نام" → "ورود"
+- Created `/src/app/api/admin/content/route.ts` - GET/PUT for SiteContent sections (hero, services, whyUs, fleet, cta, footer, about)
+- Created `/src/app/api/admin/blog/route.ts` - GET/POST/PUT for blog posts management
+- Created `/src/app/api/admin/blog/[id]/route.ts` - DELETE for blog posts
+- Created `/src/app/api/admin/upload/route.ts` - Image upload (accepts jpg/png/webp/gif, max 5MB, saves to /public/uploads/blog/)
+- Rewrote `/src/components/sivan/AdminPanel.tsx` with 7 tabs:
+  1. داشبورد (Dashboard) - stats overview
+  2. سفرها (Trips) - loads real data from DB via /api/booking
+  3. مسافران (Passengers) - placeholder
+  4. رانندگان (Drivers) - placeholder
+  5. مدیریت محتوا (Content) - section-based editor with title/subtitle/body per page section (hero, services, whyUs, fleet, cta, footer, about)
+  6. بلاگ (Blog) - full CRUD: list/create/edit/delete posts, image upload, tags, status (draft/published/archived)
+  7. تنظیمات (Settings) - site settings, email notification, SMTP config
+- Updated store.ts: added content and blog tabs to AdminState
+- Updated Prisma schema: SiteContent model already existed
+- All lint checks pass
+
+Stage Summary:
+- Login system changed from phone+OTP to username/password
+- Admin panel now has Content Editor tab for editing all page texts (hero, services, whyUs, etc.)
+- Admin panel now has Blog Management tab for creating/editing/publishing blog posts with image upload
+- API routes: /api/auth/login, /api/admin/content, /api/admin/blog, /api/admin/blog/[id], /api/admin/upload

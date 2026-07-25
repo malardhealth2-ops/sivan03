@@ -9,6 +9,7 @@ datasource db {
 
 model User {
   id        String   @id @default(cuid())
+  username  String   @unique @default("")
   phone     String   @unique
   email     String?  @unique
   password  String?
@@ -330,4 +331,13 @@ model Testimonial {
   tripRoute String?
   isApproved Boolean @default(true)
   createdAt DateTime @default(now())
+}
+
+model SiteContent {
+  id        String   @id @default(cuid())
+  section   String   @unique // hero, services, whyUs, fleet, cta, footer, etc.
+  title     String   @default("")
+  subtitle  String   @default("")
+  body      String   @default("") // can be JSON string for complex content
+  updatedAt DateTime @updatedAt
 }

@@ -39,12 +39,19 @@ interface BookingState {
   isSubmitting: boolean;
 }
 
+interface AuthUser {
+  id: string;
+  fullName: string;
+  role: string;
+}
+
 interface AuthState {
   isOpen: boolean;
-  mode: 'login' | 'register' | 'otp';
-  phone: string;
-  otpCode: string;
-  fullName: string;
+  mode: 'login';
+  username: string;
+  password: string;
+  error: string;
+  user: AuthUser | null;
   isVerified: boolean;
 }
 
@@ -53,7 +60,7 @@ interface AdminState {
   isLoggedIn: boolean;
   adminUsername: string;
   loginError: string;
-  activeTab: 'dashboard' | 'trips' | 'users' | 'settings' | 'drivers';
+  activeTab: 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'settings';
   setAdminOpen: (open: boolean) => void;
   adminLogin: (username: string, password: string) => boolean;
   adminLogout: () => void;
@@ -75,9 +82,10 @@ interface AppState {
   auth: AuthState;
   openAuth: (mode: AuthState['mode']) => void;
   closeAuth: () => void;
-  setAuthPhone: (phone: string) => void;
-  setAuthOtp: (otp: string) => void;
-  setAuthFullName: (name: string) => void;
+  setAuthUsername: (username: string) => void;
+  setAuthPassword: (password: string) => void;
+  setAuthError: (error: string) => void;
+  setAuthUser: (user: AuthUser | null) => void;
   setAuthVerified: (val: boolean) => void;
 
   // Admin panel
@@ -138,12 +146,13 @@ export const useAppStore = create<AppState>((set) => ({
   resetBooking: () => set({ booking: { currentStep: -1, formData: { ...initialBookingForm, originCity: { province: '', city: '' }, destCity: { province: '', city: '' } }, estimatedPrice: null, estimatedDuration: null, bookingCode: null, isSubmitting: false } }),
 
   // Auth
-  auth: { isOpen: false, mode: 'login', phone: '', otpCode: '', fullName: '', isVerified: false },
-  openAuth: (mode) => set((s) => ({ auth: { ...s.auth, isOpen: true, mode } })),
-  closeAuth: () => set((s) => ({ auth: { ...s.auth, isOpen: false } })),
-  setAuthPhone: (phone) => set((s) => ({ auth: { ...s.auth, phone } })),
-  setAuthOtp: (otp) => set((s) => ({ auth: { ...s.auth, otpCode: otp } })),
-  setAuthFullName: (name) => set((s) => ({ auth: { ...s.auth, fullName: name } })),
+  auth: { isOpen: false, mode: 'login', username: '', password: '', error: '', user: null, isVerified: false },
+  openAuth: (mode) => set((s) => ({ auth: { ...s.auth, isOpen: true, mode, error: '' } })),
+  closeAuth: () => set((s) => ({ auth: { ...s.auth, isOpen: false, username: '', password: '', error: '', user: null, isVerified: false } })),
+  setAuthUsername: (username) => set((s) => ({ auth: { ...s.auth, username } })),
+  setAuthPassword: (password) => set((s) => ({ auth: { ...s.auth, password } })),
+  setAuthError: (error) => set((s) => ({ auth: { ...s.auth, error } })),
+  setAuthUser: (user) => set((s) => ({ auth: { ...s.auth, user } })),
   setAuthVerified: (val) => set((s) => ({ auth: { ...s.auth, isVerified: val } })),
 
   // Admin

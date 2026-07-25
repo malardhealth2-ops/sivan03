@@ -1,0 +1,700 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Shield, LogOut, LayoutDashboard, Car, Users, UserCheck, Settings, X,
+     7→  TrendingUp, MapPin, Phone, Star, ChevronDown, Eye, EyeOff, Loader2,
+     8→  Calendar, Clock, CreditCard, Check, AlertTriangle, Ban, CheckCircle2,
+     9→} from 'lucide-react';
+    10→import { Button } from '@/components/ui/button';
+    11→import { Input } from '@/components/ui/input';
+    12→import { Label } from '@/components/ui/label';
+    13→import { Badge } from '@/components/ui/badge';
+    14→import { Card } from '@/components/ui/card';
+    15→import { Separator } from '@/components/ui/separator';
+    16→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    17→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    18→import { useAppStore } from '@/lib/store';
+    19→import { formatJalaaliDate, getTehranTime, toPersianDigits } from '@/lib/jalaali';
+    20→
+    21→// ─── Admin Login ───
+    22→function AdminLoginScreen() {
+    23→  const { adminLogin, admin, setAdminOpen } = useAppStore();
+    24→  const [username, setUsername] = useState('');
+    25→  const [password, setPassword] = useState('');
+    26→  const [showPass, setShowPass] = useState(false);
+    27→  const [loading, setLoading] = useState(false);
+    28→
+    29→  const handleLogin = async () => {
+    30→    setLoading(true);
+    31→    await new Promise((r) => setTimeout(r, 800));
+    32→    adminLogin(username, password);
+    33→    setLoading(false);
+    34→  };
+    35→
+    36→  return (
+    37→    <motion.div
+    38→      initial={{ opacity: 0 }}
+    39→      animate={{ opacity: 1 }}
+    40→      className="fixed inset-0 z-[100] bg-[#0a0a0a] flex items-center justify-center"
+    41→    >
+    42→      <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a0a] via-[#111] to-[#0a0a0a]" />
+    43→
+    44→      <button
+    45→        onClick={() => setAdminOpen(false)}
+    46→        className="absolute top-6 left-6 p-2 rounded-lg hover:bg-[#2d2d2d] text-[#a1a1aa] hover:text-[#fafafa] transition-colors z-10"
+    47→      >
+    48→        <X className="h-6 w-6" />
+    49→      </button>
+    50→
+    51→      <motion.div
+    52→        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+    53→        animate={{ opacity: 1, y: 0, scale: 1 }}
+    54→        transition={{ duration: 0.5 }}
+    55→        className="relative z-10 w-full max-w-md mx-4"
+    56→      >
+    57→        <div className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-8 shadow-2xl">
+    58→          <div className="text-center mb-8">
+    59→            <div className="w-16 h-16 rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center mx-auto mb-4">
+    60→              <Shield className="h-8 w-8 text-[#D4AF37]" />
+    61→            </div>
+    62→            <h1 className="text-2xl font-bold text-[#fafafa] mb-2">پنل مدیریت سیوان</h1>
+    63→            <p className="text-[#a1a1aa] text-sm">برای ورود نام کاربری و رمز عبور خود را وارد کنید</p>
+    64→          </div>
+    65→
+    66→          <div className="space-y-5">
+    67→            <div className="space-y-2">
+    68→              <Label className="text-[#a1a1aa] text-sm">نام کاربری</Label>
+    69→              <Input
+    70→                value={username}
+    71→                onChange={(e) => setUsername(e.target.value)}
+    72→                placeholder="نام کاربری"
+    73→                className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
+    74→                dir="ltr"
+    75→              />
+    76→            </div>
+    77→
+    78→            <div className="space-y-2">
+    79→              <Label className="text-[#a1a1aa] text-sm">رمز عبور</Label>
+    80→              <div className="relative">
+    81→                <Input
+    82→                  type={showPass ? 'text' : 'password'}
+    83→                  value={password}
+    84→                  onChange={(e) => setPassword(e.target.value)}
+    85→                  placeholder="رمز عبور"
+    86→                  className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
+    87→                  dir="ltr"
+    88→                />
+    89→                <button
+    90→                  type="button"
+    91→                  onClick={() => setShowPass(!showPass)}
+    92→                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1aa] hover:text-[#fafafa]"
+    93→                >
+    94→                  {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+    95→                </button>
+    96→              </div>
+    97→            </div>
+    98→
+    99→            {admin.loginError && (
+   100→              <motion.div
+   101→                initial={{ opacity: 0, y: -5 }}
+   102→                animate={{ opacity: 1, y: 0 }}
+   103→                className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+   104→              >
+   105→                <AlertTriangle className="h-4 w-4 shrink-0" />
+   106→                {admin.loginError}
+   107→              </motion.div>
+   108→            )}
+   109→
+   110→            <Button
+   111→              onClick={handleLogin}
+   112→              disabled={loading || !username || !password}
+   113→              className="w-full h-12 bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold text-base rounded-xl"
+   114→            >
+   115→              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'ورود به پنل مدیریت'}
+   116→            </Button>
+   117→
+   118→            <div className="text-center pt-3">
+   119→              <p className="text-[#888] text-xs">اطلاعات پیش‌فرض دمو:</p>
+   120→              <p className="text-[#a1a1aa] text-xs mt-1" dir="ltr">admin / sivan2024</p>
+   121→            </div>
+   122→          </div>
+   123→        </div>
+   124→      </motion.div>
+   125→    </motion.div>
+   126→  );
+   127→}
+   128→
+   129→// ─── Admin Dashboard ───
+   130→function AdminDashboard() {
+   131→  const { admin, adminLogout, setAdminOpen, setAdminActiveTab } = useAppStore();
+   132→  const [jalaliClock, setJalaliClock] = useState('');
+   133→
+   134→  useEffect(() => {
+   135→    const update = () => {
+   136→      const now = getTehranTime();
+   137→      const time = toPersianDigits(
+   138→        now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0')
+   139→      );
+   140→      setJalaliClock(time + ' - ' + formatJalaaliDate(now));
+   141→    };
+   142→    update();
+   143→    const i = setInterval(update, 1000);
+   144→    return () => clearInterval(i);
+   145→  });
+   146→
+   147→  const tabs = [
+   148→    { id: 'dashboard' as const, label: 'داشبورد', icon: LayoutDashboard },
+   149→    { id: 'trips' as const, label: 'سفرها', icon: Car },
+   150→    { id: 'passengers' as const, label: 'مسافران', icon: Users },
+   151→    { id: 'drivers' as const, label: 'رانندگان', icon: UserCheck },
+   152→    { id: 'settings' as const, label: 'تنظیمات', icon: Settings },
+   153→  ];
+   154→
+   155→  return (
+   156→    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[100] bg-[#0a0a0a] flex">
+   157→      {/* Sidebar */}
+   158→      <aside className="hidden md:flex w-64 bg-[#111111] border-l border-[#333] flex-col">
+   159→        <div className="p-5 border-b border-[#333]">
+   160→          <div className="flex items-center gap-3">
+   161→            <div className="w-10 h-10 rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center">
+   162→              <Shield className="h-5 w-5 text-[#D4AF37]" />
+   163→            </div>
+   164→            <div>
+   165→              <h3 className="text-[#fafafa] font-bold text-sm">پنل مدیریت</h3>
+   166→              <p className="text-[#a1a1aa] text-xs">سیوان VIP</p>
+   167→            </div>
+   168→          </div>
+   169→        </div>
+   170→
+   171→        <nav className="flex-1 p-3 space-y-1">
+   172→          {tabs.map((tab) => (
+   173→            <button
+   174→              key={tab.id}
+   175→              onClick={() => setAdminActiveTab(tab.id)}
+   176→              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all ${
+   177→                admin.activeTab === tab.id
+   178→                  ? 'bg-[#D4AF37] text-[#0a0a0a] font-bold shadow-lg shadow-[#D4AF37]/20'
+   179→                  : 'text-[#a1a1aa] hover:text-[#fafafa] hover:bg-[#2d2d2d]'
+   180→              }`}
+   181→            >
+   182→              <tab.icon className="h-4 w-4" />
+   183→              {tab.label}
+   184→            </button>
+   185→          ))}
+   186→        </nav>
+   187→
+   188→        <div className="p-4 border-t border-[#333]">
+   189→          <div className="flex items-center gap-3 mb-3 px-2">
+   190→            <div className="w-8 h-8 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   191→              <span className="text-[#D4AF37] text-xs font-bold">A</span>
+   192→            </div>
+   193→            <div>
+   194→              <p className="text-[#fafafa] text-sm">{admin.adminUsername}</p>
+   195→              <p className="text-[#a1a1aa] text-[10px]">مدیر سیستم</p>
+   196→            </div>
+   197→          </div>
+   198→          <Button
+   199→            onClick={adminLogout}
+   200→            variant="ghost"
+   201→            className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10 justify-start gap-2"
+   202→          >
+   203→            <LogOut className="h-4 w-4" />
+   204→            خروج
+   205→          </Button>
+   206→        </div>
+   207→      </aside>
+   208→
+   209→      {/* Main Content */}
+   210→      <div className="flex-1 flex flex-col overflow-hidden">
+   211→        {/* Top Bar */}
+   212→        <header className="h-16 bg-[#111111] border-b border-[#333] flex items-center justify-between px-6">
+   213→          <div className="flex items-center gap-3">
+   214→            <span className="text-[#fafafa] font-bold">مدیریت سیوان</span>
+   215→            <Separator orientation="vertical" className="h-6 bg-[#333]" />
+   216→            <span className="text-[#a1a1aa] text-xs">{jalaliClock}</span>
+   217→          </div>
+   218→          <div className="flex items-center gap-3">
+   219→            {/* Mobile tabs dropdown */}
+   220→            <div className="md:hidden">
+   221→              <Select value={admin.activeTab} onValueChange={(v) => setAdminActiveTab(v as typeof admin.activeTab)}>
+   222→                <SelectTrigger className="w-36 bg-[#1a1a1a] border-[#333] text-[#fafafa] h-9 text-xs">
+   223→                  <SelectValue />
+   224→                </SelectTrigger>
+   225→                <SelectContent className="bg-[#1a1a1a] border-[#333]">
+   226→                  {tabs.map((t) => (
+   227→                    <SelectItem key={t.id} value={t.id} className="text-[#fafafa]">{t.label}</SelectItem>
+   228→                  ))}
+   229→                </SelectContent>
+   230→              </Select>
+   231→            </div>
+   232→            <button
+   233→              onClick={adminLogout}
+   234→              className="md:hidden p-2 rounded-lg hover:bg-[#2d2d2d] text-[#a1a1aa] hover:text-red-400 transition-colors"
+   235→            >
+   236→              <LogOut className="h-5 w-5" />
+   237→            </button>
+   238→            <button
+   239→              onClick={() => setAdminOpen(false)}
+   240→              className="p-2 rounded-lg hover:bg-[#2d2d2d] text-[#a1a1aa] hover:text-[#fafafa] transition-colors"
+   241→            >
+   242→              <X className="h-5 w-5" />
+   243→            </button>
+   244→          </div>
+   245→        </header>
+   246→
+   247→        {/* Content */}
+   248→        <main className="flex-1 overflow-y-auto p-6">
+   249→          <AnimatePresence mode="wait">
+   250→            {admin.activeTab === 'dashboard' && <DashboardTab key="dash" />}
+   251→            {admin.activeTab === 'trips' && <TripsTab key="trips" />}
+   252→            {admin.activeTab === 'passengers' && <PassengersTab key="pass" />}
+   253→            {admin.activeTab === 'drivers' && <DriversTab key="drivers" />}
+   254→            {admin.activeTab === 'settings' && <SettingsTab key="settings" />}
+   255→          </AnimatePresence>
+   256→        </main>
+   257→      </div>
+   258→    </motion.div>
+   259→  );
+   260→}
+   261→
+   262→// ─── Dashboard Tab ───
+   263→function DashboardTab() {
+   264→  const stats = [
+   265→    { label: 'کل مسافران', value: '۱,۲۵۰', icon: Users, color: '#D4AF37', change: '+۱۲٪' },
+   266→    { label: 'رانندگان فعال', value: '۸۵', icon: UserCheck, color: '#10B981', change: '+۵٪' },
+   267→    { label: 'سفرهای امروز', value: '۴۲', icon: Car, color: '#3B82F6', change: '+۸٪' },
+   268→    { label: 'درآمد امروز', value: '۸۵,۰۰۰,۰۰۰', icon: CreditCard, color: '#F59E0B', suffix: 'تومان', change: '+۱۵٪' },
+   269→  ];
+   270→
+   271→  const quickStats = [
+   272→    { label: '۵۰+ شهر تحت پوشش', icon: MapPin },
+   273→    { label: '۹۹٪ رضایت مشتری', icon: Star },
+   274→    { label: '۱۰,۰۰۰+ سفر موفق', icon: CheckCircle2 },
+   275→    { label: 'پشتیبانی ۲۴/۷', icon: Clock },
+   276→  ];
+   277→
+   278→  return (
+   279→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+   280→      <h2 className="text-xl font-bold text-[#fafafa]">داشبورد</h2>
+   281→
+   282→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   283→        {stats.map((stat) => (
+   284→          <Card key={stat.label} className="bg-[#1a1a1a] border border-[#333] p-5 card-gold-glow">
+   285→            <div className="flex items-start justify-between">
+   286→              <div>
+   287→                <p className="text-[#a1a1aa] text-sm mb-2">{stat.label}</p>
+   288→                <p className="text-2xl font-bold text-[#fafafa]">
+   289→                  {stat.value}
+   290→                  {stat.suffix && <span className="text-sm text-[#a1a1aa] mr-1">{stat.suffix}</span>}
+   291→                </p>
+   292→              </div>
+   293→              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${stat.color}15` }}>
+   294→                <stat.icon className="h-5 w-5" style={{ color: stat.color }} />
+   295→              </div>
+   296→            </div>
+   297→            <div className="flex items-center gap-1 mt-3">
+   298→              <TrendingUp className="h-3 w-3 text-green-400" />
+   299→              <span className="text-green-400 text-xs">{stat.change}</span>
+   300→              <span className="text-[#888] text-xs mr-1">نسبت به ماه قبل</span>
+   301→            </div>
+   302→          </Card>
+   303→        ))}
+   304→      </div>
+   305→
+   306→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   307→        {quickStats.map((s) => (
+   308→          <div key={s.label} className="bg-[#1a1a1a] border border-[#333] rounded-xl p-4 flex items-center gap-3">
+   309→            <s.icon className="h-5 w-5 text-[#D4AF37] shrink-0" />
+   310→            <span className="text-[#fafafa] text-sm">{s.label}</span>
+   311→          </div>
+   312→        ))}
+   313→      </div>
+   314→
+   315→      {/* Recent activity */}
+   316→      <Card className="bg-[#1a1a1a] border border-[#333] p-6">
+   317→        <h3 className="text-[#fafafa] font-bold mb-4">آخرین سفرها</h3>
+   318→        <Table>
+   319→          <TableHeader>
+   320→            <TableRow className="border-[#333]">
+   321→              <TableHead className="text-[#a1a1aa]">کد</TableHead>
+   322→              <TableHead className="text-[#a1a1aa]">مسیر</TableHead>
+   323→              <TableHead className="text-[#a1a1aa]">وضعیت</TableHead>
+   324→              <TableHead className="text-[#a1a1aa]">مبلغ</TableHead>
+   325→            </TableRow>
+   326→          </TableHeader>
+   327→          <TableBody>
+   328→            {recentTrips.slice(0, 5).map((trip) => (
+   329→              <TableRow key={trip.id} className="border-[#333]">
+   330→                <TableCell className="text-[#fafafa] font-mono text-xs" dir="ltr">{trip.code}</TableCell>
+   331→                <TableCell className="text-[#fafafa] text-sm">{trip.route}</TableCell>
+   332→                <TableCell>{getStatusBadge(trip.status)}</TableCell>
+   333→                <TableCell className="text-[#fafafa] text-sm" dir="ltr">{trip.amount} تومان</TableCell>
+   334→              </TableRow>
+   335→            ))}
+   336→          </TableBody>
+   337→        </Table>
+   338→      </Card>
+   339→    </motion.div>
+   340→  );
+   341→}
+   342→
+   343→// ─── Trips Tab ───
+   344→function TripsTab() {
+   345→  const [statusFilter, setStatusFilter] = useState('all');
+   346→
+   347→  const filtered = statusFilter === 'all' ? recentTrips : recentTrips.filter((t) => t.status === statusFilter);
+   348→
+   349→  return (
+   350→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+   351→      <div className="flex items-center justify-between flex-wrap gap-4">
+   352→        <h2 className="text-xl font-bold text-[#fafafa]">مدیریت سفرها</h2>
+   353→        <div className="flex items-center gap-2">
+   354→          <span className="text-[#a1a1aa] text-sm">فیلتر:</span>
+   355→          <Select value={statusFilter} onValueChange={setStatusFilter}>
+   356→            <SelectTrigger className="w-36 bg-[#1a1a1a] border-[#333] text-[#fafafa] h-9 text-sm">
+   357→              <SelectValue />
+   358→            </SelectTrigger>
+   359→            <SelectContent className="bg-[#1a1a1a] border-[#333]">
+   360→              <SelectItem value="all" className="text-[#fafafa]">همه</SelectItem>
+   361→              <SelectItem value="pending" className="text-[#fafafa]">در انتظار</SelectItem>
+   362→              <SelectItem value="in_progress" className="text-[#fafafa]">در حال انجام</SelectItem>
+   363→              <SelectItem value="completed" className="text-[#fafafa]">تکمیل شده</SelectItem>
+   364→              <SelectItem value="cancelled" className="text-[#fafafa]">لغو شده</SelectItem>
+   365→            </SelectContent>
+   366→          </Select>
+   367→        </div>
+   368→      </div>
+   369→
+   370→      <Card className="bg-[#1a1a1a] border border-[#333] overflow-hidden">
+   371→        <div className="overflow-x-auto">
+   372→          <Table>
+   373→            <TableHeader>
+   374→              <TableRow className="border-[#333]">
+   375→                <TableHead className="text-[#a1a1aa]">کد رزرو</TableHead>
+   376→                <TableHead className="text-[#a1a1aa]">مسیر</TableHead>
+   377→                <TableHead className="text-[#a1a1aa]">وضعیت</TableHead>
+   378→                <TableHead className="text-[#a1a1aa]">نوع خودرو</TableHead>
+   379→                <TableHead className="text-[#a1a1aa]">مبلغ (تومان)</TableHead>
+   380→                <TableHead className="text-[#a1a1aa]">تاریخ</TableHead>
+   381→              </TableRow>
+   382→            </TableHeader>
+   383→            <TableBody>
+   384→              {filtered.map((trip) => (
+   385→                <TableRow key={trip.id} className="border-[#333] hover:bg-[#2d2d2d]/50">
+   386→                  <TableCell className="text-[#fafafa] font-mono text-xs" dir="ltr">{trip.code}</TableCell>
+   387→                  <TableCell className="text-[#fafafa] text-sm">{trip.route}</TableCell>
+   388→                  <TableCell>{getStatusBadge(trip.status)}</TableCell>
+   389→                  <TableCell className="text-[#fafafa] text-sm">{trip.carType}</TableCell>
+   390→                  <TableCell className="text-[#fafafa] text-sm" dir="ltr">{trip.amount}</TableCell>
+   391→                  <TableCell className="text-[#a1a1aa] text-sm">{trip.date}</TableCell>
+   392→                </TableRow>
+   393→              ))}
+   394→            </TableBody>
+   395→          </Table>
+   396→        </div>
+   397→      </Card>
+   398→    </motion.div>
+   399→  );
+   400→}
+   401→
+   402→// ─── Passengers Tab ───
+   403→function PassengersTab() {
+   404→  return (
+   405→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+   406→      <h2 className="text-xl font-bold text-[#fafafa]">مدیریت مسافران</h2>
+   407→      <Card className="bg-[#1a1a1a] border border-[#333] overflow-hidden">
+   408→        <div className="overflow-x-auto">
+   409→          <Table>
+   410→            <TableHeader>
+   411→              <TableRow className="border-[#333]">
+   412→                <TableHead className="text-[#a1a1aa]">نام</TableHead>
+   413→                <TableHead className="text-[#a1a1aa]">شماره تلفن</TableHead>
+   414→                <TableHead className="text-[#a1a1aa]">تعداد سفر</TableHead>
+   415→                <TableHead className="text-[#a1a1aa]">امتیاز</TableHead>
+   416→                <TableHead className="text-[#a1a1aa]">وضعیت</TableHead>
+   417→                <TableHead className="text-[#a1a1aa]">تاریخ عضویت</TableHead>
+   418→              </TableRow>
+   419→            </TableHeader>
+   420→            <TableBody>
+   421→              {passengers.map((p) => (
+   422→                <TableRow key={p.id} className="border-[#333] hover:bg-[#2d2d2d]/50">
+   423→                  <TableCell className="text-[#fafafa] text-sm">{p.name}</TableCell>
+   424→                  <TableCell className="text-[#fafafa] text-sm font-mono" dir="ltr">{p.phone}</TableCell>
+   425→                  <TableCell className="text-[#fafafa] text-sm">{p.trips}</TableCell>
+   426→                  <TableCell>
+   427→                    <div className="flex items-center gap-1">
+   428→                      <Star className="h-3.5 w-3.5 text-[#D4AF37] fill-[#D4AF37]" />
+   429→                      <span className="text-[#fafafa] text-sm">{p.rating}</span>
+   430→                    </div>
+   431→                  </TableCell>
+   432→                  <TableCell>
+   433→                    <Badge className={p.status === 'فعال' ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-red-500/15 text-red-400 border-red-500/30'}>
+   434→                      {p.status}
+   435→                    </Badge>
+   436→                  </TableCell>
+   437→                  <TableCell className="text-[#a1a1aa] text-sm">{p.joinDate}</TableCell>
+   438→                </TableRow>
+   439→              ))}
+   440→            </TableBody>
+   441→          </Table>
+   442→        </div>
+   443→      </Card>
+   444→    </motion.div>
+   445→  );
+   446→}
+   447→
+   448→// ─── Drivers Tab ───
+   449→function DriversTab() {
+   450→  return (
+   451→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+   452→      <h2 className="text-xl font-bold text-[#fafafa]">مدیریت رانندگان</h2>
+   453→      <Card className="bg-[#1a1a1a] border border-[#333] overflow-hidden">
+   454→        <div className="overflow-x-auto">
+   455→          <Table>
+   456→            <TableHeader>
+   457→              <TableRow className="border-[#333]">
+   458→                <TableHead className="text-[#a1a1aa]">نام</TableHead>
+   459→                <TableHead className="text-[#a1a1aa]">خودرو</TableHead>
+   460→                <TableHead className="text-[#a1a1aa]">امتیاز</TableHead>
+   461→                <TableHead className="text-[#a1a1aa]">سفرها</TableHead>
+   462→                <TableHead className="text-[#a1a1aa]">نرخ تکمیل</TableHead>
+   463→                <TableHead className="text-[#a1a1aa]">وضعیت</TableHead>
+   464→              </TableRow>
+   465→            </TableHeader>
+   466→            <TableBody>
+   467→              {drivers.map((d) => (
+   468→                <TableRow key={d.id} className="border-[#333] hover:bg-[#2d2d2d]/50">
+   469→                  <TableCell className="text-[#fafafa] text-sm">{d.name}</TableCell>
+   470→                  <TableCell className="text-[#fafafa] text-sm">{d.car}</TableCell>
+   471→                  <TableCell>
+   472→                    <div className="flex items-center gap-1">
+   473→                      <Star className="h-3.5 w-3.5 text-[#D4AF37] fill-[#D4AF37]" />
+   474→                      <span className="text-[#fafafa] text-sm">{d.rating}</span>
+   475→                    </div>
+   476→                  </TableCell>
+   477→                  <TableCell className="text-[#fafafa] text-sm">{d.trips}</TableCell>
+   478→                  <TableCell className="text-[#fafafa] text-sm">{d.completionRate}%</TableCell>
+   479→                  <TableCell>{getDriverStatusBadge(d.status)}</TableCell>
+   480→                </TableRow>
+   481→              ))}
+   482→            </TableBody>
+   483→          </Table>
+   484→        </div>
+   485→      </Card>
+   486→    </motion.div>
+   487→  );
+   488→}
+   489→
+   490→// ─── Settings Tab ───
+   491→function SettingsTab() {
+   492→  const [saved, setSaved] = useState(false);
+   493→  const [saveError, setSaveError] = useState('');
+   494→  const [form, setForm] = useState({
+   495→    siteName: 'تاکسی ویژه سیوان',
+   496→    phone1: '09109419743',
+   497→    phone2: '09368816807',
+   498→    email: 'info@sivantaxi.com',
+   499→    address: 'تهران، خیابان ولیعصر',
+   500→    commission: '10',
+   501→    minWithdrawal: '500000',
+   502→    workingHours: '۲۴ ساعته - ۷ روز هفته',
+   503→    // Email notification settings
+   504→    notifyEmail: '',
+   505→    smtpHost: 'smtp.gmail.com',
+   506→    smtpPort: '587',
+   507→    smtpUser: '',
+   508→    smtpPass: '',
+   509→  });
+   510→
+   511→  // Load settings from API on mount
+   512→  useEffect(() => {
+   513→    fetch('/api/settings')
+   514→      .then(r => r.json())
+   515→      .then(data => {
+   516→        if (data.notifyEmail) setForm(f => ({ ...f, notifyEmail: data.notifyEmail }));
+   517→        if (data.smtpHost) setForm(f => ({ ...f, smtpHost: data.smtpHost }));
+   518→        if (data.smtpPort) setForm(f => ({ ...f, smtpPort: data.smtpPort }));
+   519→        if (data.smtpUser) setForm(f => ({ ...f, smtpUser: data.smtpUser }));
+   520→        if (data.smtpPass) setForm(f => ({ ...f, smtpPass: data.smtpPass }));
+   521→        if (data.siteName) setForm(f => ({ ...f, siteName: data.siteName }));
+   522→        if (data.phone1) setForm(f => ({ ...f, phone1: data.phone1 }));
+   523→        if (data.phone2) setForm(f => ({ ...f, phone2: data.phone2 }));
+   524→        if (data.email) setForm(f => ({ ...f, email: data.email }));
+   525→        if (data.address) setForm(f => ({ ...f, address: data.address }));
+   526→        if (data.commission) setForm(f => ({ ...f, commission: String(data.commission) }));
+   527→        if (data.minWithdrawal) setForm(f => ({ ...f, minWithdrawal: String(data.minWithdrawal) }));
+   528→        if (data.workingHours) setForm(f => ({ ...f, workingHours: data.workingHours }));
+   529→      })
+   530→      .catch(() => {});
+   531→  }, []);
+   532→
+   533→  const handleSave = async () => {
+   534→    setSaveError('');
+   535→    try {
+   536→      const res = await fetch('/api/settings', {
+   537→        method: 'PUT',
+   538→        headers: { 'Content-Type': 'application/json' },
+   539→        body: JSON.stringify(form),
+   540→      });
+   541→      if (!res.ok) {
+   542→        const d = await res.json().catch(() => ({ error: 'خطا' }));
+   543→        throw new Error(d.error || 'خطا در ذخیره');
+   544→      }
+   545→      setSaved(true);
+   546→      setTimeout(() => setSaved(false), 3000);
+   547→    } catch (e) {
+   548→      setSaveError(e instanceof Error ? e.message : 'خطا');
+   549→    }
+   550→  };
+   551→
+   552→  return (
+   553→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6 max-w-3xl">
+   554→      <h2 className="text-xl font-bold text-[#fafafa]">تنظیمات سیستم</h2>
+   555→
+   556→      {saved && (
+   557→        <motion.div
+   558→          initial={{ opacity: 0, y: -10 }}
+   559→          animate={{ opacity: 1, y: 0 }}
+   560→          className="flex items-center gap-2 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400"
+   561→        >
+   562→          <Check className="h-4 w-4" />
+   563→          تنظیمات با موفقیت ذخیره شد
+   564→        </motion.div>
+   565→      )}
+   566→
+   567→      <Card className="bg-[#1a1a1a] border border-[#333] p-6">
+   568→        <h3 className="text-[#fafafa] font-bold mb-6">اطلاعات پایه</h3>
+   569→        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+   570→          <SettingsField label="نام سایت" value={form.siteName} onChange={(v) => setForm({ ...form, siteName: v })} />
+   571→          <SettingsField label="ایمیل" value={form.email} onChange={(v) => setForm({ ...form, email: v })} dir="ltr" />
+   572→          <SettingsField label="شماره تلفن ۱" value={form.phone1} onChange={(v) => setForm({ ...form, phone1: v })} dir="ltr" />
+   573→          <SettingsField label="شماره تلفن ۲" value={form.phone2} onChange={(v) => setForm({ ...form, phone2: v })} dir="ltr" />
+   574→          <SettingsField label="آدرس" value={form.address} onChange={(v) => setForm({ ...form, address: v })} full />
+   575→        </div>
+   576→      </Card>
+   577→
+   578→      <Card className="bg-[#1a1a1a] border border-[#333] p-6">
+   579→        <h3 className="text-[#fafafa] font-bold mb-2">تنظیمات اعلان ایمیلی</h3>
+   580→        <p className="text-[#a1a1aa] text-xs mb-6">پس از ثبت رزرو جدید، ایمیل اعلان به این آدرس ارسال می‌شود</p>
+   581→        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+   582→          <SettingsField label="ایمیل دریافت اعلان" value={form.notifyEmail} onChange={(v) => setForm({ ...form, notifyEmail: v })} dir="ltr" placeholder="admin@gmail.com" />
+   583→          <SettingsField label="سرور SMTP" value={form.smtpHost} onChange={(v) => setForm({ ...form, smtpHost: v })} dir="ltr" />
+   584→          <SettingsField label="پورت SMTP" value={form.smtpPort} onChange={(v) => setForm({ ...form, smtpPort: v })} dir="ltr" />
+   585→          <SettingsField label="نام کاربری SMTP (ایمیل)" value={form.smtpUser} onChange={(v) => setForm({ ...form, smtpUser: v })} dir="ltr" placeholder="your@gmail.com" />
+   586→          <SettingsField label="رمز عبور SMTP" value={form.smtpPass} onChange={(v) => setForm({ ...form, smtpPass: v })} dir="ltr" placeholder="app-password" type="password" />
+   587→        </div>
+   588→        <div className="mt-4 p-3 rounded-lg bg-[#0a0a0a] border border-[#333]">
+   589→          <p className="text-[#a1a1aa] text-xs leading-relaxed">
+   590→            <span className="text-[#D4AF37]">راهنمای Gmail:</span> برای استفاده از Gmail، باید App Password بسازید.
+   591→            به Google Account → Security → 2-Step Verification → App passwords بروید و یک رمز جدید بسازید.
+   592→          </p>
+   593→        </div>
+   594→      </Card>
+   595→
+   596→      <Card className="bg-[#1a1a1a] border border-[#333] p-6">
+   597→        <h3 className="text-[#fafafa] font-bold mb-6">تنظیمات مالی</h3>
+   598→        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+   599→          <SettingsField label="نرخ کمیسیون (%)" value={form.commission} onChange={(v) => setForm({ ...form, commission: v })} />
+   600→          <SettingsField label="حداقل تسویه (تومان)" value={form.minWithdrawal} onChange={(v) => setForm({ ...form, minWithdrawal: v })} />
+   601→          <SettingsField label="ساعات کاری" value={form.workingHours} onChange={(v) => setForm({ ...form, workingHours: v })} full />
+   602→        </div>
+   603→      </Card>
+   604→
+   605→      <Button
+   606→        onClick={handleSave}
+   607→        className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-12 px-8 rounded-xl"
+   608→      >
+   609→        ذخیره تنظیمات
+   610→      </Button>
+   611→    </motion.div>
+   612→  );
+   613→}
+   614→
+   615→function SettingsField({ label, value, onChange, dir, full, placeholder, type }: { label: string; value: string; onChange: (v: string) => void; dir?: string; full?: boolean; placeholder?: string; type?: string }) {
+   616→  return (
+   617→    <div className={full ? 'md:col-span-2' : ''}>
+   618→      <Label className="text-[#a1a1aa] text-sm mb-2 block">{label}</Label>
+   619→      <Input
+   620→        value={value}
+   621→        onChange={(e) => onChange(e.target.value)}
+   622→        className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11"
+   623→        dir={dir}
+   624→        placeholder={placeholder}
+   625→        type={type || 'text'}
+   626→      />
+   627→    </div>
+   628→  );
+   629→}
+   630→
+   631→// ─── Helpers ───
+   632→function getStatusBadge(status: string) {
+   633→  const map: Record<string, { label: string; className: string }> = {
+   634→    pending: { label: 'در انتظار', className: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
+   635→    in_progress: { label: 'در حال انجام', className: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+   636→    completed: { label: 'تکمیل شده', className: 'bg-green-500/15 text-green-400 border-green-500/30' },
+   637→    cancelled: { label: 'لغو شده', className: 'bg-red-500/15 text-red-400 border-red-500/30' },
+   638→  };
+   639→  const info = map[status] || map.pending;
+   640→  return <Badge className={info.className}>{info.label}</Badge>;
+   641→}
+   642→
+   643→function getDriverStatusBadge(status: string) {
+   644→  const map: Record<string, { label: string; className: string }> = {
+   645→    approved: { label: 'تأیید شده', className: 'bg-green-500/15 text-green-400 border-green-500/30' },
+   646→    pending: { label: 'در انتظار بررسی', className: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
+   647→    rejected: { label: 'رد شده', className: 'bg-red-500/15 text-red-400 border-red-500/30' },
+   648→    suspended: { label: 'تعلیق شده', className: 'bg-red-500/15 text-red-400 border-red-500/30' },
+   649→  };
+   650→  const info = map[status] || map.pending;
+   651→  return <Badge className={info.className}>{info.label}</Badge>;
+   652→}
+   653→
+   654→// ─── Sample Data ───
+   655→const recentTrips = [
+   656→  { id: 1, code: 'SV-A3F2K1', route: 'تهران → اصفهان', status: 'completed', carType: 'VIP - سوناتا', amount: '۸۵۰,۰۰۰', date: '۲۵ آذر ۱۴۰۳' },
+   657→  { id: 2, code: 'SV-B7H4M2', route: 'تهران → شیراز', status: 'in_progress', carType: 'لوکس - مرسدس', amount: '۱,۵۰۰,۰۰۰', date: '۲۵ آذر ۱۴۰۳' },
+   658→  { id: 3, code: 'SV-C9K5N3', route: 'تهران → تبریز', status: 'pending', carType: 'اقتصادی', amount: '۱,۲۰۰,۰۰۰', date: '۲۶ آذر ۱۴۰۳' },
+   659→  { id: 4, code: 'SV-D2L6P4', route: 'تهران → مشهد', status: 'completed', carType: 'VIP - سوناتا', amount: '۱,۸۰۰,۰۰۰', date: '۲۴ آذر ۱۴۰۳' },
+   660→  { id: 5, code: 'SV-E5M7Q5', route: 'اصفهان → شیراز', status: 'cancelled', carType: 'اقتصادی', amount: '۱,۱۰۰,۰۰۰', date: '۲۴ آذر ۱۴۰۳' },
+   661→  { id: 6, code: 'SV-F8N8R6', route: 'تهران → رشت', status: 'completed', carType: 'ون', amount: '۹۵۰,۰۰۰', date: '۲۳ آذر ۱۴۰۳' },
+   662→  { id: 7, code: 'SV-G1O9S7', route: 'تهران → کرج', status: 'completed', carType: 'برقی', amount: '۴۵۰,۰۰۰', date: '۲۳ آذر ۱۴۰۳' },
+   663→  { id: 8, code: 'SV-H4P1T8', route: 'تهران → کرمانشاه', status: 'in_progress', carType: 'VIP - سوناتا', amount: '۱,۱۰۰,۰۰۰', date: '۲۶ آذر ۱۴۰۳' },
+   664→  { id: 9, code: 'SV-J7Q2U9', route: 'تبریز → تهران', status: 'pending', carType: 'لوکس - مرسدس', amount: '۱,۳۰۰,۰۰۰', date: '۲۷ آذر ۱۴۰۳' },
+   665→  { id: 10, code: 'SV-K0R3V0', route: 'تهران → اصفهان', status: 'completed', carType: 'اقتصادی', amount: '۸۰۰,۰۰۰', date: '۲۲ آذر ۱۴۰۳' },
+   666→];
+   667→
+   668→const passengers = [
+   669→  { id: 1, name: 'علی محمدی', phone: '09123456789', trips: 12, rating: 4.8, status: 'فعال', joinDate: '۱۰ مهر ۱۴۰۳' },
+   670→  { id: 2, name: 'سارا احمدی', phone: '09118765432', trips: 8, rating: 4.9, status: 'فعال', joinDate: '۱۵ آبان ۱۴۰۳' },
+   671→  { id: 3, name: 'محمد رضایی', phone: '09351234567', trips: 25, rating: 4.5, status: 'فعال', joinDate: '۵ شهریور ۱۴۰۳' },
+   672→  { id: 4, name: 'فاطمه حسینی', phone: '09199876543', trips: 5, rating: 5.0, status: 'فعال', joinDate: '۲۰ آذر ۱۴۰۳' },
+   673→  { id: 5, name: 'حسین کریمی', phone: '09361112233', trips: 15, rating: 4.7, status: 'فعال', joinDate: '۱ اردیبهشت ۱۴۰۳' },
+   674→  { id: 6, name: 'مریم نوری', phone: '09125556677', trips: 3, rating: 4.3, status: 'غیرفعال', joinDate: '۱۰ آذر ۱۴۰۳' },
+   675→  { id: 7, name: 'رضا عباسی', phone: '09378889900', trips: 20, rating: 4.6, status: 'فعال', joinDate: '۱ فروردین ۱۴۰۳' },
+   676→  { id: 8, name: 'زهرا صادقی', phone: '09164445566', trips: 7, rating: 4.9, status: 'فعال', joinDate: '۳۰ مهر ۱۴۰۳' },
+   677→];
+   678→
+   679→const drivers = [
+   680→  { id: 1, name: 'رضا کریمی', car: 'هیوندای سوناتا ۲۰۲۲ - مشکی', rating: 4.8, trips: 320, completionRate: 98, status: 'approved' },
+   681→  { id: 2, name: 'احمد یوسفی', car: 'مرسدس بنز E220 - نقرهای', rating: 4.9, trips: 180, completionRate: 99, status: 'approved' },
+   682→  { id: 3, name: 'مهدی شریفی', car: 'تویوتا کمری ۲۰۲۱ - سفید', rating: 4.5, trips: 95, completionRate: 96, status: 'approved' },
+   683→  { id: 4, name: 'حسین جعفری', car: 'تسلا مدل ۳ - قرمز', rating: 4.7, trips: 45, completionRate: 97, status: 'pending' },
+   684→  { id: 5, name: 'علی باقری', car: 'ون تویوتا هایس - سفید', rating: 4.6, trips: 210, completionRate: 95, status: 'approved' },
+   685→  { id: 6, name: 'سعید رحیمی', car: 'پژو پارس - آبی', rating: 4.2, trips: 15, completionRate: 88, status: 'rejected' },
+   686→];
+   687→
+   688→// ─── Main Export ───
+   689→export function AdminPanel() {
+   690→  const { admin } = useAppStore();
+   691→
+   692→  if (!admin.isAdminOpen) return null;
+   693→
+   694→  return (
+   695→    <>
+   696→      {!admin.isLoggedIn ? <AdminLoginScreen /> : <AdminDashboard />}
+   697→    </>
+   698→  );
+   699→}
+   700→

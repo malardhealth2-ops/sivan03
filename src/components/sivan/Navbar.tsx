@@ -108,7 +108,7 @@ export function Navbar() {
                 onClick={() => openAuth('login')}
                 className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-medium rounded-lg px-4 h-9 text-sm"
               >
-                ورود / ثبت‌نام
+                ورود
               </Button>
             </div>
 
@@ -170,7 +170,7 @@ export function Navbar() {
                 onClick={() => { setMobileMenuOpen(false); openAuth('login'); }}
                 className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-medium mx-4 mt-2"
               >
-                ورود / ثبت‌نام
+                ورود
               </Button>
             </SheetClose>
           </div>

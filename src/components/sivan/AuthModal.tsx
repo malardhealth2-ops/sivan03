@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Phone, User, Shield, Loader2, Check, ArrowLeft } from 'lucide-react';
+import { User, Lock, Shield, Loader2, Check, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,48 +13,48 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from '@/components/ui/input-otp';
 import { useAppStore } from '@/lib/store';
 
 export function AuthModal() {
-  const {
-    auth,
-    closeAuth,
-    setAuthPhone,
-    setAuthOtp,
-    setAuthFullName,
-    setAuthVerified,
-  } = useAppStore();
+  const { auth, closeAuth, setAuthUsername, setAuthPassword, setAuthVerified } = useAppStore();
 
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
+  const [localError, setLocalError] = useState('');
 
-  const handleSendOtp = async () => {
-    if (auth.phone.length < 10) return;
+  const handleLogin = async () => {
+    if (!auth.username || !auth.password) {
+      setLocalError('نام کاربری و رمز عبور را وارد کنید');
+      return;
+    }
+    setLocalError('');
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setLoading(false);
-    setOtpSent(true);
-  };
 
-  const handleVerifyOtp = async () => {
-    if (auth.otpCode.length < 4) return;
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setLoading(false);
-    setAuthVerified(true);
-  };
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: auth.username, password: auth.password }),
+      });
 
-  const handleRegister = async () => {
-    if (!auth.fullName || auth.phone.length < 10) return;
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setLoading(false);
-    setAuthVerified(true);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setLocalError(data.error || 'خطا در ورود');
+        setLoading(false);
+        return;
+      }
+
+      // Store user info in auth state via fullName field
+      setAuthVerified(true);
+    } catch {
+      setLocalError('خطا در ارتباط با سرور');
+      setLoading(false);
+    }
   };
 
   const resetAndClose = () => {
-    setOtpSent(false);
+    setLocalError('');
     closeAuth();
   };
 
@@ -63,18 +63,15 @@ export function AuthModal() {
       <DialogContent className="bg-[#1a1a1a] border-[#333] max-w-md">
         <DialogHeader>
           <DialogTitle className="text-right text-[#fafafa]">
-            {auth.isVerified ? 'خوش آمدید!' : auth.mode === 'login' ? 'ورود به حساب' : 'ثبت‌نام'}
+            {auth.isVerified ? 'خوش آمدید!' : 'ورود به حساب کاربری'}
           </DialogTitle>
           <DialogDescription className="text-right text-[#a1a1aa]">
-            {auth.isVerified
-              ? 'حساب شما با موفقیت تأیید شد'
-              : 'برای ادامه، شماره موبایل خود را وارد کنید'}
+            {auth.isVerified ? 'حساب شما با موفقیت تأیید شد' : 'نام کاربری و رمز عبور خود را وارد کنید'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="mt-2">
           <AnimatePresence mode="wait">
-            {/* OTP Success */}
             {auth.isVerified ? (
               <motion.div
                 key="success"
@@ -96,126 +93,83 @@ export function AuthModal() {
                 </Button>
               </motion.div>
             ) : (
-              <>
-                {/* Phone Input */}
-                {!otpSent && (
-                  <motion.div
-                    key="phone"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    className="space-y-5"
-                  >
-                    <div className="flex justify-center">
-                      <div className="w-16 h-16 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
-                        <Shield className="h-8 w-8 text-[#D4AF37]" />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[#fafafa]">
-                        <Phone className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
-                        شماره موبایل
-                      </Label>
-                      <Input
-                        placeholder="۰۹۱۲XXXXXXX"
-                        value={auth.phone}
-                        onChange={(e) => setAuthPhone(e.target.value)}
-                        className="bg-[#0a0a0a] border-[#333] text-[#fafafa] text-center text-lg tracking-widest h-12"
-                        dir="ltr"
-                        maxLength={11}
-                      />
-                      <p className="text-xs text-[#a1a1aa] text-center">
-                        کد تأیید به این شماره ارسال خواهد شد
-                      </p>
-                    </div>
-                    <Button
-                      onClick={handleSendOtp}
-                      disabled={auth.phone.length < 10 || loading}
-                      className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium"
-                    >
-                      {loading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          ارسال کد تأیید
-                          <ArrowLeft className="h-4 w-4 mr-1" />
-                        </>
-                      )}
-                    </Button>
+              <motion.div
+                key="login"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-5"
+              >
+                <div className="flex justify-center">
+                  <div className="w-16 h-16 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+                    <Shield className="h-8 w-8 text-[#D4AF37]" />
+                  </div>
+                </div>
 
-                    {auth.mode === 'login' && (
-                      <p className="text-center text-xs text-[#a1a1aa]">
-                        حساب ندارید؟{' '}
-                        <button
-                          onClick={() => { setOtpSent(false); }}
-                          className="text-[#D4AF37] hover:underline"
-                        >
-                          ثبت‌نام کنید
-                        </button>
-                      </p>
-                    )}
+                <div className="space-y-2">
+                  <Label className="text-[#fafafa] text-sm">
+                    <User className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />
+                    نام کاربری
+                  </Label>
+                  <Input
+                    placeholder="نام کاربری"
+                    value={auth.username}
+                    onChange={(e) => setAuthUsername(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
+                    dir="ltr"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[#fafafa] text-sm">
+                    <Lock className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />
+                    رمز عبور
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      type={showPass ? 'text' : 'password'}
+                      placeholder="رمز عبور"
+                      value={auth.password}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                      className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
+                      dir="ltr"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1aa] hover:text-[#fafafa]"
+                    >
+                      {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {(localError) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+                  >
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    {localError}
                   </motion.div>
                 )}
 
-                {/* OTP Input */}
-                {otpSent && !auth.isVerified && (
-                  <motion.div
-                    key="otp"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    className="space-y-5"
-                  >
-                    <div className="text-center mb-2">
-                      <p className="text-[#a1a1aa] text-sm">
-                        کد تأیید ارسال شده به شماره
-                      </p>
-                      <p className="text-[#fafafa] font-bold mt-1" dir="ltr">{auth.phone}</p>
-                    </div>
-
-                    <div className="flex justify-center py-4">
-                      <InputOTP
-                        value={auth.otpCode}
-                        onChange={(val) => setAuthOtp(val)}
-                        maxLength={5}
-                      >
-                        <InputOTPGroup>
-                          <InputOTPSlot index={0} className="bg-[#0a0a0a] border-[#333] text-[#fafafa]" />
-                          <InputOTPSlot index={1} className="bg-[#0a0a0a] border-[#333] text-[#fafafa]" />
-                          <InputOTPSeparator className="text-[#333]" />
-                          <InputOTPSlot index={2} className="bg-[#0a0a0a] border-[#333] text-[#fafafa]" />
-                          <InputOTPSlot index={3} className="bg-[#0a0a0a] border-[#333] text-[#fafafa]" />
-                          <InputOTPSlot index={4} className="bg-[#0a0a0a] border-[#333] text-[#fafafa]" />
-                        </InputOTPGroup>
-                      </InputOTP>
-                    </div>
-
-                    <Button
-                      onClick={handleVerifyOtp}
-                      disabled={auth.otpCode.length < 4 || loading}
-                      className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium"
-                    >
-                      {loading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        'تأیید و ورود'
-                      )}
-                    </Button>
-
-                    <div className="flex items-center justify-between text-xs text-[#a1a1aa]">
-                      <button
-                        onClick={() => setOtpSent(false)}
-                        className="text-[#D4AF37] hover:underline"
-                      >
-                        تغییر شماره
-                      </button>
-                      <button className="hover:text-[#fafafa]">
-                        ارسال مجدد کد
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </>
+                <Button
+                  onClick={handleLogin}
+                  disabled={loading || !auth.username || !auth.password}
+                  className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'ورود به حساب'
+                  )}
+                </Button>
+              </motion.div>
             )}
           </AnimatePresence>
         </div>
