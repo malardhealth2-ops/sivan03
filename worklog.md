@@ -117,3 +117,21 @@ Stage Summary:
 - Booking API confirmed working: POST /api/booking returns 200 with bookingCode
 - Database verified: bookings saved with correct data (distanceKm, totalFare, etc.)
 
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix date display to show Jalali calendar format
+
+Work Log:
+- Identified issue: BookingModal step 3 summary was showing raw ISO date (2025-03-23) instead of Jalali
+- Added import for formatJalaaliDate and toPersianDigits from @/lib/jalaali
+- Changed date display: booking.formData.date → formatJalaaliDate(booking.formData.date)
+- Changed time display: booking.formData.time → toPersianDigits(booking.formData.time) with dir="ltr"
+- Verified via Agent Browser: summary now shows "۳ مرداد ۱۴۰۵" and "۱۰:۳۰" with Persian digits
+- JalaliDatePicker calendar correctly shows today as "۳ مرداد" matching Tehran timezone
+
+Stage Summary:
+- BookingModal.tsx: date and time in step 3 summary now display in Jalali format with Persian digits
+- Calendar "today" button correctly identifies current Jalali date
+- All date-related displays verified: navbar (۳ مرداد ۱۴۰۵), datepicker (۳ مرداد), summary (۳ مرداد ۱۴۰۵)
+

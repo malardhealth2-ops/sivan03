@@ -34,6 +34,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAppStore } from '@/lib/store';
 import { JalaliDatePicker } from '@/components/sivan/JalaliDatePicker';
 import { CitySelector } from '@/components/sivan/CitySelector';
+import { formatJalaaliDate, toPersianDigits } from '@/lib/jalaali';
 import { toast } from 'sonner';
 
 const steps = [
@@ -557,11 +558,15 @@ export function BookingModal() {
                     )}
                     <div className="flex justify-between text-[#a1a1aa]">
                       <span>تاریخ:</span>
-                      <span className="text-[#fafafa]">{booking.formData.date || '---'}</span>
+                      <span className="text-[#fafafa]">
+                        {booking.formData.date ? formatJalaaliDate(booking.formData.date) : '---'}
+                      </span>
                     </div>
                     <div className="flex justify-between text-[#a1a1aa]">
                       <span>ساعت:</span>
-                      <span className="text-[#fafafa]">{booking.formData.time || '---'}</span>
+                      <span className="text-[#fafafa]" dir="ltr">
+                        {booking.formData.time ? toPersianDigits(booking.formData.time) : '---'}
+                      </span>
                     </div>
                     <div className="flex justify-between text-[#a1a1aa]">
                       <span>خودرو:</span>
