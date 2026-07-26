@@ -189,3 +189,32 @@ Stage Summary:
 - Admin panel now has Content Editor tab for editing all page texts (hero, services, whyUs, etc.)
 - Admin panel now has Blog Management tab for creating/editing/publishing blog posts with image upload
 - API routes: /api/auth/login, /api/admin/content, /api/admin/blog, /api/admin/blog/[id], /api/admin/upload
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Fix admin login not entering panel + add pricing management (per-km per vehicle category)
+
+Work Log:
+- Fixed AuthModal.tsx: after successful /api/auth/login, if returned user.role === 'admin', now calls adminLogin() + setAdminOpen(true) + closeAuth() to open the admin panel instead of showing the passenger "welcome" screen
+- Updated store.ts adminLogin: credentials now verified by API beforehand; store just records the logged-in admin session
+- Updated AdminPanel.tsx AdminLoginScreen: now calls /api/auth/login API (instead of hardcoded check) and validates role === 'admin' before entering panel
+- Added PricingConfig model to prisma/schema.prisma (baseFare, minFare, perKm rates for economy/vip/luxury/van/electric, roundTripDiscount)
+- Ran `bun run db:push` to sync schema + regenerate Prisma client
+- Created src/lib/pricing.ts: shared getPricingConfig(), calculateFare(), rateForTripType(), TRIP_TYPE_LABELS helpers
+- Created /api/admin/pricing route (GET returns config, PUT upserts config)
+- Rewrote /api/pricing route to read rates from DB via getPricingConfig() + calculateFare() (was hardcoded)
+- Updated /api/booking route to use calculateFare() from DB-backed config (removed hardcoded RATES/BASE_FARE constants)
+- Added 'pricing' to AdminState activeTab type in store.ts
+- Added PricingTab component to AdminPanel.tsx: base fares section (baseFare, minFare, roundTripDiscount), per-vehicle-category rate cards (economy/vip/luxury/van/electric with icons + live 100km example), and a live price preview calculator
+- Added 'قیمت‌گذاری' (Pricing) tab to admin sidebar with Calculator icon
+- Updated HeroSection.tsx: fetches /api/admin/pricing on mount and uses admin-configured rates for the quick-estimate preview (falls back to defaults)
+- Restarted dev server with `setsid --fork` to pick up new Prisma client (stale client was causing 500 on PUT)
+
+Stage Summary:
+- Admin login now correctly opens the admin panel (was showing passenger welcome screen)
+- New "قیمت‌گذاری" tab in admin panel lets admin set: base fare, minimum fare, round-trip discount %, and per-kilometer rate for each of 5 vehicle categories (economy, VIP, luxury, van, electric)
+- All rates persist in DB (PricingConfig table) and are used by both /api/pricing (estimate) and /api/booking (final fare)
+- HeroSection quick-estimate now reflects admin-configured rates
+- Verified end-to-end via agent-browser: login → admin panel → pricing tab → edit VIP rate 3000→4000 → save → toast "قیمت‌گذاری با موفقیت ذخیره شد" → API confirms vipPerKm:4000 persisted
+- Verified pricing math: luxury 200km = 50000 base + 200×5000 = 1,050,000 تومان (correct)

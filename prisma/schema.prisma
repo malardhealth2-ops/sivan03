@@ -341,3 +341,16 @@ model SiteContent {
   body      String   @default("") // can be JSON string for complex content
   updatedAt DateTime @updatedAt
 }
+
+model PricingConfig {
+  id             String   @id @default("main")
+  baseFare       Float    @default(50000) // هزینه پایه (ورود به سفر)
+  minFare        Float    @default(100000) // حداقل کرایه
+  economyPerKm   Float    @default(2000) // اقتصادی - تومان بر کیلومتر
+  vipPerKm       Float    @default(3000) // VIP لوکس
+  luxuryPerKm    Float    @default(5000) // دربستی ویژه
+  vanPerKm       Float    @default(2500) // ون
+  electricPerKm  Float    @default(3500) // برقی
+  roundTripDiscount Float @default(0) // درصد تخفیف رفت و برگشت
+  updatedAt      DateTime @updatedAt
+}

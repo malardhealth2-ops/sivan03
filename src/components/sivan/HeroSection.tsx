@@ -74,6 +74,25 @@ export function HeroSection() {
   const [distanceData, setDistanceData] = useState<{ distanceKm: number; durationMin: number; durationFormatted: string } | null>(null);
   const [distanceError, setDistanceError] = useState('');
   const [price, setPrice] = useState<number | null>(null);
+  const [pricingConfig, setPricingConfig] = useState<{ baseFare: number; rates: Record<string, number> } | null>(null);
+
+  // Fetch admin-configured pricing (fallback to hardcoded defaults)
+  useEffect(() => {
+    fetch('/api/admin/pricing').then(r => r.json()).then(data => {
+      if (data && typeof data.baseFare === 'number') {
+        setPricingConfig({
+          baseFare: data.baseFare,
+          rates: {
+            economy: data.economyPerKm,
+            vip: data.vipPerKm,
+            luxury: data.luxuryPerKm,
+            van: data.vanPerKm,
+            electric: data.electricPerKm,
+          },
+        });
+      }
+    }).catch(() => { /* use defaults */ });
+  }, []);
 
   // Calculate distance when both cities selected
   const fetchDistance = useCallback(async () => {
@@ -124,13 +143,15 @@ export function HeroSection() {
   // Calculate price when distance or car type changes
   useEffect(() => {
     if (distanceData) {
-      const rate = RATES[heroCarType] || 3000;
-      const calcPrice = Math.round(BASE_FARE + distanceData.distanceKm * rate);
+      const rates = pricingConfig?.rates || RATES;
+      const base = pricingConfig?.baseFare ?? BASE_FARE;
+      const rate = rates[heroCarType] || 3000;
+      const calcPrice = Math.round(base + distanceData.distanceKm * rate);
       setPrice(calcPrice);
     } else {
       setPrice(null);
     }
-  }, [distanceData, heroCarType]);
+  }, [distanceData, heroCarType, pricingConfig]);
 
   const handleQuickBook = () => {
     // Copy hero selections to booking form and open modal at step 1 (time selection)

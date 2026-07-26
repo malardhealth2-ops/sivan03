@@ -60,7 +60,7 @@ interface AdminState {
   isLoggedIn: boolean;
   adminUsername: string;
   loginError: string;
-  activeTab: 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'settings';
+  activeTab: 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'settings';
   setAdminOpen: (open: boolean) => void;
   adminLogin: (username: string, password: string) => boolean;
   adminLogout: () => void;
@@ -165,8 +165,9 @@ export const useAppStore = create<AppState>((set) => ({
   },
   setAdminOpen: (open) => set((s) => ({ admin: { ...s.admin, isAdminOpen: open } })),
   adminLogin: (username, password) => {
-    // Demo admin credentials
-    if (username === 'admin' && password === 'sivan2024') {
+    // Credentials are verified by the API (/api/auth/login) before calling this.
+    // This just records the logged-in admin session in client state.
+    if (username && password) {
       set((s) => ({ admin: { ...s.admin, isLoggedIn: true, adminUsername: username, loginError: '' } }));
       return true;
     }

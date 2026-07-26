@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { useAppStore } from '@/lib/store';
 
 export function AuthModal() {
-  const { auth, closeAuth, setAuthUsername, setAuthPassword, setAuthVerified } = useAppStore();
+  const { auth, closeAuth, setAuthUsername, setAuthPassword, setAuthVerified, setAuthUser, adminLogin, setAdminOpen } = useAppStore();
 
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,8 +45,20 @@ export function AuthModal() {
         return;
       }
 
-      // Store user info in auth state via fullName field
+      // Store user info in auth state
+      setAuthUser(data.user || null);
+
+      // If the logged-in user is an admin, open the admin panel instead of the welcome screen
+      if (data.user?.role === 'admin') {
+        adminLogin(auth.username, auth.password);
+        setAdminOpen(true);
+        closeAuth();
+        setLoading(false);
+        return;
+      }
+
       setAuthVerified(true);
+      setLoading(false);
     } catch {
       setLocalError('خطا در ارتباط با سرور');
       setLoading(false);

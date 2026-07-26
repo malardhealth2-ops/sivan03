@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { z } from 'zod';
 import nodemailer from 'nodemailer';
+import { getPricingConfig, calculateFare, TRIP_TYPE_LABELS } from '@/lib/pricing';
 
 const bookingSchema = z.object({
   originAddress: z.string().min(1),
@@ -18,24 +19,6 @@ const bookingSchema = z.object({
   paymentMethod: z.enum(['cash', 'online', 'wallet']).default('cash'),
   totalAmount: z.number().optional(),
 });
-
-const RATES: Record<string, number> = {
-  economy: 2000,
-  vip: 3000,
-  luxury: 5000,
-  van: 2500,
-  electric: 3500,
-};
-
-const BASE_FARE = 500000;
-
-const TRIP_TYPE_LABELS: Record<string, string> = {
-  economy: 'اقتصادی',
-  vip: 'VIP لوکس',
-  luxury: 'دربستی ویژه',
-  van: 'ون',
-  electric: 'برقی',
-};
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: 'نقدی',
@@ -159,9 +142,11 @@ export async function POST(request: NextRequest) {
     const data = bookingSchema.parse(body);
 
     const distanceKm = data.distanceKm || 0;
-    const rate = RATES[data.tripType] || 3000;
-    const calculatedFare = BASE_FARE + distanceKm * rate;
-    const totalFare = data.totalAmount || calculatedFare;
+    const config = await getPricingConfig();
+    const fare = calculateFare(config, data.tripType, distanceKm, data.roundTrip);
+    // If the client supplied a totalAmount (already quoted via /api/pricing), trust it;
+    // otherwise use the server-calculated fare.
+    const totalFare = data.totalAmount || fare.price;
     const durationMin = distanceKm > 0 ? Math.round((distanceKm / 80) * 60) : 0;
 
     const bookingCode = 'SV-' + Date.now().toString(36).toUpperCase().slice(-6);
@@ -180,8 +165,8 @@ export async function POST(request: NextRequest) {
         scheduledFor: data.date ? new Date(data.date) : null,
         notes: data.notes,
         totalFare: Math.round(totalFare),
-        baseFare: BASE_FARE,
-        distanceFare: Math.round(distanceKm * rate),
+        baseFare: fare.baseFare,
+        distanceFare: fare.distanceFare,
         distanceKm: Math.round(distanceKm * 10) / 10,
         durationMin,
         paymentMethod: data.paymentMethod,
