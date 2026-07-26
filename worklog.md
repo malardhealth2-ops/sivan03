@@ -368,3 +368,53 @@ Stage Summary:
 - Settings: simple sender identity config + optional relay + Gmail delivery DNS guide (SPF/DKIM/DMARC/rDNS)
 - Files changed: prisma/schema.prisma, mini-services/mail-service/{package.json,index.ts} (new), src/app/api/settings/route.ts, src/app/api/admin/emails/route.ts (new), src/app/api/admin/emails/[id]/route.ts (new), src/app/api/booking/route.ts, src/lib/store.ts, src/components/sivan/AdminPanel.tsx (new EmailsTab + redesigned SettingsTab)
 - Removed: src/lib/email.ts (OAuth2 helper), src/app/api/admin/email-test/route.ts
+
+---
+Task ID: 16
+Agent: Main Agent
+Task: Fix city selector dropdown clipping + hydration error, add PWA installability + push notifications
+
+Work Log:
+- Issue 1 (dropdown clipping): Root cause = HeroSection had `overflow-hidden` on the whole section, clipping absolutely-positioned dropdowns; the bottom gradient fade also sat on top (later in DOM, same z) covering bottom list items → provinces appeared dimmed/unselectable.
+  - Fix: Moved `overflow-hidden` from the section to the background-image container only; added `pointer-events-none` to decorative overlays; gave content `relative z-10`; gave bottom fade `z-0 pointer-events-none`.
+  - Raised CitySelector dropdown z-index z-50 → z-[100]; raised JalaliDatePicker z-50 → z-[100].
+- Issue 4/5 (button-in-button hydration error): CitySelector had a clear (X) `<button>` nested inside the trigger `<button>` → invalid HTML + hydration error.
+  - Fix: Restructured trigger to use a `relative` wrapper; main button is full-width with left padding; the clear X button is now an absolutely-positioned SIBLING (not child) of the trigger button.
+- Issue 2 (PWA installability):
+  - Generated PWA icons from logo.png via sharp (scripts/gen-icons.js): icon-192.png, icon-512.png, icon-maskable-192.png, icon-maskable-512.png, apple-touch-icon.png, favicon-32.png (dark #0a0a0a background, gold brand).
+  - Created /public/manifest.json: name, short_name, start_url=/, display=standalone, theme_color=#0a0a0a, lang=fa, dir=rtl, icons (any + maskable), shortcuts.
+  - Created /public/sw.js service worker: precache core assets, network-first navigations with offline fallback, cache-first static assets, push event handler (showNotification with RTL/fa, vibrate, actions), notificationclick handler (focus existing tab or open new).
+  - Updated layout.tsx: added manifest, appleWebApp config, full icons set, themeColor viewport.
+  - Created PWARegister component: registers /sw.js, listens for beforeinstallprompt, shows install banner with "نصب" button, detects standalone mode via lazy useState initializer.
+- Issue 3 (push notifications to admin devices):
+  - Installed web-push + @types/web-push; generated VAPID key pair, stored in .env (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT).
+  - Added PushSubscription model to prisma/schema.prisma (endpoint unique, p256dhKey, authKey, label, userAgent). Ran db:push.
+  - Created src/lib/push.ts: ensureConfigured(), getVapidPublicKey(), sendPushToAll() (auto-removes 404/410 expired subs), saveSubscription(), removeSubscription(), listSubscriptions().
+  - Created API routes: GET /api/push/vapid-public, POST /api/push/subscribe, POST /api/push/unsubscribe, POST /api/push/test, GET /api/push/subscriptions.
+  - Updated /api/booking route: after creating trip, calls sendPushToAll() (non-blocking) with booking details → admin devices get push notification on new booking.
+  - Added 'notifications' tab to admin panel (TabId + store type + sidebar + render switch).
+  - Built NotificationsTab component: permission status badge, enable/disable button (requests Notification.permission + PushManager.subscribe + saves to backend), test button (POST /api/push/test), "how it works" guide, registered-devices list with refresh.
+  - Added global email-polling effect in AdminDashboard: polls /api/admin/emails every 25s; on new email → toast (foreground) + playNotifSound() (Web Audio two-tone chime) + SW showNotification (background). Complements web-push for when tab is open.
+  - Added playNotifSound() helper using Web Audio API (no audio file needed).
+  - Added getDeviceLabel() (detects iOS/Android/Windows/Mac/Linux from userAgent) + urlBase64ToUint8Array() helpers.
+- Fixed lint: lazy useState initializer in PWARegister (avoids setState-in-effect); eslint-disable for scripts/gen-icons.js require().
+- Restarted dev server (setsid --fork) to load VAPID env vars + regenerated Prisma client.
+- ESLint: passes clean.
+- Browser-verified end-to-end:
+  - Homepage loads with NO hydration errors (console clean of "button cannot be descendant" / "mismatch")
+  - City selector dropdown: scrolled to bottom — last province "یزد" has color rgb(250,250,250), opacity 1, fully visible (was dimmed before); clicking it transitions to city selection ✓
+  - JalaliDatePicker calendar opens and shows "امروز (۴ مرداد)" ✓
+  - PWA: SW registered (scope=/), manifest linked, apple-touch-icon linked, theme-color=#0a0a0a ✓
+  - Admin login (admin/sivan2024) → new "اعلان‌ها" tab visible and renders "سیستم نوتیفیکیشن", status card, enable/test buttons, devices list, how-it-works guide ✓
+  - Enable button correctly requests permission; denied (headless auto-deny) → shows Persian error "دسترسی نوتیفیکیشن رد شد..." ✓
+  - Backend: GET /api/push/vapid-public returns configured publicKey; POST /api/push/test returns "هیچ دستگاهی ثبت نشده" (correct, no subs yet); GET /api/push/subscriptions returns [] ✓
+  - Booking POST /api/booking 200 (SV-1JCNZ8); dev log shows PushSubscription query after booking → sendPushToAll() fired correctly ✓
+
+Stage Summary:
+- Fixed all 5 user-reported issues:
+  1. Dropdown provinces no longer dimmed/clipped (overflow + z-index fix in HeroSection)
+  2. Calendar no longer clipped (same fix)
+  3. Site is now installable as PWA on mobile (Android/iOS) + Windows (manifest + SW + icons + install banner)
+  4. Push notification system: admin gets browser/phone notifications on new booking or email (VAPID web-push + live polling fallback + sound)
+  5. Button-in-button hydration error eliminated (restructured CitySelector trigger)
+- Files changed: src/components/sivan/CitySelector.tsx, src/components/sivan/HeroSection.tsx, src/components/sivan/JalaliDatePicker.tsx, src/components/sivan/PWARegister.tsx (new), src/components/sivan/AdminPanel.tsx (NotificationsTab + polling effect + helpers), src/app/layout.tsx, src/lib/store.ts, src/lib/push.ts (new), src/app/api/push/{vapid-public,subscribe,unsubscribe,test,subscriptions}/route.ts (new), src/app/api/booking/route.ts, prisma/schema.prisma, .env, scripts/gen-icons.js (new), public/manifest.json (new), public/sw.js (new), public/icon-{192,512,maskable-192,maskable-512}.png + apple-touch-icon.png + favicon-32.png (generated)

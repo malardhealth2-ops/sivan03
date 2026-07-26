@@ -193,43 +193,46 @@ export function CitySelector({
         {label}
       </label>
 
-      {/* Trigger button */}
-      <button
-        type="button"
-        onClick={() => {
-          setIsOpen(!isOpen);
-          if (!isOpen) {
-            setPhase('province');
-            setSearch('');
-          }
-        }}
-        className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-all ${
-          displayText
-            ? 'bg-[#0a0a0a] border-[#D4AF37]/30 text-[#fafafa]'
-            : 'bg-[#0a0a0a] border-[#333] text-[#888]'
-        } hover:border-[#D4AF37]/50 focus:border-[#D4AF37] focus:outline-none`}
-      >
-        <span className={displayText ? '' : ''}>
-          {displayText || placeholder}
-        </span>
-        <div className="flex items-center gap-2">
-          {displayText && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange({ province: '', city: '' });
-              }}
-              className="text-[#a1a1aa] hover:text-[#fafafa] transition-colors"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
+      {/* Trigger wrapper (relative so the clear button can overlay as a SIBLING, not a child) */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setIsOpen(!isOpen);
+            if (!isOpen) {
+              setPhase('province');
+              setSearch('');
+            }
+          }}
+          className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-all ${
+            displayText
+              ? 'bg-[#0a0a0a] border-[#D4AF37]/30 text-[#fafafa]'
+              : 'bg-[#0a0a0a] border-[#333] text-[#888]'
+          } hover:border-[#D4AF37]/50 focus:border-[#D4AF37] focus:outline-none`}
+        >
+          <span className="truncate">
+            {displayText || placeholder}
+          </span>
           <ChevronDown
-            className={`h-4 w-4 text-[#a1a1aa] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`h-4 w-4 text-[#a1a1aa] transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
           />
-        </div>
-      </button>
+        </button>
+        {displayText && (
+          <button
+            type="button"
+            aria-label="پاک کردن"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange({ province: '', city: '' });
+              setPhase('province');
+              setSearch('');
+            }}
+            className="absolute left-9 top-1/2 -translate-y-1/2 text-[#a1a1aa] hover:text-[#fafafa] transition-colors p-1"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
 
       {/* Dropdown */}
       <AnimatePresence>
@@ -239,7 +242,7 @@ export function CitySelector({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
-            className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl z-50 overflow-hidden"
+            className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl z-[100] overflow-visible"
           >
             {/* Header */}
             <div className="bg-[#0a0a0a] border-b border-[#333] px-4 py-3 flex items-center gap-2">

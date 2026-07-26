@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { z } from 'zod';
 import { getPricingConfig, calculateFare, TRIP_TYPE_LABELS } from '@/lib/pricing';
+import { sendPushToAll } from '@/lib/push';
 
 const bookingSchema = z.object({
   originAddress: z.string().min(1),
@@ -187,6 +188,15 @@ export async function POST(request: NextRequest) {
       paymentMethod: data.paymentMethod,
       notes: data.notes || '',
     });
+
+    // Send push notification to all subscribed admin devices (non-blocking)
+    void sendPushToAll({
+      title: `🚕 رزرو جدید: ${bookingCode}`,
+      body: `${data.fullName} | ${data.originAddress} ← ${data.destAddress} | ${formatPrice(Math.round(totalFare))} تومان`,
+      tag: `booking-${bookingCode}`,
+      url: '/',
+      renotify: true,
+    }).catch(() => { /* silent */ });
 
     return NextResponse.json({
       success: true,

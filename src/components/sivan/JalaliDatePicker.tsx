@@ -131,7 +131,7 @@ export function JalaliDatePicker({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-2 z-50 w-72 bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl shadow-black/60 p-4">
+        <div className="absolute top-full mt-2 z-[100] w-72 bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl shadow-black/60 p-4">
           {/* Month navigation */}
           <div className="flex items-center justify-between mb-4">
             <button

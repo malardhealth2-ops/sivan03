@@ -172,9 +172,9 @@ export function HeroSection() {
   const canBook = heroOrigin.city.length > 0 && heroDest.city.length > 0 && !distanceLoading;
 
   return (
-    <section id="hero" className="relative min-h-screen flex items-center overflow-hidden">
-      {/* Background Image */}
-      <div className="absolute inset-0">
+    <section id="hero" className="relative min-h-screen flex items-center">
+      {/* Background Image (clipped to its own container, NOT the whole hero, so dropdowns can overflow) */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <img
           src="/images/hero-bg.png"
           alt="پس‌زمینه"
@@ -184,9 +184,9 @@ export function HeroSection() {
       </div>
 
       {/* Gold accent line */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-l from-transparent via-[#D4AF37] to-transparent opacity-60" />
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-l from-transparent via-[#D4AF37] to-transparent opacity-60 pointer-events-none" />
 
-      <div className="relative container mx-auto px-4 sm:px-6 pt-24 pb-12">
+      <div className="relative z-10 container mx-auto px-4 sm:px-6 pt-24 pb-12">
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
           {/* Text Content */}
           <motion.div
@@ -379,8 +379,8 @@ export function HeroSection() {
         </div>
       </div>
 
-      {/* Bottom fade */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#0a0a0a] to-transparent" />
+      {/* Bottom fade (pointer-events-none + low z so it never blocks dropdowns) */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#0a0a0a] to-transparent pointer-events-none z-0" />
     </section>
   );
 }

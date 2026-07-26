@@ -7,7 +7,7 @@ import {
   TrendingUp, MapPin, Phone, Star, ChevronDown, Eye, EyeOff, Loader2,
   Calendar, Clock, CreditCard, Check, AlertTriangle, Ban, CheckCircle2,
   FileText, Pencil, Plus, Trash2, Image, Send, Save, Calculator, Mail, KeyRound,
-  Inbox, RefreshCw,
+  Inbox, RefreshCw, Bell, BellOff, Smartphone, Volume2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +21,7 @@ import { useAppStore } from '@/lib/store';
 import { formatJalaaliDate, getTehranTimeString, getTehranTime, toPersianDigits } from '@/lib/jalaali';
 import { toast } from 'sonner';
 
-type TabId = 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'emails' | 'settings';
+type TabId = 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'emails' | 'notifications' | 'settings';
 type BlogPostForm = {
   id?: string;
   title: string;
@@ -122,6 +122,68 @@ function AdminDashboard() {
     return () => clearInterval(i);
   }, []);
 
+  // ── Live email polling: foreground toast + background SW notification ──
+  // Polls /api/admin/emails every 25s; when a NEW email arrives (unseen id),
+  // shows a toast (foreground) + a service-worker notification (background)
+  // + a short notification sound. This complements the web-push system
+  // (which works even when the tab is fully closed).
+  useEffect(() => {
+    let seenIds = new Set<string>();
+    let firstLoad = true;
+
+    const checkNewEmails = async () => {
+      try {
+        const res = await fetch('/api/admin/emails?limit=5');
+        if (!res.ok) return;
+        const data = await res.json();
+        const items: { id: string; subject: string; toEmail: string; source: string; refId?: string }[] = data.items || [];
+        if (items.length === 0) return;
+
+        if (firstLoad) {
+          items.forEach((it) => seenIds.add(it.id));
+          firstLoad = false;
+          return;
+        }
+
+        const fresh = items.filter((it) => !seenIds.has(it.id));
+        if (fresh.length === 0) return;
+
+        fresh.forEach((it) => seenIds.add(it.id));
+
+        const isBooking = it.source === 'booking';
+        const title = isBooking ? `🚕 رزرو جدید: ${it.refId || ''}` : `📧 ایمیل جدید: ${it.subject}`;
+        const body = isBooking ? `کد رهگیری ${it.refId || ''} — برای مشاهده کلیک کنید` : `${it.subject} — برای ${it.toEmail}`;
+
+        // Foreground: toast + sound
+        toast(title, { description: body, duration: 8000 });
+        playNotifSound();
+
+        // Background: service worker notification (shows even if tab is not focused)
+        if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            reg.showNotification(title, {
+              body,
+              icon: '/icon-192.png',
+              badge: '/icon-192.png',
+              tag: `email-${it.id}`,
+              renotify: true,
+              dir: 'rtl',
+              lang: 'fa',
+              data: { url: '/' },
+              actions: [{ action: 'open', title: 'مشاهده' }, { action: 'close', title: 'بستن' }],
+              vibrate: [120, 60, 120],
+            });
+          } catch { /* ignore */ }
+        }
+      } catch { /* ignore */ }
+    };
+
+    checkNewEmails();
+    const iv = setInterval(checkNewEmails, 25000);
+    return () => clearInterval(iv);
+  }, []);
+
   const tabs: { id: TabId; label: string; icon: typeof LayoutDashboard }[] = [
     { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },
     { id: 'trips', label: 'سفرها', icon: Car },
@@ -131,6 +193,7 @@ function AdminDashboard() {
     { id: 'blog', label: 'بلاگ', icon: FileText },
     { id: 'pricing', label: 'قیمت‌گذاری', icon: Calculator },
     { id: 'emails', label: 'ایمیل‌ها', icon: Mail },
+    { id: 'notifications', label: 'اعلان‌ها', icon: Bell },
     { id: 'settings', label: 'تنظیمات', icon: Settings },
   ];
 
@@ -189,6 +252,7 @@ function AdminDashboard() {
             {admin.activeTab === 'blog' && <BlogTab key="blog" />}
             {admin.activeTab === 'pricing' && <PricingTab key="pricing" />}
             {admin.activeTab === 'emails' && <EmailsTab key="emails" />}
+            {admin.activeTab === 'notifications' && <NotificationsTab key="notif" />}
             {admin.activeTab === 'settings' && <SettingsTab key="settings" />}
           </AnimatePresence>
         </main>
@@ -1324,6 +1388,304 @@ function EmailStatusBadge({ status }: { status: string }) {
   };
   const info = map[status] || map.queued;
   return <Badge className={info.cls}>{info.label}</Badge>;
+}
+
+// ─── Settings Tab ───
+// ─── Notifications Tab (push notifications to admin devices) ───
+function NotificationsTab() {
+  const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [subscribed, setSubscribed] = useState(false);
+  const [enabling, setEnabling] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [devices, setDevices] = useState<{ id: string; label: string; createdAt: string; userAgent: string | null }[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(true);
+  const [pushSupported, setPushSupported] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setPushSupported('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+    if ('Notification' in window) setPermission(Notification.permission);
+    // Check existing subscription
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.ready.then(reg =>
+        reg.pushManager.getSubscription().then(s => setSubscribed(!!s))
+      ).catch(() => {});
+    }
+    loadDevices();
+  }, []);
+
+  const loadDevices = useCallback(async () => {
+    setLoadingDevices(true);
+    try {
+      const res = await fetch('/api/push/subscriptions');
+      const data = await res.json();
+      setDevices(data.subscriptions || []);
+    } catch { /* ignore */ } finally { setLoadingDevices(false); }
+  }, []);
+
+  const handleEnable = async () => {
+    setEnabling(true);
+    try {
+      // 1. Get VAPID public key
+      const vapidRes = await fetch('/api/push/vapid-public');
+      const vapidData = await vapidRes.json();
+      if (!vapidData.configured) {
+        toast.error('کلید VAPID روی سرور پیکربندی نشده است');
+        setEnabling(false);
+        return;
+      }
+
+      // 2. Request permission + subscribe via PushManager
+      const permission = await Notification.requestPermission();
+      setPermission(permission);
+      if (permission !== 'granted') {
+        toast.error('دسترسی نوتیفیکیشن رد شد. از تنظیمات مرورگر اجازه دهید.');
+        setEnabling(false);
+        return;
+      }
+
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const convertedKey = urlBase64ToUint8Array(vapidData.publicKey);
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedKey,
+        });
+      }
+
+      // 3. Save subscription on the server
+      const subJson = sub.toJSON();
+      const saveRes = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: subJson.endpoint,
+          keys: subJson.keys,
+          label: getDeviceLabel(),
+          userAgent: navigator.userAgent,
+        }),
+      });
+      if (!saveRes.ok) throw new Error('save failed');
+
+      setSubscribed(true);
+      toast.success('نوتیفیکیشن روی این دستگاه فعال شد ✅');
+      loadDevices();
+    } catch (e) {
+      console.error(e);
+      toast.error('خطا در فعال‌سازی نوتیفیکیشن');
+    } finally {
+      setEnabling(false);
+    }
+  };
+
+  const handleDisable = async () => {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch('/api/push/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      setSubscribed(false);
+      toast.success('نوتیفیکیشن روی این دستگاه غیرفعال شد');
+      loadDevices();
+    } catch {
+      toast.error('خطا در غیرفعال‌سازی');
+    }
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      const res = await fetch('/api/push/test', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success(data.message || `به ${data.sent} دستگاه ارسال شد`);
+      } else {
+        toast.error(data.error || 'ارسال ناموفق');
+      }
+    } catch {
+      toast.error('خطا در ارسال تست');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6 max-w-3xl">
+      <div>
+        <h2 className="text-xl font-bold text-[#fafafa] flex items-center gap-2">
+          <Bell className="h-5 w-5 text-[#D4AF37]" />
+          سیستم نوتیفیکیشن
+        </h2>
+        <p className="text-[#a1a1aa] text-sm mt-1">
+          با فعال‌سازی نوتیفیکیشن، هنگام دریافت رزرو جدید یا ایمیل، روی گوشی و کامپیوترتان اعلان نمایش داده می‌شود — حتی اگر سایت بسته باشد.
+        </p>
+      </div>
+
+      {!pushSupported && (
+        <Card className="bg-red-500/10 border border-red-500/20 p-4">
+          <div className="flex items-center gap-2 text-red-400 text-sm">
+            <AlertTriangle className="h-4 w-4" />
+            مرورگر شما از نوتیفیکیشن push پشتیبانی نمی‌کند. از Chrome، Edge، Firefox یا Safari نسخه جدید استفاده کنید.
+          </div>
+        </Card>
+      )}
+
+      {/* Status card */}
+      <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${subscribed ? 'bg-green-500/15' : 'bg-[#D4AF37]/15'}`}>
+              {subscribed ? <Bell className="h-6 w-6 text-green-400" /> : <BellOff className="h-6 w-6 text-[#D4AF37]" />}
+            </div>
+            <div>
+              <h3 className="text-[#fafafa] font-bold">وضعیت این دستگاه</h3>
+              <p className="text-[#a1a1aa] text-xs mt-0.5">
+                {subscribed ? 'فعال — نوتیفیکیشن‌ها دریافت می‌شود' : 'غیرفعال — روی دکمه زیر بزنید'}
+              </p>
+            </div>
+          </div>
+          <Badge className={
+            permission === 'granted' ? 'bg-green-500/15 text-green-400 border-green-500/30'
+            : permission === 'denied' ? 'bg-red-500/15 text-red-400 border-red-500/30'
+            : 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'
+          }>
+            {permission === 'granted' ? 'اجازه داده شده' : permission === 'denied' ? 'مسدود شده' : 'در انتظار'}
+          </Badge>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {!subscribed ? (
+            <Button onClick={handleEnable} disabled={enabling || !pushSupported} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-11 px-6 rounded-xl">
+              {enabling ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Bell className="h-4 w-4 ml-2" />}
+              فعال‌سازی نوتیفیکیشن
+            </Button>
+          ) : (
+            <Button onClick={handleDisable} variant="outline" className="bg-transparent border-red-500/30 text-red-400 hover:bg-red-500/10 h-11 px-6 rounded-xl">
+              <BellOff className="h-4 w-4 ml-2" />
+              غیرفعال‌سازی این دستگاه
+            </Button>
+          )}
+          <Button onClick={handleTest} disabled={testing} variant="outline" className="bg-transparent border-[#333] text-[#fafafa] hover:bg-[#2d2d2d] h-11 px-6 rounded-xl">
+            {testing ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Send className="h-4 w-4 ml-2" />}
+            ارسال نوتیفیکیشن تست
+          </Button>
+        </div>
+
+        {permission === 'denied' && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-xs text-red-300 leading-relaxed">
+            دسترسی نوتیفیکیشن مسدود شده است. برای رفع آن، روی آیکن قفل کنار آدرس سایت کلیک کرده و «Notifications» را روی «Allow» قرار دهید، سپس صفحه را رفرش کنید.
+          </div>
+        )}
+      </Card>
+
+      {/* How it works */}
+      <Card className="bg-[#0a0a0a] border border-[#D4AF37]/20 p-5">
+        <h4 className="text-[#D4AF37] font-bold text-sm mb-3">چطور کار می‌کند؟</h4>
+        <ol className="text-xs text-[#bbb] space-y-2 list-decimal pr-5 leading-relaxed">
+          <li>روی «فعال‌سازی نوتیفیکیشن» بزنید و اجازه مرورگر را تایید کنید.</li>
+          <li>این دستگاه در سرور ثبت می‌شود تا بتواند اعلان دریافت کند.</li>
+          <li>از این پس هر رزرو جدید یا ایمیل دریافتی، فوراً روی این دستگاه اعلان می‌شود — حتی اگر تب مرورگر بسته باشد (تا زمانی که مرورگر در پس‌زمینه اجرا باشد).</li>
+          <li>برای نصب دائمی روی دسکتاپ/گوشی، از منوی مرورگر «Install app» را بزنید.</li>
+          <li>می‌توانید روی چند دستگاه (گوشی + لپ‌تاپ) همزمان نوتیفیکیشن فعال کنید.</li>
+        </ol>
+      </Card>
+
+      {/* Devices list */}
+      <Card className="bg-[#1a1a1a] border border-[#333] p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-[#fafafa] font-bold flex items-center gap-2">
+            <Smartphone className="h-4 w-4 text-[#D4AF37]" />
+            دستگاه‌های ثبت‌شده
+          </h3>
+          <Button onClick={loadDevices} variant="ghost" size="sm" className="text-[#a1a1aa] hover:text-[#fafafa] h-8">
+            <RefreshCw className="h-3.5 w-3.5 ml-1" />
+            بروزرسانی
+          </Button>
+        </div>
+        {loadingDevices ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-[#D4AF37]" />
+          </div>
+        ) : devices.length === 0 ? (
+          <div className="text-center py-8 text-[#888] text-sm">
+            هنوز دستگاهی ثبت نشده است. روی «فعال‌سازی نوتیفیکیشن» بزنید.
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+            {devices.map((d) => (
+              <div key={d.id} className="flex items-center gap-3 p-3 rounded-lg bg-[#0a0a0a] border border-[#333]">
+                <div className="w-9 h-9 rounded-lg bg-[#D4AF37]/10 flex items-center justify-center flex-shrink-0">
+                  <Smartphone className="h-4 w-4 text-[#D4AF37]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[#fafafa] text-sm font-medium truncate">{d.label}</p>
+                  <p className="text-[#888] text-xs mt-0.5">{formatJalaaliDate(d.createdAt)}</p>
+                </div>
+                <CheckCircle2 className="h-4 w-4 text-green-400 flex-shrink-0" />
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </motion.div>
+  );
+}
+
+function getDeviceLabel(): string {
+  if (typeof navigator === 'undefined') return 'دستگاه ناشناخته';
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS دستگاه';
+  if (/Android/i.test(ua)) return 'اندروید';
+  if (/Windows/i.test(ua)) return 'ویندوز';
+  if (/Mac/i.test(ua)) return 'مک';
+  if (/Linux/i.test(ua)) return 'لینوکس';
+  return 'دستگاه';
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const output = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) output[i] = rawData.charCodeAt(i);
+  return output;
+}
+
+/** Plays a short two-tone "ding" using the Web Audio API (no audio file needed). */
+function playNotifSound() {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    const playTone = (freq: number, start: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + start);
+      gain.gain.setValueAtTime(0, now + start);
+      gain.gain.linearRampToValueAtTime(0.25, now + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + start + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + start);
+      osc.stop(now + start + duration + 0.05);
+    };
+
+    // Pleasant two-tone ascending chime (gold/bell-like)
+    playTone(880, 0, 0.18);     // A5
+    playTone(1318.5, 0.12, 0.3); // E6
+
+    setTimeout(() => { try { ctx.close(); } catch { /* ignore */ } }, 600);
+  } catch { /* audio not available — silent */ }
 }
 
 // ─── Settings Tab ───

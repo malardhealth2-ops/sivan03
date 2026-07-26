@@ -346,6 +346,22 @@ model EmailMessage {
   @@index([createdAt])
 }
 
+model PushSubscription {
+  id        String   @id @default(cuid())
+  // The PushSubscription.endpoint URL (unique per browser/device)
+  endpoint  String   @unique
+  // p256dh + auth keys (base64url) needed by web-push to encrypt payloads
+  p256dhKey String   @default("")
+  authKey   String   @default("")
+  // Optional label so admin can identify the device (e.g. "iPhone", "Office PC")
+  label     String   @default("")
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
 model PopularRoute {
   id          String @id @default(cuid())
   origin      String
