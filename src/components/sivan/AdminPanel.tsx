@@ -6,7 +6,7 @@ import {
   Shield, LogOut, LayoutDashboard, Car, Users, UserCheck, Settings, X,
   TrendingUp, MapPin, Phone, Star, ChevronDown, Eye, EyeOff, Loader2,
   Calendar, Clock, CreditCard, Check, AlertTriangle, Ban, CheckCircle2,
-  FileText, Pencil, Plus, Trash2, Image, Send, Save, Calculator,
+  FileText, Pencil, Plus, Trash2, Image, Send, Save, Calculator, Mail, KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -982,38 +982,90 @@ function PF(props: { label: string; value: string; onChange: (v: string) => void
 // ─── Settings Tab ───
 function SettingsTab() {
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [showSecret, setShowSecret] = useState(false);
   const [form, setForm] = useState({
     siteName: '', phone1: '', phone2: '', email: '', address: '',
     commission: '10', minWithdrawal: '500000', workingHours: '',
-    notifyEmail: '', smtpHost: 'smtp.gmail.com', smtpPort: '587', smtpUser: '', smtpPass: '',
+    notifyEmail: '',
+    oauthUserEmail: '',
+    oauthClientId: '',
+    oauthClientSecret: '__SET__',
+    oauthRefreshToken: '__SET__',
+    oauthAccessToken: '__SET__',
   });
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(data => {
-      if (data.siteName) setForm(f => ({ ...f, siteName: data.siteName }));
-      if (data.phone1) setForm(f => ({ ...f, phone1: data.phone1 }));
-      if (data.phone2) setForm(f => ({ ...f, phone2: data.phone2 }));
-      if (data.email) setForm(f => ({ ...f, email: data.email }));
-      if (data.address) setForm(f => ({ ...f, address: data.address }));
-      if (data.commission) setForm(f => ({ ...f, commission: String(data.commission) }));
-      if (data.minWithdrawal) setForm(f => ({ ...f, minWithdrawal: String(data.minWithdrawal) }));
-      if (data.workingHours) setForm(f => ({ ...f, workingHours: data.workingHours }));
-      if (data.notifyEmail) setForm(f => ({ ...f, notifyEmail: data.notifyEmail }));
-      if (data.smtpHost) setForm(f => ({ ...f, smtpHost: data.smtpHost }));
-      if (data.smtpPort) setForm(f => ({ ...f, smtpPort: data.smtpPort }));
-      if (data.smtpUser) setForm(f => ({ ...f, smtpUser: data.smtpUser }));
-      if (data.smtpPass) setForm(f => ({ ...f, smtpPass: data.smtpPass }));
+      if (!data) return;
+      setForm(f => ({
+        ...f,
+        siteName: data.siteName ?? f.siteName,
+        phone1: data.phone1 ?? f.phone1,
+        phone2: data.phone2 ?? f.phone2,
+        email: data.email ?? f.email,
+        address: data.address ?? f.address,
+        commission: data.commission != null ? String(data.commission) : f.commission,
+        minWithdrawal: data.minWithdrawal != null ? String(data.minWithdrawal) : f.minWithdrawal,
+        workingHours: data.workingHours ?? f.workingHours,
+        notifyEmail: data.notifyEmail ?? f.notifyEmail,
+        oauthUserEmail: data.oauthUserEmail ?? '',
+        oauthClientId: data.oauthClientId ?? '',
+        // __SET__ means a secret is already stored; show placeholder so admin can
+        // type a new value to overwrite, or leave it to keep the existing one.
+        oauthClientSecret: data.oauthClientSecret === '__SET__' ? '__SET__' : (data.oauthClientSecret || ''),
+        oauthRefreshToken: data.oauthRefreshToken === '__SET__' ? '__SET__' : (data.oauthRefreshToken || ''),
+        oauthAccessToken: data.oauthAccessToken === '__SET__' ? '__SET__' : (data.oauthAccessToken || ''),
+      }));
     }).catch(() => {});
   }, []);
 
   const handleSave = async () => {
+    setSaving(true);
     try {
-      const res = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
       if (!res.ok) throw new Error();
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+      // Refresh masked secrets
+      const data = await res.json();
+      if (data?.settings) {
+        setForm(f => ({
+          ...f,
+          oauthClientSecret: data.settings.oauthClientSecret === '__SET__' ? '__SET__' : '',
+          oauthRefreshToken: data.settings.oauthRefreshToken === '__SET__' ? '__SET__' : '',
+          oauthAccessToken: data.settings.oauthAccessToken === '__SET__' ? '__SET__' : '',
+        }));
+      }
     } catch {
       toast.error('خطا در ذخیره تنظیمات');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/admin/email-test', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        setTestResult({ ok: true, msg: `ایمیل آزمایشی به ${data.sentTo} ارسال شد` });
+      } else {
+        setTestResult({ ok: false, msg: data.error || 'ارسال ایمیل ناموفق بود' });
+      }
+    } catch {
+      setTestResult({ ok: false, msg: 'ارتباط با سرور برقرار نشد' });
+    } finally {
+      setTesting(false);
+      setTimeout(() => setTestResult(null), 8000);
     }
   };
 
@@ -1034,18 +1086,115 @@ function SettingsTab() {
       </Card>
 
       <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-5">
-        <h3 className="text-[#fafafa] font-bold">تنظیمات اعلان ایمیلی</h3>
+        <div className="flex items-center gap-2">
+          <Mail className="h-5 w-5 text-[#D4AF37]" />
+          <h3 className="text-[#fafafa] font-bold">تنظیمات اعلان ایمیلی (OAuth2)</h3>
+        </div>
+        <p className="text-xs text-[#888] leading-relaxed">
+          برای ارسال ایمیل از طریق گوگل، به جای رمز عبور SMTP از OAuth2 استفاده می‌شود.
+          این روش امن‌تر است و نیاز به «رمز برنامه» (App Password) ندارد.
+        </p>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <SF label="ایمیل اعلان" value={form.notifyEmail} onChange={(v) => setForm({ ...form, notifyEmail: v })} dir="ltr" placeholder="admin@gmail.com" />
-          <SF label="SMTP Host" value={form.smtpHost} onChange={(v) => setForm({ ...form, smtpHost: v })} dir="ltr" />
-          <SF label="SMTP Port" value={form.smtpPort} onChange={(v) => setForm({ ...form, smtpPort: v })} dir="ltr" />
-          <SF label="SMTP User" value={form.smtpUser} onChange={(v) => setForm({ ...form, smtpUser: v })} dir="ltr" />
-          <SF label="SMTP Pass" value={form.smtpPass} onChange={(v) => setForm({ ...form, smtpPass: v })} dir="ltr" type="password" />
+          <SF label="ایمیل مقصد اعلان" value={form.notifyEmail} onChange={(v) => setForm({ ...form, notifyEmail: v })} dir="ltr" placeholder="admin@sivantaxi.com" />
+          <SF label="ایمیل ارسال‌کننده (Gmail)" value={form.oauthUserEmail} onChange={(v) => setForm({ ...form, oauthUserEmail: v })} dir="ltr" placeholder="bot@sivantaxi.com" />
+          <SF label="OAuth2 Client ID" value={form.oauthClientId} onChange={(v) => setForm({ ...form, oauthClientId: v })} dir="ltr" placeholder="xxxx.apps.googleusercontent.com" full />
+          <SecretInput
+            label="OAuth2 Client Secret"
+            value={form.oauthClientSecret}
+            onChange={(v) => setForm({ ...form, oauthClientSecret: v })}
+            show={showSecret}
+            onToggle={() => setShowSecret(s => !s)}
+            placeholder="GOCSPX-xxxxxxxxxxxx"
+          />
+          <SecretInput
+            label="OAuth2 Refresh Token"
+            value={form.oauthRefreshToken}
+            onChange={(v) => setForm({ ...form, oauthRefreshToken: v })}
+            show={showSecret}
+            onToggle={() => setShowSecret(s => !s)}
+            placeholder="1//0gxxxxxxxxxxxx"
+            full
+          />
+        </div>
+
+        {/* Setup instructions */}
+        <details className="bg-[#0a0a0a] border border-[#333] rounded-lg p-4 group">
+          <summary className="cursor-pointer text-sm text-[#D4AF37] font-bold flex items-center gap-2">
+            <KeyRound className="h-4 w-4" />
+            راهنمای دریافت اطلاعات OAuth2 از Google Cloud
+          </summary>
+          <ol className="mt-3 space-y-2 text-xs text-[#aaa] leading-relaxed list-decimal pr-5">
+            <li>به <span dir="ltr" className="text-[#D4AF37]">console.cloud.google.com</span> بروید و یک پروژه جدید بسازید یا پروژه فعلی را انتخاب کنید.</li>
+            <li>از منو «APIs &amp; Services → Library»، <b>Gmail API</b> را پیدا و <b>Enable</b> کنید.</li>
+            <li>به «APIs &amp; Services → OAuth consent screen» بروید و یک consent screen بسازید (نوع: External). اسکوپ <span dir="ltr" className="text-[#D4AF37]">https://mail.google.com/</span> را اضافه کنید و یک کاربر تست (همان ایمیل ارسال‌کننده) اضافه کنید.</li>
+            <li>به «APIs &amp; Services → Credentials → Create Credentials → OAuth client ID» بروید. نوع را <b>Web application</b> انتخاب کنید.</li>
+            <li>در بخش «Authorized redirect URIs» آدرس <span dir="ltr" className="text-[#D4AF37]">https://developers.google.com/oauthplayground/</span> را اضافه کنید و ذخیره کنید. سپس <b>Client ID</b> و <b>Client Secret</b> را کپی کنید.</li>
+            <li>به <span dir="ltr" className="text-[#D4AF37]">https://developers.google.com/oauthplayground/</span> بروید و روی آیکون چرخ‌دنده (Settings) کلیک کنید.</li>
+            <li>گزینه «Use your own OAuth credentials» را فعال کنید و Client ID و Client Secret خود را وارد کنید.</li>
+            <li>در سمت چپ، اسکوپ <span dir="ltr" className="text-[#D4AF37]">https://mail.google.com/</span> را وارد و «Authorize APIs» را بزنید. به اکانت گوگل خود دسترسی دهید.</li>
+            <li>پس از بازگشت، روی «Exchange authorization code for tokens» بزنید. <b>Refresh token</b> نمایش داده می‌شود — آن را کپی کنید.</li>
+            <li>این چهار مقدار (Client ID، Client Secret، Refresh Token و ایمیل ارسال‌کننده) را در فرم بالا وارد و ذخیره کنید.</li>
+            <li>در نهایت برای اطمینان، دکمه «ارسال ایمیل آزمایشی» را بزنید.</li>
+          </ol>
+        </details>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={handleTestEmail} disabled={testing} variant="outline" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10 h-11 px-6 rounded-xl font-bold">
+            {testing ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Send className="h-4 w-4 ml-2" />}
+            ارسال ایمیل آزمایشی
+          </Button>
+          {testResult && (
+            <div className={`flex items-center gap-2 text-sm ${testResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {testResult.ok ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+              {testResult.msg}
+            </div>
+          )}
         </div>
       </Card>
 
-      <Button onClick={handleSave} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-12 px-8 rounded-xl">ذخیره تنظیمات</Button>
+      <Button onClick={handleSave} disabled={saving} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-12 px-8 rounded-xl">
+        {saving ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
+        ذخیره تنظیمات
+      </Button>
     </motion.div>
+  );
+}
+
+function SecretInput(props: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  show: boolean;
+  onToggle: () => void;
+  placeholder?: string;
+  full?: boolean;
+}) {
+  const { label, value, onChange, show, onToggle, placeholder, full } = props;
+  const isMasked = value === '__SET__';
+  return (
+    <div className={full ? 'md:col-span-2' : ''}>
+      <Label className="text-[#a1a1aa] text-sm mb-2 block">{label}</Label>
+      <div className="relative">
+        <Input
+          type={show ? 'text' : 'password'}
+          value={isMasked ? '' : value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => { if (isMasked) onChange(''); }}
+          className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11 pl-10"
+          dir="ltr"
+          placeholder={isMasked ? '•••••••• (ذخیره شده — برای تغییر، تایپ کنید)' : (placeholder || '')}
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute left-2 top-1/2 -translate-y-1/2 text-[#888] hover:text-[#fafafa] p-1"
+          aria-label={show ? 'پنهان کردن' : 'نمایش'}
+        >
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
   );
 }
 

@@ -303,10 +303,13 @@ model SiteSettings {
   minWithdrawal Float @default(500000)
   workingHours String @default("۲۴ ساعته - ۷ روز هفته")
   notifyEmail String @default("")
-  smtpHost    String @default("smtp.gmail.com")
-  smtpPort    String @default("587")
-  smtpUser    String @default("")
-  smtpPass    String @default("")
+  // Google OAuth2 credentials (replaces SMTP)
+  oauthUserEmail    String @default("") // Gmail address that sends mail (e.g. bot@sivantaxi.com)
+  oauthClientId     String @default("") // Google Cloud OAuth2 Client ID
+  oauthClientSecret String @default("") // Google Cloud OAuth2 Client Secret
+  oauthRefreshToken String @default("") // Long-lived refresh token (offline access)
+  oauthAccessToken  String @default("") // Short-lived access token (cached, auto-refreshed)
+  oauthTokenExpiry  DateTime? // When the cached access token expires
   updatedAt   DateTime @updatedAt
 }
 

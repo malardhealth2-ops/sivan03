@@ -256,3 +256,49 @@ Stage Summary:
 - Pricing preview dropdown now opens correctly (z-index fix from z-50 to z-[200])
 - Content management tab now has 7 sections each with distinct, relevant fields instead of generic title/subtitle/body
 - Verified via agent-browser: pricing tab shows correct labels, dropdown opens with all 5 categories, selecting "سوپر لوکس" updates price correctly (400,000 for 100km), content tab shows section-specific fields (CTA: title/subtitle/button/phone, Footer: brand/description/copyright/address)
+
+---
+Task ID: 14
+Agent: Main Agent
+Task: Switch admin email notification from SMTP (password-based) to Google OAuth2 (XOAUTH2)
+
+Work Log:
+- Investigated existing SMTP implementation across /api/settings, /api/booking, AdminPanel SettingsTab (was using smtpHost/smtpPort/smtpUser/smtpPass)
+- Updated prisma/schema.prisma SiteSettings model: removed smtpHost, smtpPort, smtpUser, smtpPass; added oauthUserEmail, oauthClientId, oauthClientSecret, oauthRefreshToken, oauthAccessToken, oauthTokenExpiry (DateTime?) fields
+- Ran `bun run db:push --accept-data-loss` to apply schema changes (existing SMTP values dropped)
+- Created src/lib/email.ts — new OAuth2 email helper using nodemailer `auth.type: 'OAuth2'`:
+  - getTransporter() caches transporter, recreated when key OAuth2 fields change
+  - loadOAuth2Config() loads from DB, returns null if required fields missing
+  - sendMail({to, subject, html, fromName}) — never throws, returns {ok, error}
+  - verifyOAuth2() — calls transporter.verify() to test credentials
+- Rewrote /api/settings route.ts:
+  - GET: masks oauthClientSecret/oauthRefreshToken/oauthAccessToken as `__SET__` sentinel when set (defense-in-depth, no secret echo to browser)
+  - PUT: resolveSecret() helper preserves existing secret values when sentinel `__SET__` or empty string sent; clears cached access token + expiry when credentials change
+- Updated /api/booking route.ts: replaced inline SMTP transporter with sendMail() call from new email helper
+- Created /api/admin/email-test/route.ts: POST endpoint that verifies OAuth2 credentials and sends a small HTML test email to the configured notifyEmail address; returns {ok, sentTo} or {ok:false, error} with Persian error messages
+- Rewrote AdminPanel.tsx SettingsTab:
+  - Removed smtpHost/Port/User/Pass form fields
+  - Added OAuth2 fields: notifyEmail, oauthUserEmail, oauthClientId, oauthClientSecret, oauthRefreshToken (with eye toggle show/hide)
+  - Secret fields show masked placeholder "•••••••• (ذخیره شده — برای تغییر، تایپ کنید)" when value is `__SET__`
+  - onFocus clears `__SET__` to allow typing new value
+  - Added collapsible <details> setup guide with 11-step Persian instructions for getting OAuth2 credentials from Google Cloud Console (project, Gmail API, consent screen, OAuth client ID, redirect URI to OAuth Playground, refresh token exchange)
+  - Added "ارسال ایمیل آزمایشی" button that calls /api/admin/email-test and shows inline success/error result
+  - Added loading spinners on Save and Test buttons
+- Restarted dev server with setsid --fork (stale Prisma client was still querying old smtp* columns and returning 500)
+- ESLint: passes clean
+- Browser-verified end-to-end:
+  - Settings tab shows "تنظیمات اعلان ایمیلی (OAuth2)" header
+  - All 5 OAuth2 fields render with proper LTR direction, placeholders, and eye toggle on secrets
+  - Setup instructions expand/collapse correctly
+  - Saving userEmail+clientId+notifyEmail persists to DB; GET returns them unmasked (non-secret)
+  - Saving clientSecret+refreshToken via API stores in DB, returns as `__SET__` sentinel, subsequent GETs also return `__SET__` (no secret leakage to browser)
+  - Clicking "ارسال ایمیل آزمایشی" with no OAuth2 configured → POST /api/admin/email-test returns 400 with Persian error "ابتدا اطلاعات OAuth2 را در تنظیمات وارد کنید." which displays inline below the button
+  - Clicking test with test/invalid credentials → Gmail returns "invalid_client: The OAuth client was not found." displayed inline in Persian error wrapper
+
+Stage Summary:
+- Email notification system fully migrated from SMTP password auth to Google OAuth2 XOAUTH2
+- Secrets (client secret, refresh token, access token) are stored in DB but never echoed back to browser (masked as `__SET__` sentinel)
+- Nodemailer's built-in XOAUTH2 flow handles access-token refresh automatically via refresh token — no manual token management needed
+- Admin UI includes Persian setup guide for Google Cloud Console OAuth2 credentials + OAuth Playground refresh-token flow
+- "ارسال ایمیل آزمایشی" button provides immediate end-to-end verification of credentials
+- Files changed: prisma/schema.prisma, src/lib/email.ts (new), src/app/api/settings/route.ts, src/app/api/admin/email-test/route.ts (new), src/app/api/booking/route.ts, src/components/sivan/AdminPanel.tsx (SettingsTab + new SecretInput component)

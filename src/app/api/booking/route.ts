@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { z } from 'zod';
-import nodemailer from 'nodemailer';
+import { sendMail } from '@/lib/email';
 import { getPricingConfig, calculateFare, TRIP_TYPE_LABELS } from '@/lib/pricing';
 
 const bookingSchema = z.object({
@@ -48,19 +48,7 @@ async function sendBookingNotification(trip: {
   try {
     const settings = await db.siteSettings.findUnique({ where: { id: 'main' } });
     const notifyEmail = settings?.notifyEmail;
-    const smtpHost = settings?.smtpHost;
-    const smtpPort = parseInt(settings?.smtpPort || '587');
-    const smtpUser = settings?.smtpUser;
-    const smtpPass = settings?.smtpPass;
-
-    if (!notifyEmail || !smtpUser || !smtpPass) return;
-
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: { user: smtpUser, pass: smtpPass },
-    });
+    if (!notifyEmail) return;
 
     const htmlBody = `
       <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; padding: 20px; background: #f5f5f5;">
@@ -125,11 +113,11 @@ async function sendBookingNotification(trip: {
       </div>
     `;
 
-    await transporter.sendMail({
-      from: `"سیوان تاکسی" <${smtpUser}>`,
+    await sendMail({
       to: notifyEmail,
       subject: `🚕 رزرو جدید: ${trip.bookingCode} - ${trip.fullName}`,
       html: htmlBody,
+      fromName: 'تاکسی ویژه سیوان',
     });
   } catch {
     // Email sending failed silently - don't block booking
