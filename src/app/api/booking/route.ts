@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { z } from 'zod';
-import { sendMail } from '@/lib/email';
 import { getPricingConfig, calculateFare, TRIP_TYPE_LABELS } from '@/lib/pricing';
 
 const bookingSchema = z.object({
@@ -113,12 +112,22 @@ async function sendBookingNotification(trip: {
       </div>
     `;
 
-    await sendMail({
-      to: notifyEmail,
-      subject: `🚕 رزرو جدید: ${trip.bookingCode} - ${trip.fullName}`,
-      html: htmlBody,
-      fromName: 'تاکسی ویژه سیوان',
-    });
+    // Fire-and-forget to the internal mail-service (mini-service on port 3004).
+    // The mail-service records the message in EmailMessage table and attempts
+    // direct MX delivery (or via configured relay) asynchronously.
+    // We deliberately don't await this so the booking response is not delayed
+    // by email delivery (which can take 10-30 seconds in some cases).
+    void fetch('http://localhost:3004/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: notifyEmail,
+        subject: `🚕 رزرو جدید: ${trip.bookingCode} - ${trip.fullName}`,
+        html: htmlBody,
+        source: 'booking',
+        refId: trip.bookingCode,
+      }),
+    }).catch(() => { /* silent — booking must not fail because of email */ });
   } catch {
     // Email sending failed silently - don't block booking
   }

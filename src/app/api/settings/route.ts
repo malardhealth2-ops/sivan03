@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-// Only these OAuth2 fields are persisted as the "secret" set.
-// We deliberately do NOT echo oauthClientSecret / oauthRefreshToken back to the
-// browser on GET for defense-in-depth (admin UI shows a masked placeholder instead).
-const OAUTH_FIELDS = [
-  'oauthUserEmail',
-  'oauthClientId',
-  'oauthClientSecret',
-  'oauthRefreshToken',
-  'oauthAccessToken',
+const MAIL_FIELDS = [
+  'mailSenderName',
+  'mailSenderEmail',
+  'mailReplyTo',
+  'notifyEmail',
+  'relayHost',
+  'relayPort',
+  'relayUser',
+  'relayPass',
 ] as const;
 
 export async function GET() {
@@ -35,11 +35,9 @@ export async function GET() {
       });
     }
 
-    // Build a safe view: keep all fields, but mask secrets when they're set.
+    // Mask relayPass in GET response (defense-in-depth)
     const safe: Record<string, unknown> = { ...settings };
-    if (settings.oauthClientSecret) safe.oauthClientSecret = '__SET__';
-    if (settings.oauthRefreshToken) safe.oauthRefreshToken = '__SET__';
-    if (settings.oauthAccessToken) safe.oauthAccessToken = '__SET__';
+    if (settings.relayPass) safe.relayPass = '__SET__';
     return NextResponse.json(safe);
   } catch {
     return NextResponse.json({ error: 'خطا در دریافت اطلاعات' }, { status: 500 });
@@ -49,34 +47,27 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-
-    // Resolve OAuth2 field values. Secrets use a sentinel: if the admin sent
-    // the placeholder "__SET__" (or empty), keep the existing DB value.
     const existing = await db.siteSettings.findUnique({ where: { id: 'main' } });
 
-    const resolveSecret = (field: (typeof OAUTH_FIELDS)[number]) => {
-      const incoming = body[field];
+    // relayPass uses sentinel: __SET__ or empty → keep existing
+    const resolvePass = () => {
+      const incoming = body.relayPass;
       if (incoming === '__SET__' || incoming === undefined || incoming === '') {
-        // Keep the existing value
-        return existing?.[field] ?? '';
+        return existing?.relayPass ?? '';
       }
       return String(incoming);
     };
 
-    const oauthValues: Record<string, string> = {
-      oauthUserEmail: body.oauthUserEmail ?? existing?.oauthUserEmail ?? '',
-      oauthClientId: body.oauthClientId ?? existing?.oauthClientId ?? '',
-      oauthClientSecret: resolveSecret('oauthClientSecret'),
-      oauthRefreshToken: resolveSecret('oauthRefreshToken'),
-      oauthAccessToken: resolveSecret('oauthAccessToken'),
+    const mailValues: Record<string, string> = {
+      mailSenderName: body.mailSenderName ?? existing?.mailSenderName ?? '',
+      mailSenderEmail: body.mailSenderEmail ?? existing?.mailSenderEmail ?? '',
+      mailReplyTo: body.mailReplyTo ?? existing?.mailReplyTo ?? '',
+      notifyEmail: body.notifyEmail ?? existing?.notifyEmail ?? '',
+      relayHost: body.relayHost ?? existing?.relayHost ?? '',
+      relayPort: body.relayPort ?? existing?.relayPort ?? '587',
+      relayUser: body.relayUser ?? existing?.relayUser ?? '',
+      relayPass: resolvePass(),
     };
-
-    // If refresh token or client credentials changed, clear the cached
-    // access token + expiry so the email helper will re-refresh from scratch.
-    const credentialsChanged =
-      oauthValues.oauthClientId !== (existing?.oauthClientId ?? '') ||
-      oauthValues.oauthClientSecret !== (existing?.oauthClientSecret ?? '') ||
-      oauthValues.oauthRefreshToken !== (existing?.oauthRefreshToken ?? '');
 
     const settings = await db.siteSettings.upsert({
       where: { id: 'main' },
@@ -91,9 +82,7 @@ export async function PUT(request: NextRequest) {
         commissionRate: parseFloat(body.commission) || 10,
         minWithdrawal: parseInt(body.minWithdrawal) || 500000,
         workingHours: body.workingHours || '',
-        notifyEmail: body.notifyEmail || '',
-        ...oauthValues,
-        oauthTokenExpiry: credentialsChanged ? null : existing?.oauthTokenExpiry ?? null,
+        ...mailValues,
       },
       update: {
         siteName: body.siteName,
@@ -104,17 +93,12 @@ export async function PUT(request: NextRequest) {
         commissionRate: parseFloat(body.commission) || 10,
         minWithdrawal: parseInt(body.minWithdrawal) || 500000,
         workingHours: body.workingHours,
-        notifyEmail: body.notifyEmail || '',
-        ...oauthValues,
-        oauthTokenExpiry: credentialsChanged ? null : existing?.oauthTokenExpiry ?? null,
+        ...mailValues,
       },
     });
 
-    // Don't echo secrets back
     const safe: Record<string, unknown> = { ...settings };
-    if (settings.oauthClientSecret) safe.oauthClientSecret = '__SET__';
-    if (settings.oauthRefreshToken) safe.oauthRefreshToken = '__SET__';
-    if (settings.oauthAccessToken) safe.oauthAccessToken = '__SET__';
+    if (settings.relayPass) safe.relayPass = '__SET__';
     return NextResponse.json({ success: true, settings: safe });
   } catch (error) {
     console.error('[settings] PUT failed:', error);

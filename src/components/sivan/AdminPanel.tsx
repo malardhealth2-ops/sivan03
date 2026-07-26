@@ -7,6 +7,7 @@ import {
   TrendingUp, MapPin, Phone, Star, ChevronDown, Eye, EyeOff, Loader2,
   Calendar, Clock, CreditCard, Check, AlertTriangle, Ban, CheckCircle2,
   FileText, Pencil, Plus, Trash2, Image, Send, Save, Calculator, Mail, KeyRound,
+  Inbox, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +21,7 @@ import { useAppStore } from '@/lib/store';
 import { formatJalaaliDate, getTehranTimeString, getTehranTime, toPersianDigits } from '@/lib/jalaali';
 import { toast } from 'sonner';
 
-type TabId = 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'settings';
+type TabId = 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'emails' | 'settings';
 type BlogPostForm = {
   id?: string;
   title: string;
@@ -129,6 +130,7 @@ function AdminDashboard() {
     { id: 'content', label: 'مدیریت محتوا', icon: Pencil },
     { id: 'blog', label: 'بلاگ', icon: FileText },
     { id: 'pricing', label: 'قیمت‌گذاری', icon: Calculator },
+    { id: 'emails', label: 'ایمیل‌ها', icon: Mail },
     { id: 'settings', label: 'تنظیمات', icon: Settings },
   ];
 
@@ -186,6 +188,7 @@ function AdminDashboard() {
             {admin.activeTab === 'content' && <ContentTab key="content" />}
             {admin.activeTab === 'blog' && <BlogTab key="blog" />}
             {admin.activeTab === 'pricing' && <PricingTab key="pricing" />}
+            {admin.activeTab === 'emails' && <EmailsTab key="emails" />}
             {admin.activeTab === 'settings' && <SettingsTab key="settings" />}
           </AnimatePresence>
         </main>
@@ -979,22 +982,366 @@ function PF(props: { label: string; value: string; onChange: (v: string) => void
   );
 }
 
+// ─── Emails Tab ───
+interface EmailItem {
+  id: string;
+  fromName: string;
+  fromEmail: string;
+  toEmail: string;
+  toName: string | null;
+  subject: string;
+  status: string;
+  mxHost: string | null;
+  attemptCount: number;
+  lastError: string | null;
+  source: string;
+  refId: string | null;
+  sentAt: string | null;
+  createdAt: string;
+}
+
+function EmailsTab() {
+  const [items, setItems] = useState<EmailItem[]>([]);
+  const [stats, setStats] = useState<Record<string, number>>({});
+  const [filter, setFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+  const [showCompose, setShowCompose] = useState(false);
+  const [viewing, setViewing] = useState<EmailItem | null>(null);
+  const [viewHtml, setViewHtml] = useState<string>('');
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const url = filter === 'all' ? '/api/admin/emails' : `/api/admin/emails?status=${filter}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.items) {
+        setItems(data.items);
+        setStats(data.stats || {});
+      }
+    } catch {
+      toast.error('خطا در دریافت ایمیل‌ها');
+    } finally {
+      setLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSend = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const to = String(fd.get('to') || '').trim();
+    const toName = String(fd.get('toName') || '').trim();
+    const subject = String(fd.get('subject') || '').trim();
+    const html = String(fd.get('html') || '').trim();
+    if (!to || !subject || !html) {
+      toast.error('گیرنده، موضوع و متن ایمیل الزامی است');
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, toName: toName || undefined, subject, html, source: 'manual' }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success(data.status === 'sent' ? 'ایمیل با موفقیت ارسال شد' : 'ایمیل ثبت شد اما ارسال ناموفق بود (پورت 25 ممکن است مسدود باشد)');
+        setShowCompose(false);
+        load();
+      } else {
+        toast.error(data.error || 'ارسال ایمیل ناموفق بود');
+      }
+    } catch {
+      toast.error('ارتباط با سرور برقرار نشد');
+    }
+  };
+
+  const handleRetry = async (id: string) => {
+    setRetryingId(id);
+    try {
+      const res = await fetch(`/api/admin/emails/${id}?action=retry`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success(data.status === 'sent' ? 'ایمیل با موفقیت ارسال شد' : 'تلاش مجدد ناموفق بود');
+        load();
+      } else {
+        toast.error(data.error || 'تلاش مجدد ناموفق بود');
+      }
+    } catch {
+      toast.error('ارتباط با سرور برقرار نشد');
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('این ایمیل از آرشیو حذف شود؟')) return;
+    try {
+      await fetch(`/api/admin/emails/${id}`, { method: 'DELETE' });
+      toast.success('ایمیل حذف شد');
+      load();
+    } catch {
+      toast.error('حذف ناموفق بود');
+    }
+  };
+
+  const handleView = async (item: EmailItem) => {
+    setViewing(item);
+    setViewHtml('');
+    try {
+      const res = await fetch(`/api/admin/emails/${item.id}`);
+      const data = await res.json();
+      if (data.htmlBody) setViewHtml(data.htmlBody);
+    } catch {
+      // ignore
+    }
+  };
+
+  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-[#fafafa]">سیستم ایمیل داخلی</h2>
+          <p className="text-xs text-[#888] mt-1">
+            ارسال ایمیل از هویت اختصاصی سایت (noreply@sivantaxi.com) — تحویل مستقیم به سرور مقصد
+          </p>
+        </div>
+        <Button onClick={() => setShowCompose(true)} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-11 px-5 rounded-xl">
+          <Plus className="h-4 w-4 ml-2" />
+          ایمیل جدید
+        </Button>
+      </div>
+
+      {/* Stats cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <StatCard label="کل" value={total} active={filter === 'all'} onClick={() => setFilter('all')} />
+        <StatCard label="ارسال شده" value={stats.sent || 0} active={filter === 'sent'} onClick={() => setFilter('sent')} color="green" />
+        <StatCard label="ناموفق" value={stats.failed || 0} active={filter === 'failed'} onClick={() => setFilter('failed')} color="red" />
+        <StatCard label="در حال ارسال" value={stats.sending || 0} active={filter === 'sending'} onClick={() => setFilter('sending')} color="yellow" />
+        <StatCard label="در صف" value={stats.queued || 0} active={filter === 'queued'} onClick={() => setFilter('queued')} color="blue" />
+      </div>
+
+      {/* List */}
+      <Card className="bg-[#1a1a1a] border border-[#333] overflow-hidden">
+        <div className="p-4 border-b border-[#333] flex items-center justify-between">
+          <h3 className="text-[#fafafa] font-bold flex items-center gap-2">
+            <Inbox className="h-4 w-4 text-[#D4AF37]" />
+            صندوق ارسالی‌ها
+          </h3>
+          <Button variant="ghost" size="sm" onClick={load} className="text-[#888] hover:text-[#fafafa] h-8">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto custom-scroll">
+          {loading ? (
+            <div className="p-8 text-center text-[#888]">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+              در حال بارگذاری…
+            </div>
+          ) : items.length === 0 ? (
+            <div className="p-12 text-center text-[#888]">
+              <Mail className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p>هیچ ایمیلی یافت نشد</p>
+              <p className="text-xs mt-1">برای ارسال اولین ایمیل، روی «ایمیل جدید» کلیک کنید</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[#222]">
+              {items.map(item => (
+                <div key={item.id} className="p-4 hover:bg-[#1f1f1f] transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <EmailStatusBadge status={item.status} />
+                        <span className="text-sm font-bold text-[#fafafa] truncate">{item.subject}</span>
+                        {item.source !== 'manual' && (
+                          <Badge variant="outline" className="text-[10px] border-[#555] text-[#888]">{item.source}</Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-[#888] mt-1.5 flex items-center gap-3 flex-wrap">
+                        <span>به: <span dir="ltr" className="text-[#bbb]">{item.toEmail}</span></span>
+                        <span>•</span>
+                        <span>{new Date(item.createdAt).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' })}</span>
+                        {item.mxHost && <><span>•</span><span dir="ltr" className="text-[#666]">{item.mxHost}</span></>}
+                        {item.attemptCount > 1 && <><span>•</span><span>تلاش: {toPersianDigits(item.attemptCount)}</span></>}
+                      </div>
+                      {item.lastError && item.status === 'failed' && (
+                        <p className="text-xs text-red-400/80 mt-1.5 line-clamp-1" dir="ltr">{item.lastError}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button variant="ghost" size="sm" onClick={() => handleView(item)} className="h-8 w-8 p-0 text-[#888] hover:text-[#fafafa]">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {item.status === 'failed' && (
+                        <Button variant="ghost" size="sm" onClick={() => handleRetry(item.id)} disabled={retryingId === item.id} className="h-8 w-8 p-0 text-[#D4AF37] hover:text-[#E5C76B]">
+                          {retryingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(item.id)} className="h-8 w-8 p-0 text-[#888] hover:text-red-400">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Compose modal */}
+      <AnimatePresence>
+        {showCompose && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4" onClick={() => setShowCompose(false)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#1a1a1a] border border-[#333] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="p-5 border-b border-[#333] flex items-center justify-between">
+                <h3 className="text-[#fafafa] font-bold flex items-center gap-2">
+                  <Send className="h-4 w-4 text-[#D4AF37]" />
+                  ارسال ایمیل جدید
+                </h3>
+                <Button variant="ghost" size="sm" onClick={() => setShowCompose(false)} className="h-8 w-8 p-0 text-[#888]">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <form onSubmit={handleSend} className="p-5 space-y-4 overflow-y-auto custom-scroll flex-1">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-2">
+                    <Label className="text-[#a1a1aa] text-sm mb-1.5 block">گیرنده *</Label>
+                    <Input name="to" type="email" dir="ltr" required placeholder="example@gmail.com" className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11" />
+                  </div>
+                  <div>
+                    <Label className="text-[#a1a1aa] text-sm mb-1.5 block">نام گیرنده</Label>
+                    <Input name="toName" dir="ltr" placeholder="اختیاری" className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-[#a1a1aa] text-sm mb-1.5 block">موضوع *</Label>
+                  <Input name="subject" required placeholder="موضوع ایمیل" className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11" />
+                </div>
+                <div>
+                  <Label className="text-[#a1a1aa] text-sm mb-1.5 block">متن (HTML) *</Label>
+                  <textarea name="html" required rows={10} placeholder="<p>متن ایمیل</p>" className="w-full bg-[#0a0a0a] border border-[#333] text-[#fafafa] rounded-md p-3 text-sm font-mono" dir="ltr" />
+                  <p className="text-[10px] text-[#888] mt-1">می‌توانید از تگ‌های HTML مانند &lt;p&gt;، &lt;strong&gt;، &lt;br&gt; استفاده کنید.</p>
+                </div>
+                <div className="bg-[#0a0a0a] border border-[#333] rounded-lg p-3">
+                  <p className="text-xs text-[#888]">
+                    <strong className="text-[#D4AF37]">فرستنده:</strong> «تاکسی ویژه سیوان» &lt;noreply@sivantaxi.com&gt;
+                    <br />
+                    ایمیل از طریق سرور اختصاصی سایت ارسال می‌شود. تحویل به گیرنده به تنظیمات DNS و باز بودن پورت 25 بستگی دارد.
+                  </p>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <Button type="button" variant="ghost" onClick={() => setShowCompose(false)} className="text-[#888] hover:text-[#fafafa] h-11 px-5">انصراف</Button>
+                  <Button type="submit" className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-11 px-6">
+                    <Send className="h-4 w-4 ml-2" />
+                    ارسال
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* View modal */}
+      <AnimatePresence>
+        {viewing && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4" onClick={() => setViewing(null)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#1a1a1a] border border-[#333] rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="p-5 border-b border-[#333] flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <EmailStatusBadge status={viewing.status} />
+                  </div>
+                  <h3 className="text-[#fafafa] font-bold truncate">{viewing.subject}</h3>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setViewing(null)} className="h-8 w-8 p-0 text-[#888]">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="p-5 overflow-y-auto custom-scroll flex-1 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-[#888]">از:</span> <span dir="ltr" className="text-[#fafafa]">{viewing.fromName} &lt;{viewing.fromEmail}&gt;</span></div>
+                  <div><span className="text-[#888]">به:</span> <span dir="ltr" className="text-[#fafafa]">{viewing.toEmail}</span></div>
+                  <div><span className="text-[#888]">زمان:</span> <span className="text-[#fafafa]">{new Date(viewing.createdAt).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' })}</span></div>
+                  {viewing.mxHost && <div><span className="text-[#888]">سرور مقصد:</span> <span dir="ltr" className="text-[#fafafa]">{viewing.mxHost}</span></div>}
+                </div>
+                {viewing.lastError && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                    <p className="text-xs text-red-400 font-bold mb-1">خطای آخرین ارسال:</p>
+                    <p className="text-xs text-red-300/80" dir="ltr">{viewing.lastError}</p>
+                  </div>
+                )}
+                <div className="border-t border-[#333] pt-4">
+                  <p className="text-xs text-[#888] mb-2">پیش‌نمایش:</p>
+                  <div className="bg-white rounded-lg p-4 max-h-[50vh] overflow-y-auto" dir="rtl">
+                    {viewHtml ? (
+                      <div dangerouslySetInnerHTML={{ __html: viewHtml }} />
+                    ) : (
+                      <p className="text-gray-400 text-sm">در حال بارگذاری…</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function StatCard(props: { label: string; value: number; active: boolean; onClick: () => void; color?: 'green' | 'red' | 'yellow' | 'blue' }) {
+  const { label, value, active, onClick, color } = props;
+  const colorMap = {
+    green: 'text-green-400 bg-green-500/10',
+    red: 'text-red-400 bg-red-500/10',
+    yellow: 'text-yellow-400 bg-yellow-500/10',
+    blue: 'text-blue-400 bg-blue-500/10',
+  };
+  return (
+    <button onClick={onClick} className={`text-right p-3 rounded-xl border transition-all ${active ? 'bg-[#D4AF37]/10 border-[#D4AF37]/50' : 'bg-[#1a1a1a] border-[#333] hover:border-[#555]'}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-[#888]">{label}</span>
+        {color && <span className={`text-[10px] px-1.5 py-0.5 rounded ${colorMap[color]}`}>●</span>}
+      </div>
+      <div className={`text-xl font-bold mt-1 ${active ? 'text-[#D4AF37]' : 'text-[#fafafa]'}`}>{toPersianDigits(value)}</div>
+    </button>
+  );
+}
+
+function EmailStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    sent: { label: 'ارسال شد', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+    failed: { label: 'ناموفق', cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
+    sending: { label: 'در حال ارسال', cls: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
+    queued: { label: 'در صف', cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+  };
+  const info = map[status] || map.queued;
+  return <Badge className={info.cls}>{info.label}</Badge>;
+}
+
 // ─── Settings Tab ───
 function SettingsTab() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
-  const [showSecret, setShowSecret] = useState(false);
+  const [showRelayPass, setShowRelayPass] = useState(false);
   const [form, setForm] = useState({
     siteName: '', phone1: '', phone2: '', email: '', address: '',
     commission: '10', minWithdrawal: '500000', workingHours: '',
     notifyEmail: '',
-    oauthUserEmail: '',
-    oauthClientId: '',
-    oauthClientSecret: '__SET__',
-    oauthRefreshToken: '__SET__',
-    oauthAccessToken: '__SET__',
+    mailSenderName: '',
+    mailSenderEmail: '',
+    mailReplyTo: '',
+    relayHost: '',
+    relayPort: '587',
+    relayUser: '',
+    relayPass: '',
   });
 
   useEffect(() => {
@@ -1011,13 +1358,13 @@ function SettingsTab() {
         minWithdrawal: data.minWithdrawal != null ? String(data.minWithdrawal) : f.minWithdrawal,
         workingHours: data.workingHours ?? f.workingHours,
         notifyEmail: data.notifyEmail ?? f.notifyEmail,
-        oauthUserEmail: data.oauthUserEmail ?? '',
-        oauthClientId: data.oauthClientId ?? '',
-        // __SET__ means a secret is already stored; show placeholder so admin can
-        // type a new value to overwrite, or leave it to keep the existing one.
-        oauthClientSecret: data.oauthClientSecret === '__SET__' ? '__SET__' : (data.oauthClientSecret || ''),
-        oauthRefreshToken: data.oauthRefreshToken === '__SET__' ? '__SET__' : (data.oauthRefreshToken || ''),
-        oauthAccessToken: data.oauthAccessToken === '__SET__' ? '__SET__' : (data.oauthAccessToken || ''),
+        mailSenderName: data.mailSenderName ?? '',
+        mailSenderEmail: data.mailSenderEmail ?? '',
+        mailReplyTo: data.mailReplyTo ?? '',
+        relayHost: data.relayHost ?? '',
+        relayPort: data.relayPort ?? '587',
+        relayUser: data.relayUser ?? '',
+        relayPass: data.relayPass ?? '',
       }));
     }).catch(() => {});
   }, []);
@@ -1033,39 +1380,10 @@ function SettingsTab() {
       if (!res.ok) throw new Error();
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-      // Refresh masked secrets
-      const data = await res.json();
-      if (data?.settings) {
-        setForm(f => ({
-          ...f,
-          oauthClientSecret: data.settings.oauthClientSecret === '__SET__' ? '__SET__' : '',
-          oauthRefreshToken: data.settings.oauthRefreshToken === '__SET__' ? '__SET__' : '',
-          oauthAccessToken: data.settings.oauthAccessToken === '__SET__' ? '__SET__' : '',
-        }));
-      }
     } catch {
       toast.error('خطا در ذخیره تنظیمات');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleTestEmail = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const res = await fetch('/api/admin/email-test', { method: 'POST' });
-      const data = await res.json();
-      if (data.ok) {
-        setTestResult({ ok: true, msg: `ایمیل آزمایشی به ${data.sentTo} ارسال شد` });
-      } else {
-        setTestResult({ ok: false, msg: data.error || 'ارسال ایمیل ناموفق بود' });
-      }
-    } catch {
-      setTestResult({ ok: false, msg: 'ارتباط با سرور برقرار نشد' });
-    } finally {
-      setTesting(false);
-      setTimeout(() => setTestResult(null), 8000);
     }
   };
 
@@ -1088,68 +1406,75 @@ function SettingsTab() {
       <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-5">
         <div className="flex items-center gap-2">
           <Mail className="h-5 w-5 text-[#D4AF37]" />
-          <h3 className="text-[#fafafa] font-bold">تنظیمات اعلان ایمیلی (OAuth2)</h3>
+          <h3 className="text-[#fafafa] font-bold">سیستم ایمیل داخلی</h3>
         </div>
         <p className="text-xs text-[#888] leading-relaxed">
-          برای ارسال ایمیل از طریق گوگل، به جای رمز عبور SMTP از OAuth2 استفاده می‌شود.
-          این روش امن‌تر است و نیاز به «رمز برنامه» (App Password) ندارد.
+          ایمیل‌ها از هویت اختصاصی سایت ارسال می‌شوند. حالت پیش‌فرض، تحویل مستقیم به سرور گیرنده (MX) است
+          — بدون نیاز به Gmail یا سرویس خارجی. برای محیط‌هایی که پورت 25 مسدود است، می‌توان یک
+          Relay SMTP دلخواه تنظیم کرد.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <SF label="ایمیل مقصد اعلان" value={form.notifyEmail} onChange={(v) => setForm({ ...form, notifyEmail: v })} dir="ltr" placeholder="admin@sivantaxi.com" />
-          <SF label="ایمیل ارسال‌کننده (Gmail)" value={form.oauthUserEmail} onChange={(v) => setForm({ ...form, oauthUserEmail: v })} dir="ltr" placeholder="bot@sivantaxi.com" />
-          <SF label="OAuth2 Client ID" value={form.oauthClientId} onChange={(v) => setForm({ ...form, oauthClientId: v })} dir="ltr" placeholder="xxxx.apps.googleusercontent.com" full />
-          <SecretInput
-            label="OAuth2 Client Secret"
-            value={form.oauthClientSecret}
-            onChange={(v) => setForm({ ...form, oauthClientSecret: v })}
-            show={showSecret}
-            onToggle={() => setShowSecret(s => !s)}
-            placeholder="GOCSPX-xxxxxxxxxxxx"
-          />
-          <SecretInput
-            label="OAuth2 Refresh Token"
-            value={form.oauthRefreshToken}
-            onChange={(v) => setForm({ ...form, oauthRefreshToken: v })}
-            show={showSecret}
-            onToggle={() => setShowSecret(s => !s)}
-            placeholder="1//0gxxxxxxxxxxxx"
-            full
-          />
+          <SF label="نام فرستنده" value={form.mailSenderName} onChange={(v) => setForm({ ...form, mailSenderName: v })} placeholder="تاکسی ویژه سیوان" />
+          <SF label="ایمیل فرستنده" value={form.mailSenderEmail} onChange={(v) => setForm({ ...form, mailSenderEmail: v })} dir="ltr" placeholder="noreply@sivantaxi.com" />
+          <SF label="آدرس Reply-To" value={form.mailReplyTo} onChange={(v) => setForm({ ...form, mailReplyTo: v })} dir="ltr" placeholder="info@sivantaxi.com" />
+          <SF label="ایمیل مقصد اعلان‌ها" value={form.notifyEmail} onChange={(v) => setForm({ ...form, notifyEmail: v })} dir="ltr" placeholder="admin@sivantaxi.com" />
         </div>
 
-        {/* Setup instructions */}
         <details className="bg-[#0a0a0a] border border-[#333] rounded-lg p-4 group">
           <summary className="cursor-pointer text-sm text-[#D4AF37] font-bold flex items-center gap-2">
             <KeyRound className="h-4 w-4" />
-            راهنمای دریافت اطلاعات OAuth2 از Google Cloud
+            تنظیمات Relay SMTP (اختیاری)
           </summary>
-          <ol className="mt-3 space-y-2 text-xs text-[#aaa] leading-relaxed list-decimal pr-5">
-            <li>به <span dir="ltr" className="text-[#D4AF37]">console.cloud.google.com</span> بروید و یک پروژه جدید بسازید یا پروژه فعلی را انتخاب کنید.</li>
-            <li>از منو «APIs &amp; Services → Library»، <b>Gmail API</b> را پیدا و <b>Enable</b> کنید.</li>
-            <li>به «APIs &amp; Services → OAuth consent screen» بروید و یک consent screen بسازید (نوع: External). اسکوپ <span dir="ltr" className="text-[#D4AF37]">https://mail.google.com/</span> را اضافه کنید و یک کاربر تست (همان ایمیل ارسال‌کننده) اضافه کنید.</li>
-            <li>به «APIs &amp; Services → Credentials → Create Credentials → OAuth client ID» بروید. نوع را <b>Web application</b> انتخاب کنید.</li>
-            <li>در بخش «Authorized redirect URIs» آدرس <span dir="ltr" className="text-[#D4AF37]">https://developers.google.com/oauthplayground/</span> را اضافه کنید و ذخیره کنید. سپس <b>Client ID</b> و <b>Client Secret</b> را کپی کنید.</li>
-            <li>به <span dir="ltr" className="text-[#D4AF37]">https://developers.google.com/oauthplayground/</span> بروید و روی آیکون چرخ‌دنده (Settings) کلیک کنید.</li>
-            <li>گزینه «Use your own OAuth credentials» را فعال کنید و Client ID و Client Secret خود را وارد کنید.</li>
-            <li>در سمت چپ، اسکوپ <span dir="ltr" className="text-[#D4AF37]">https://mail.google.com/</span> را وارد و «Authorize APIs» را بزنید. به اکانت گوگل خود دسترسی دهید.</li>
-            <li>پس از بازگشت، روی «Exchange authorization code for tokens» بزنید. <b>Refresh token</b> نمایش داده می‌شود — آن را کپی کنید.</li>
-            <li>این چهار مقدار (Client ID، Client Secret، Refresh Token و ایمیل ارسال‌کننده) را در فرم بالا وارد و ذخیره کنید.</li>
-            <li>در نهایت برای اطمینان، دکمه «ارسال ایمیل آزمایشی» را بزنید.</li>
-          </ol>
+          <p className="text-xs text-[#888] mt-3 mb-3 leading-relaxed">
+            اگر سرور شما پورت 25 خروجی باز ندارد (مانند اکثر سرویس‌های ابری)، می‌توانید یک سرور Relay
+            دلخواه تنظیم کنید. این فیلدها اگر خالی باشند، سیستم مستقیماً به MX گیرنده تحویل می‌دهد.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SF label="Relay Host" value={form.relayHost} onChange={(v) => setForm({ ...form, relayHost: v })} dir="ltr" placeholder="mail.yourserver.com" />
+            <SF label="Relay Port" value={form.relayPort} onChange={(v) => setForm({ ...form, relayPort: v })} dir="ltr" placeholder="587" />
+            <SF label="Relay Username" value={form.relayUser} onChange={(v) => setForm({ ...form, relayUser: v })} dir="ltr" placeholder="noreply@sivantaxi.com" />
+            <div>
+              <Label className="text-[#a1a1aa] text-sm mb-2 block">Relay Password</Label>
+              <div className="relative">
+                <Input
+                  type={showRelayPass ? 'text' : 'password'}
+                  value={form.relayPass}
+                  onChange={(e) => setForm({ ...form, relayPass: e.target.value })}
+                  className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11 pl-10"
+                  dir="ltr"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowRelayPass(s => !s)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-[#888] hover:text-[#fafafa] p-1"
+                  aria-label={showRelayPass ? 'پنهان' : 'نمایش'}
+                >
+                  {showRelayPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
         </details>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={handleTestEmail} disabled={testing} variant="outline" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10 h-11 px-6 rounded-xl font-bold">
-            {testing ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Send className="h-4 w-4 ml-2" />}
-            ارسال ایمیل آزمایشی
-          </Button>
-          {testResult && (
-            <div className={`flex items-center gap-2 text-sm ${testResult.ok ? 'text-green-400' : 'text-red-400'}`}>
-              {testResult.ok ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-              {testResult.msg}
-            </div>
-          )}
+        <div className="bg-[#0a0a0a] border border-[#D4AF37]/30 rounded-lg p-4">
+          <p className="text-xs text-[#bbb] leading-relaxed">
+            <strong className="text-[#D4AF37]">راهنمای تحویل به Gmail:</strong>
+            <br />
+            برای اینکه ایمیل‌های ارسالی به Inbox گیرنده برسند (نه پوشه Spam)، باید این رکوردهای DNS را
+            روی دامنه <span dir="ltr" className="text-[#D4AF37]">sivantaxi.com</span> تنظیم کنید:
+          </p>
+          <ul className="text-xs text-[#999] mt-2 space-y-1 list-disc pr-5">
+            <li><b>SPF:</b> یک رکورد TXT با مقدار <code dir="ltr" className="text-[#D4AF37]">v=spf1 mx a -all</code></li>
+            <li><b>DKIM:</b> با راه‌اندازی کلید DKIM روی سرور ایمیل خود</li>
+            <li><b>DMARC:</b> یک رکورد TXT با مقدار <code dir="ltr" className="text-[#D4AF37]">v=DMARC1; p=quarantine;</code></li>
+            <li><b>rDNS (Reverse DNS):</b> آدرس IP سرور باید به <span dir="ltr" className="text-[#D4AF37]">mail.sivantaxi.com</span> pointing باشد</li>
+          </ul>
+          <p className="text-xs text-[#888] mt-2 leading-relaxed">
+            بدون این تنظیمات، ایمیل‌ها احتمالاً به پوشه Spam گیرنده می‌روند. برای مشاهده وضعیت تحویل،
+            به تب «ایمیل‌ها» مراجعه کنید.
+          </p>
         </div>
       </Card>
 
@@ -1161,44 +1486,15 @@ function SettingsTab() {
   );
 }
 
-function SecretInput(props: {
+function SF(props: {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  show: boolean;
-  onToggle: () => void;
-  placeholder?: string;
+  dir?: 'ltr' | 'rtl';
   full?: boolean;
+  placeholder?: string;
+  type?: string;
 }) {
-  const { label, value, onChange, show, onToggle, placeholder, full } = props;
-  const isMasked = value === '__SET__';
-  return (
-    <div className={full ? 'md:col-span-2' : ''}>
-      <Label className="text-[#a1a1aa] text-sm mb-2 block">{label}</Label>
-      <div className="relative">
-        <Input
-          type={show ? 'text' : 'password'}
-          value={isMasked ? '' : value}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => { if (isMasked) onChange(''); }}
-          className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11 pl-10"
-          dir="ltr"
-          placeholder={isMasked ? '•••••••• (ذخیره شده — برای تغییر، تایپ کنید)' : (placeholder || '')}
-        />
-        <button
-          type="button"
-          onClick={onToggle}
-          className="absolute left-2 top-1/2 -translate-y-1/2 text-[#888] hover:text-[#fafafa] p-1"
-          aria-label={show ? 'پنهان کردن' : 'نمایش'}
-        >
-          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SF(props) {
   const { label, value, onChange, dir, full, placeholder, type } = props;
   return (
     <div className={full ? 'md:col-span-2' : ''}>

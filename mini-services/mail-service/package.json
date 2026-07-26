@@ -1,0 +1,12 @@
+{
+  "name": "sivan-mail-service",
+  "version": "1.0.0",
+  "description": "Internal mail sending service for Sivan VIP Taxi — direct MX delivery with optional relay fallback",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "nodemailer": "^9.0.3"
+  }
+}

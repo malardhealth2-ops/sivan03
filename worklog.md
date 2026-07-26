@@ -302,3 +302,69 @@ Stage Summary:
 - Admin UI includes Persian setup guide for Google Cloud Console OAuth2 credentials + OAuth Playground refresh-token flow
 - "ارسال ایمیل آزمایشی" button provides immediate end-to-end verification of credentials
 - Files changed: prisma/schema.prisma, src/lib/email.ts (new), src/app/api/settings/route.ts, src/app/api/admin/email-test/route.ts (new), src/app/api/booking/route.ts, src/components/sivan/AdminPanel.tsx (SettingsTab + new SecretInput component)
+
+---
+Task ID: 15
+Agent: Main Agent
+Task: Replace Gmail OAuth2 with internal self-hosted mail system (deliver to Gmail via direct MX)
+
+Work Log:
+- Tested outbound connectivity: port 25 (MX delivery) BLOCKED in sandbox, port 587 BLOCKED, DNS MX resolution WORKS — designed system for both sandbox (relay fallback) and real VPS (direct MX)
+- Updated prisma/schema.prisma: removed OAuth2 fields (oauthUserEmail, oauthClientId, oauthClientSecret, oauthRefreshToken, oauthAccessToken, oauthTokenExpiry); added internal mail fields (mailSenderName, mailSenderEmail, mailReplyTo, relayHost, relayPort, relayUser, relayPass) to SiteSettings
+- Added new EmailMessage model: fromName, fromEmail, replyTo, toEmail, toName, subject, textBody, htmlBody, status (queued|sending|sent|failed), mxHost, attemptCount, lastError, source (manual|booking|system), refId, sentAt, createdAt + indexes on status/toEmail/createdAt
+- Ran bun run db:push to apply schema
+- Created mini-services/mail-service/ (new Bun project, port 3004):
+  - Uses nodemailer with two delivery modes:
+    1) DIRECT MX: resolveMxRecords() looks up recipient MX via dns.resolveMx(), connects directly to MX server on port 25 (unauthenticated SMTP — receiving server decides based on SPF/DKIM/DMARC)
+    2) SMTP RELAY: when relayHost + relayUser configured in settings, authenticates against admin's own relay (any port: 587/465/2525)
+  - enqueueAndSend(): records message in EmailMessage table as 'sending', attempts delivery, updates to 'sent' or 'failed' with full error message + mxHost contacted + attempt count
+  - retryEmail(id): re-attempts failed delivery, increments attemptCount
+  - Hard 30-second timeout wrapper prevents stuck 'sending' state
+  - Tries only first 2 MX records (sorted by priority) to keep response time reasonable (~10s instead of 75s)
+  - Endpoints: POST /send, POST /retry/:id, GET /health
+  - Started with `setsid --fork bun run dev` for auto-reload on file changes
+- Removed old OAuth2 files: src/lib/email.ts, src/app/api/admin/email-test/route.ts
+- Created API routes:
+  - GET /api/admin/emails (list with pagination, status filter, search, stats)
+  - POST /api/admin/emails (forward to mail-service on port 3004)
+  - GET /api/admin/emails/[id] (full email record with html body)
+  - POST /api/admin/emails/[id]?action=retry (retry failed delivery)
+  - DELETE /api/admin/emails/[id] (delete from archive)
+- Updated /api/settings: handles new mail fields (mailSenderName/Email/ReplyTo, relayHost/Port/User/Pass); masks relayPass as '__SET__' in GET responses (defense-in-depth)
+- Updated /api/booking: sendBookingNotification() now uses fire-and-forget fetch to mail-service (was blocking SMTP/OAuth2 call before); booking response not delayed by email delivery; source='booking', refId=bookingCode
+- Added 'emails' to AdminState activeTab type in store.ts
+- Built EmailsTab component in AdminPanel.tsx:
+  - Stats cards: کل، ارسال شده، ناموفق، در حال ارسال، در صف (clickable filters)
+  - Email list with subject, recipient, time, MX host, attempt count, error preview
+  - Status badges: ارسال شد / ناموفق / در حال ارسال / در صف
+  - Compose modal: full HTML email composer with recipient/name/subject/HTML body fields
+  - View modal: shows full email preview (rendered HTML), from/to/time/MX host/error
+  - Retry button on failed emails, delete button on all
+- Updated SettingsTab:
+  - Replaced "تنظیمات اعلان ایمیلی (OAuth2)" with "سیستم ایمیل داخلی"
+  - New fields: نام فرستنده، ایمیل فرستنده، آدرس Reply-To، ایمیل مقصد اعلان‌ها
+  - Collapsible "تنظیمات Relay SMTP (اختیاری)" section with relayHost/Port/User/Password fields
+  - Gmail delivery guide: SPF (v=spf1 mx a -all), DKIM, DMARC (v=DMARC1; p=quarantine;), rDNS instructions
+- Restarted dev server (setsid --fork) to pick up new Prisma client
+- Browser-verified end-to-end:
+  - Login as admin → sidebar shows new "ایمیل‌ها" tab
+  - Emails tab shows stats cards (کل ۹، ارسال شده ۰، ناموفق ۹) and email list
+  - Each email shows subject, recipient, time (Jalali), source badge, error preview
+  - Compose modal: form accepts recipient/name/subject/HTML, submits via POST /api/admin/emails
+  - View modal shows rendered HTML preview + delivery details + error message
+  - Settings tab shows "سیستم ایمیل داخلی" with sender identity fields + collapsible relay config + Gmail delivery guide
+  - Booking submission returns instantly (no email delay) and email is recorded asynchronously in EmailMessage table with source='booking'
+- Verified email delivery attempts:
+  - To gmail.com: fails with "Connection timeout" (port 25 blocked in sandbox — expected; will work on real VPS)
+  - To savantaxi.com (no MX records): fails immediately with "queryMx ENOTFOUND" (correct behavior)
+  - Total send time: ~10s for valid MX (was 75s before optimization)
+
+Stage Summary:
+- Built complete internal mail system replacing Gmail OAuth2 — uses site's own domain (noreply@sivantaxi.com) as sender identity
+- Two delivery modes: direct MX (default, works on VPS with port 25 open) + configurable SMTP relay (fallback for sandboxed/cloud environments)
+- All emails archived in EmailMessage table with full status tracking (queued → sending → sent|failed), error messages, attempt counts, MX host contacted
+- Admin UI: compose new emails, view archived emails with rendered HTML preview, retry failed deliveries, filter by status, delete
+- Booking notifications fire asynchronously (don't delay booking response), recorded with source='booking' + refId=bookingCode
+- Settings: simple sender identity config + optional relay + Gmail delivery DNS guide (SPF/DKIM/DMARC/rDNS)
+- Files changed: prisma/schema.prisma, mini-services/mail-service/{package.json,index.ts} (new), src/app/api/settings/route.ts, src/app/api/admin/emails/route.ts (new), src/app/api/admin/emails/[id]/route.ts (new), src/app/api/booking/route.ts, src/lib/store.ts, src/components/sivan/AdminPanel.tsx (new EmailsTab + redesigned SettingsTab)
+- Removed: src/lib/email.ts (OAuth2 helper), src/app/api/admin/email-test/route.ts

@@ -60,7 +60,7 @@ interface AdminState {
   isLoggedIn: boolean;
   adminUsername: string;
   loginError: string;
-  activeTab: 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'settings';
+  activeTab: 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'emails' | 'settings';
   setAdminOpen: (open: boolean) => void;
   adminLogin: (username: string, password: string) => boolean;
   adminLogout: () => void;

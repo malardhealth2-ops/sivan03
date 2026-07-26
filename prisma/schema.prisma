@@ -303,14 +303,47 @@ model SiteSettings {
   minWithdrawal Float @default(500000)
   workingHours String @default("۲۴ ساعته - ۷ روز هفته")
   notifyEmail String @default("")
-  // Google OAuth2 credentials (replaces SMTP)
-  oauthUserEmail    String @default("") // Gmail address that sends mail (e.g. bot@sivantaxi.com)
-  oauthClientId     String @default("") // Google Cloud OAuth2 Client ID
-  oauthClientSecret String @default("") // Google Cloud OAuth2 Client Secret
-  oauthRefreshToken String @default("") // Long-lived refresh token (offline access)
-  oauthAccessToken  String @default("") // Short-lived access token (cached, auto-refreshed)
-  oauthTokenExpiry  DateTime? // When the cached access token expires
+  // Internal mail system sender identity (the site's own domain)
+  mailSenderName    String @default("تاکسی ویژه سیوان")
+  mailSenderEmail   String @default("noreply@sivantaxi.com")
+  mailReplyTo       String @default("info@sivantaxi.com")
+  // Optional outbound SMTP relay (used when direct MX delivery is blocked, e.g. cloud sandboxes)
+  // When all three are empty, the mail service delivers directly to recipient MX servers on port 25.
+  relayHost         String @default("")
+  relayPort         String @default("587")
+  relayUser         String @default("")
+  relayPass         String @default("")
   updatedAt   DateTime @updatedAt
+}
+
+model EmailMessage {
+  id          String   @id @default(cuid())
+  // Sender identity used for this message (snapshot from SiteSettings at send time)
+  fromName    String   @default("تاکسی ویژه سیوان")
+  fromEmail   String   @default("noreply@sivantaxi.com")
+  replyTo     String?
+  // Recipient
+  toEmail     String
+  toName      String?
+  subject     String
+  textBody    String   @default("")
+  htmlBody    String   @default("")
+  // Status: queued | sending | sent | failed
+  status      String   @default("queued")
+  // SMTP/MX delivery details (for debugging + admin transparency)
+  mxHost      String? // which MX server was contacted
+  attemptCount Int    @default(0)
+  lastError   String?
+  // Context: why this email was sent
+  source      String   @default("manual") // manual | booking | system
+  refId       String? // e.g. trip id for booking notifications
+  sentAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([toEmail])
+  @@index([createdAt])
 }
 
 model PopularRoute {
