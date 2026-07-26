@@ -45,11 +45,11 @@ const steps = [
 ];
 
 const carOptions = [
-  { value: 'vip', label: 'VIP لوکس', desc: 'هیوندای سوناتا - لوکس و راحت', price: 'پایه + ۲۰٪' },
+  { value: 'vip', label: 'لوکس', desc: 'هیوندای سوناتا - لوکس و راحت', price: 'پایه + ۲۰٪' },
   { value: 'economy', label: 'اقتصادی', desc: 'خودرو معمولی - قیمت مناسب', price: 'پایه' },
   { value: 'luxury', label: 'دربستی ویژه', desc: 'مرسدس بنز - اختصاصی و لوکس', price: 'پایه + ۴۰٪' },
   { value: 'van', label: 'ون', desc: 'ون ۸ نفره - مناسب گروهی', price: 'پایه + ۳۰٪' },
-  { value: 'electric', label: 'برقی', desc: 'خودرو برقی - دوستدار محیط زیست', price: 'پایه + ۱۵٪' },
+  { value: 'electric', label: 'سوپر لوکس', desc: 'خودرو لوکس پریمیوم - بهترین تجربه', price: 'پایه + ۱۵٪' },
 ];
 
 const paymentMethods = [

@@ -24,10 +24,10 @@ const DEFAULT_PRICING: PricingConfig = {
 
 export const TRIP_TYPE_LABELS: Record<string, string> = {
   economy: 'اقتصادی',
-  vip: 'VIP لوکس',
+  vip: 'لوکس',
   luxury: 'دربستی ویژه',
   van: 'ون',
-  electric: 'برقی',
+  electric: 'سوپر لوکس',
 };
 
 export function rateForTripType(config: PricingConfig, tripType: string): number {

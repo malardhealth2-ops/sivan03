@@ -218,3 +218,41 @@ Stage Summary:
 - HeroSection quick-estimate now reflects admin-configured rates
 - Verified end-to-end via agent-browser: login → admin panel → pricing tab → edit VIP rate 3000→4000 → save → toast "قیمت‌گذاری با موفقیت ذخیره شد" → API confirms vipPerKm:4000 persisted
 - Verified pricing math: luxury 200km = 50000 base + 200×5000 = 1,050,000 تومان (correct)
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Rename vehicle categories (electric→super luxury, VIP luxury→luxury), fix pricing preview dropdown, add section-specific content fields
+
+Work Log:
+- Task 1: Renamed "برقی" → "سوپر لوکس" (super luxury) category label across all booking flow UI:
+  - src/lib/pricing.ts TRIP_TYPE_LABELS.electric: 'برقی' → 'سوپر لوکس'
+  - src/components/sivan/AdminPanel.tsx vehicleCategories: electric label 'برقی' → 'سوپر لوکس', desc updated, icon ⚡ → 💎
+  - src/components/sivan/HeroSection.tsx carTypes: electric label 'برقی' → 'سوپر لوکس'
+  - src/components/sivan/BookingModal.tsx carOptions: electric label 'برقی' → 'سوپر لوکس', desc updated
+- Task 3: Renamed "VIP لوکس" → "لوکس" (luxury) category label:
+  - src/lib/pricing.ts TRIP_TYPE_LABELS.vip: 'VIP لوکس' → 'لوکس'
+  - src/components/sivan/AdminPanel.tsx vehicleCategories: vip label 'VIP لوکس' → 'لوکس'
+  - src/components/sivan/HeroSection.tsx carTypes: vip label 'VIP - لوکس' → 'لوکس'
+  - src/components/sivan/BookingModal.tsx carOptions: vip label 'VIP لوکس' → 'لوکس'
+  - Internal keys (vip, electric) unchanged to avoid DB migration
+- Task 2: Fixed pricing preview dropdown not opening:
+  - Root cause: SelectContent had z-50 but admin panel overlay is z-[100], so the Radix Portal dropdown rendered BEHIND the admin overlay
+  - Fix: Changed SelectContent z-index from z-50 to z-[200] in src/components/ui/select.tsx
+- Task 4: Redesigned ContentTab with section-specific field schemas:
+  - Defined SECTION_DEFS array with 7 sections, each having its own distinct fields:
+    - hero: badge text, title, subtitle, background image URL
+    - services: title, subtitle, services list (pipe-delimited)
+    - whyUs: title, subtitle, features list (pipe-delimited)
+    - fleet: title, subtitle, description
+    - cta: title, subtitle, button text, phone number
+    - footer: brand name, description, copyright text, address
+    - about: title, subtitle, body text
+  - Added parseSectionData() and serializeSectionData() helpers to store extra fields as JSON in the body column (no schema change needed)
+  - Each section now shows a description header and its own labeled input fields
+
+Stage Summary:
+- Vehicle category labels updated: "برقی"→"سوپر لوکس", "VIP لوکس"→"لوکس" (consistent across pricing, hero, booking modal)
+- Pricing preview dropdown now opens correctly (z-index fix from z-50 to z-[200])
+- Content management tab now has 7 sections each with distinct, relevant fields instead of generic title/subtitle/body
+- Verified via agent-browser: pricing tab shows correct labels, dropdown opens with all 5 categories, selecting "سوپر لوکس" updates price correctly (400,000 for 100km), content tab shows section-specific fields (CTA: title/subtitle/button/phone, Footer: brand/description/copyright/address)

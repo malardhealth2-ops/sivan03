@@ -291,27 +291,142 @@ function DriversTab() {
 }
 
 // ─── Content Editor Tab ───
+type FieldDef = {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'list';
+  placeholder?: string;
+  hint?: string;
+};
+
+type SectionDef = {
+  id: string;
+  label: string;
+  icon: string;
+  description: string;
+  fields: FieldDef[];
+};
+
+const SECTION_DEFS: SectionDef[] = [
+  {
+    id: 'hero', label: 'هدر اصلی', icon: '🏠', description: 'بخش بالای صفحه - اولین چیزی که کاربر می‌بیند',
+    fields: [
+      { key: 'badge', label: 'متن نشان (Badge)', type: 'text', placeholder: 'تاکسی VIP بین شهری', hint: 'نشان طلایی بالای عنوان' },
+      { key: 'title', label: 'عنوان اصلی', type: 'text', placeholder: 'سفری لوکس، راحت و ایمن با سیوان' },
+      { key: 'subtitle', label: 'توضیحات', type: 'textarea', placeholder: 'با ناوگان لوکس و رانندگان حرفه‌ای...' },
+      { key: 'bgImage', label: 'آدرس تصویر پس‌زمینه', type: 'text', placeholder: '/images/hero-bg.png', hint: 'مسیر تصویر پس‌زمینه هدر' },
+    ],
+  },
+  {
+    id: 'services', label: 'خدمات', icon: '🚗', description: 'بخش معرفی انواع خدمات سفر',
+    fields: [
+      { key: 'title', label: 'عنوان بخش', type: 'text', placeholder: 'انواع خدمات سفر' },
+      { key: 'subtitle', label: 'زیرعنوان', type: 'text', placeholder: 'خدمات متنوع برای نیازهای شما' },
+      { key: 'items', label: 'لیست خدمات', type: 'list', hint: 'هر خط: عنوان | توضیحات | آیکون (مثل: تاکسی VIP لوکس | هیوندای سوناتا | ✨)' },
+    ],
+  },
+  {
+    id: 'whyUs', label: 'چرا سیوان', icon: '✅', description: 'بخش مزایا و دلایل انتخاب سیوان',
+    fields: [
+      { key: 'title', label: 'عنوان بخش', type: 'text', placeholder: 'چرا سیوان؟' },
+      { key: 'subtitle', label: 'زیرعنوان', type: 'text', placeholder: 'مزایای سفر با ما' },
+      { key: 'items', label: 'لیست مزایا', type: 'list', hint: 'هر خط: عنوان | توضیحات | آیکون (مثل: امنیت بالا | رانندگان تأیید شده | 🛡️)' },
+    ],
+  },
+  {
+    id: 'fleet', label: 'ناوگان', icon: '🏎️', description: 'بخش نمایش ناوگان خودروها',
+    fields: [
+      { key: 'title', label: 'عنوان بخش', type: 'text', placeholder: 'ناوگان لوکس سیوان' },
+      { key: 'subtitle', label: 'زیرعنوان', type: 'text', placeholder: 'بهترین خودروها برای سفر شما' },
+      { key: 'description', label: 'توضیحات ناوگان', type: 'textarea', placeholder: 'توضیحات کامل درباره ناوگان خودروها...' },
+    ],
+  },
+  {
+    id: 'cta', label: 'دعوت به اقدام', icon: '📞', description: 'بخش تشویق به رزرو سفر',
+    fields: [
+      { key: 'title', label: 'عنوان', type: 'text', placeholder: 'آماده سفر هستید؟' },
+      { key: 'subtitle', label: 'زیرعنوان', type: 'text', placeholder: 'همین حالا رزرو کنید' },
+      { key: 'buttonText', label: 'متن دکمه', type: 'text', placeholder: 'رزرو تاکسی ویژه' },
+      { key: 'phone', label: 'شماره تماس', type: 'text', placeholder: '09109419743', hint: 'شماره نمایش داده شده در دکمه تماس' },
+    ],
+  },
+  {
+    id: 'footer', label: 'فوتر', icon: '📋', description: 'بخش پایین صفحه',
+    fields: [
+      { key: 'brandName', label: 'نام برند', type: 'text', placeholder: 'تاکسی ویژه سیوان' },
+      { key: 'description', label: 'توضیحات برند', type: 'textarea', placeholder: 'توضیحات کوتاه درباره سیوان...' },
+      { key: 'copyright', label: 'متن کپی‌رایت', type: 'text', placeholder: '© ۱۴۰۴ سیوان - تمامی حقوق محفوظ است' },
+      { key: 'address', label: 'آدرس', type: 'text', placeholder: 'تهران، ایران' },
+    ],
+  },
+  {
+    id: 'about', label: 'درباره ما', icon: 'ℹ️', description: 'بخش معرفی شرکت',
+    fields: [
+      { key: 'title', label: 'عنوان', type: 'text', placeholder: 'درباره سیوان' },
+      { key: 'subtitle', label: 'زیرعنوان', type: 'text', placeholder: 'تاریخچه و ماموریت ما' },
+      { key: 'body', label: 'متن کامل', type: 'textarea', placeholder: 'متن کامل درباره ما (می‌تواند HTML باشد)...' },
+    ],
+  },
+];
+
+function parseSectionData(raw: { title?: string; subtitle?: string; body?: string } | undefined): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!raw) return result;
+  result.title = raw.title || '';
+  result.subtitle = raw.subtitle || '';
+  if (raw.body) {
+    try {
+      const parsed = JSON.parse(raw.body);
+      if (parsed && typeof parsed === 'object') {
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === 'string') result[k] = v;
+          else if (Array.isArray(v)) result[k] = (v as string[]).join('\n');
+        }
+      } else {
+        result.body = raw.body;
+      }
+    } catch {
+      result.body = raw.body;
+    }
+  }
+  return result;
+}
+
+function serializeSectionData(data: Record<string, string>): { title: string; subtitle: string; body: string } {
+  const title = data.title || '';
+  const subtitle = data.subtitle || '';
+  const extra: Record<string, string | string[]> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (k === 'title' || k === 'subtitle') continue;
+    if (k === 'items' || k === 'body') {
+      extra[k] = v;
+    } else {
+      extra[k] = v;
+    }
+  }
+  const hasExtra = Object.keys(extra).length > 0;
+  return { title, subtitle, body: hasExtra ? JSON.stringify(extra) : '' };
+}
+
 function ContentTab() {
   const [sections, setSections] = useState<Record<string, { title: string; subtitle: string; body: string }>>({});
   const [activeSection, setActiveSection] = useState('hero');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const sectionList = [
-    { id: 'hero', label: 'هدر / قهرمان', icon: '🏠' },
-    { id: 'services', label: 'خدمات', icon: '🚗' },
-    { id: 'whyUs', label: 'چرا سیوان', icon: '✅' },
-    { id: 'fleet', label: 'ناوگان', icon: '🏎️' },
-    { id: 'cta', label: 'دعوت به اقدام', icon: '📞' },
-    { id: 'footer', label: 'فوتر', icon: '📋' },
-    { id: 'about', label: 'درباره ما', icon: 'ℹ️' },
-  ];
-
   useEffect(() => {
     fetch('/api/admin/content').then(r => r.json()).then(data => { setSections(data || {}); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
-  const current = sections[activeSection] || { title: '', subtitle: '', body: '' };
+  const sectionDef = SECTION_DEFS.find(s => s.id === activeSection)!;
+  const rawData = sections[activeSection];
+  const fieldValues = parseSectionData(rawData);
+
+  const setField = (key: string, value: string) => {
+    const updated = { ...fieldValues, [key]: value };
+    const serialized = serializeSectionData(updated);
+    setSections({ ...sections, [activeSection]: serialized });
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -330,7 +445,10 @@ function ContentTab() {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h2 className="text-xl font-bold text-[#fafafa]">مدیریت محتوا</h2>
+        <div>
+          <h2 className="text-xl font-bold text-[#fafafa]">مدیریت محتوا</h2>
+          <p className="text-[#a1a1aa] text-sm mt-1">ویرایش متون و تنظیمات هر بخش از سایت</p>
+        </div>
         <Button onClick={handleSave} disabled={saving} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-10 px-6 rounded-xl">
           {saving ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
           ذخیره تغییرات
@@ -339,13 +457,13 @@ function ContentTab() {
 
       <div className="flex flex-col md:flex-row gap-6">
         {/* Section selector */}
-        <div className="w-full md:w-56 shrink-0">
+        <div className="w-full md:w-60 shrink-0">
           <Card className="bg-[#1a1a1a] border border-[#333] p-3">
             <p className="text-[#a1a1aa] text-xs mb-3 px-2">بخش مورد نظر را انتخاب کنید</p>
             <div className="space-y-1">
-              {sectionList.map((s) => (
+              {SECTION_DEFS.map((s) => (
                 <button key={s.id} onClick={() => setActiveSection(s.id)} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all ${activeSection === s.id ? 'bg-[#D4AF37] text-[#0a0a0a] font-bold' : 'text-[#a1a1aa] hover:text-[#fafafa] hover:bg-[#2d2d2d]'}`}>
-                  <span>{s.icon}</span>{s.label}
+                  <span className="text-base">{s.icon}</span>{s.label}
                 </button>
               ))}
             </div>
@@ -355,20 +473,42 @@ function ContentTab() {
         {/* Editor */}
         <div className="flex-1 space-y-5">
           <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-5">
-            <h3 className="text-[#D4AF37] font-bold text-lg">{sectionList.find(s => s.id === activeSection)?.label}</h3>
+            <div className="pb-4 border-b border-[#333]">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xl">{sectionDef.icon}</span>
+                <h3 className="text-[#D4AF37] font-bold text-lg">{sectionDef.label}</h3>
+              </div>
+              <p className="text-[#a1a1aa] text-xs">{sectionDef.description}</p>
+            </div>
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-[#a1a1aa] text-sm">عنوان</Label>
-                <Input value={current.title} onChange={(e) => setSections({ ...sections, [activeSection]: { ...current, title: e.target.value } })} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" placeholder="عنوان بخش..." />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[#a1a1aa] text-sm">زیرعنوان</Label>
-                <Input value={current.subtitle} onChange={(e) => setSections({ ...sections, [activeSection]: { ...current, subtitle: e.target.value } })} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" placeholder="زیرعنوان بخش..." />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[#a1a1aa] text-sm">محتوای متنی</Label>
-                <textarea value={current.body} onChange={(e) => setSections({ ...sections, [activeSection]: { ...current, body: e.target.value } })} className="w-full min-h-[200px] bg-[#0a0a0a] border border-[#333] text-[#fafafa] placeholder:text-[#888] rounded-lg p-3 text-sm resize-y focus:outline-none focus:border-[#D4AF37]/50" placeholder="محتوای متنی بخش (می‌تواند HTML باشد)..." dir="rtl" />
-              </div>
+              {sectionDef.fields.map((field) => {
+                const value = fieldValues[field.key] || '';
+                if (field.type === 'textarea') {
+                  return (
+                    <div key={field.key} className="space-y-2">
+                      <Label className="text-[#a1a1aa] text-sm">{field.label}</Label>
+                      <textarea value={value} onChange={(e) => setField(field.key, e.target.value)} className="w-full min-h-[100px] bg-[#0a0a0a] border border-[#333] text-[#fafafa] placeholder:text-[#888] rounded-lg p-3 text-sm resize-y focus:outline-none focus:border-[#D4AF37]/50" placeholder={field.placeholder} dir="rtl" />
+                      {field.hint && <p className="text-[10px] text-[#888]">{field.hint}</p>}
+                    </div>
+                  );
+                }
+                if (field.type === 'list') {
+                  return (
+                    <div key={field.key} className="space-y-2">
+                      <Label className="text-[#a1a1aa] text-sm">{field.label}</Label>
+                      <textarea value={value} onChange={(e) => setField(field.key, e.target.value)} className="w-full min-h-[140px] bg-[#0a0a0a] border border-[#333] text-[#fafafa] placeholder:text-[#888] rounded-lg p-3 text-sm resize-y focus:outline-none focus:border-[#D4AF37]/50 font-mono" placeholder={field.hint || 'هر خط یک مورد...'} dir="rtl" />
+                      {field.hint && <p className="text-[10px] text-[#888]">{field.hint}</p>}
+                    </div>
+                  );
+                }
+                return (
+                  <div key={field.key} className="space-y-2">
+                    <Label className="text-[#a1a1aa] text-sm">{field.label}</Label>
+                    <Input value={value} onChange={(e) => setField(field.key, e.target.value)} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" placeholder={field.placeholder} dir={field.key === 'phone' || field.key === 'bgImage' ? 'ltr' : 'rtl'} />
+                    {field.hint && <p className="text-[10px] text-[#888]">{field.hint}</p>}
+                  </div>
+                );
+              })}
             </div>
           </Card>
         </div>
@@ -715,10 +855,10 @@ function PricingTab() {
 
   const vehicleCategories = [
     { id: 'economy', label: 'اقتصادی', desc: 'خودرو معمولی - قیمت مناسب', icon: '🚗', color: '#10B981' },
-    { id: 'vip', label: 'VIP لوکس', desc: 'هیوندای سوناتا - لوکس و راحت', icon: '✨', color: '#D4AF37' },
+    { id: 'vip', label: 'لوکس', desc: 'هیوندای سوناتا - لوکس و راحت', icon: '✨', color: '#D4AF37' },
     { id: 'luxury', label: 'دربستی ویژه', desc: 'مرسدس بنز - اختصاصی و لوکس', icon: '👑', color: '#F59E0B' },
     { id: 'van', label: 'ون', desc: 'ون ۸ نفره - مناسب گروهی', icon: '🚐', color: '#3B82F6' },
-    { id: 'electric', label: 'برقی', desc: 'خودرو برقی - دوستدار محیط زیست', icon: '⚡', color: '#22C55E' },
+    { id: 'electric', label: 'سوپر لوکس', desc: 'خودرو لوکس پریمیوم - بهترین تجربه', icon: '💎', color: '#22C55E' },
   ];
 
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" /></div>;

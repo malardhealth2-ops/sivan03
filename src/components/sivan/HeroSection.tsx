@@ -25,11 +25,11 @@ import { JalaliDatePicker } from '@/components/sivan/JalaliDatePicker';
 import { CitySelector } from '@/components/sivan/CitySelector';
 
 const carTypes = [
-  { value: 'vip', label: 'VIP - لوکس' },
+  { value: 'vip', label: 'لوکس' },
   { value: 'economy', label: 'اقتصادی' },
   { value: 'luxury', label: 'دربستی' },
   { value: 'van', label: 'ون' },
-  { value: 'electric', label: 'برقی' },
+  { value: 'electric', label: 'سوپر لوکس' },
 ];
 
 const trustBadges = [
