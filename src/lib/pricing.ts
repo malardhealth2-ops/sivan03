@@ -24,11 +24,14 @@ const DEFAULT_PRICING: PricingConfig = {
 
 export const TRIP_TYPE_LABELS: Record<string, string> = {
   economy: 'اقتصادی',
-  vip: 'لوکس',
-  luxury: 'دربستی ویژه',
-  van: 'ون',
+  vip: 'ویژه',
+  luxury: 'لوکس',
   electric: 'سوپر لوکس',
+  van: 'خانوادگی',
 };
+
+// Default trip type used when computing popular-route preview prices
+export const DEFAULT_PREVIEW_TRIP_TYPE = 'vip';
 
 export function rateForTripType(config: PricingConfig, tripType: string): number {
   switch (tripType) {

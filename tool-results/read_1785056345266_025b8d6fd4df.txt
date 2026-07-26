@@ -1,0 +1,698 @@
+     1→'use client';
+     2→
+     3→import { motion, AnimatePresence } from 'framer-motion';
+     4→import { useState, useEffect, useCallback } from 'react';
+     5→import {
+     6→  MapPin,
+     7→  Calendar,
+     8→  Clock,
+     9→  Car,
+    10→  User,
+    11→  CreditCard,
+    12→  Check,
+    13→  ArrowLeft,
+    14→  ArrowRight,
+    15→  Users,
+    16→  Loader2,
+    17→  Phone,
+    18→  Route,
+    19→  Navigation,
+    20→  AlertCircle,
+    21→} from 'lucide-react';
+    22→import {
+    23→  Dialog,
+    24→  DialogContent,
+    25→  DialogHeader,
+    26→  DialogTitle,
+    27→  DialogDescription,
+    28→} from '@/components/ui/dialog';
+    29→import { Button } from '@/components/ui/button';
+    30→import { Input } from '@/components/ui/input';
+    31→import { Label } from '@/components/ui/label';
+    32→import { Badge } from '@/components/ui/badge';
+    33→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    34→import { useAppStore } from '@/lib/store';
+    35→import { JalaliDatePicker } from '@/components/sivan/JalaliDatePicker';
+    36→import { CitySelector } from '@/components/sivan/CitySelector';
+    37→import { formatJalaaliDate, toPersianDigits } from '@/lib/jalaali';
+    38→import { toast } from 'sonner';
+    39→
+    40→const steps = [
+    41→  { id: 0, title: 'مسیر', icon: MapPin },
+    42→  { id: 1, title: 'زمان', icon: Calendar },
+    43→  { id: 2, title: 'خودرو', icon: Car },
+    44→  { id: 3, title: 'اطلاعات و پرداخت', icon: User },
+    45→];
+    46→
+    47→const carOptions = [
+    48→  { value: 'vip', label: 'ویژه', desc: 'هیوندای سوناتا - راحت و مجهز', price: 'پایه + ۲۰٪' },
+    49→  { value: 'economy', label: 'اقتصادی', desc: 'خودرو معمولی - قیمت مناسب', price: 'پایه' },
+    50→  { value: 'luxury', label: 'لوکس', desc: 'مرسدس بنز - اختصاصی و لوکس', price: 'پایه + ۴۰٪' },
+    51→  { value: 'electric', label: 'سوپر لوکس', desc: 'خودرو لوکس پریمیوم - بهترین تجربه', price: 'پایه + ۱۵٪' },
+    52→  { value: 'van', label: 'خانوادگی', desc: 'خودرو جادار - مناسب خانواده و گروه', price: 'پایه + ۳۰٪' },
+    53→];
+    54→
+    55→const paymentMethods = [
+    56→  { value: 'online', label: 'پرداخت آنلاین', icon: CreditCard },
+    57→  { value: 'cash', label: 'پرداخت نقدی', icon: BanknoteIcon },
+    58→  { value: 'wallet', label: 'کیف پول', icon: WalletIcon },
+    59→];
+    60→
+    61→function BanknoteIcon({ className }: { className?: string }) {
+    62→  return (
+    63→    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    64→      <rect width="20" height="12" x="2" y="6" rx="2" /><circle cx="12" cy="12" r="2" /><path d="M6 12h.01M18 12h.01" />
+    65→    </svg>
+    66→  );
+    67→}
+    68→
+    69→function WalletIcon({ className }: { className?: string }) {
+    70→  return (
+    71→    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    72→      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+    73→    </svg>
+    74→  );
+    75→}
+    76→
+    77→function getCityDisplayName(city: { province: string; city: string; district?: string; neighborhood?: string }): string {
+    78→  if (city.neighborhood) {
+    79→    return `${city.neighborhood}، ${city.district}، ${city.province}`;
+    80→  }
+    81→  if (city.district) {
+    82→    return `${city.district}، ${city.province}`;
+    83→  }
+    84→  if (city.city) {
+    85→    return `${city.city}، ${city.province}`;
+    86→  }
+    87→  return city.province;
+    88→}
+    89→
+    90→function formatPrice(price: number): string {
+    91→  return new Intl.NumberFormat('fa-IR').format(price) + ' تومان';
+    92→}
+    93→
+    94→export function BookingModal() {
+    95→  const {
+    96→    booking,
+    97→    setBookingStep,
+    98→    updateBookingForm,
+    99→    setEstimatedPrice,
+   100→    setBookingCode,
+   101→    setBookingSubmitting,
+   102→    resetBooking,
+   103→  } = useAppStore();
+   104→
+   105→  const [open, setOpen] = useState(false);
+   106→  const [distanceLoading, setDistanceLoading] = useState(false);
+   107→  const [distanceError, setDistanceError] = useState('');
+   108→
+   109→  const shouldOpen = booking.currentStep >= 0 && booking.currentStep <= 3;
+   110→  const dialogOpen = open || shouldOpen;
+   111→
+   112→  const handleClose = (val: boolean) => {
+   113→    if (!val) {
+   114→      setOpen(false);
+   115→      resetBooking();
+   116→    }
+   117→  };
+   118→
+   119→  const nextStep = () => {
+   120→    if (booking.currentStep < 3) {
+   121→      setBookingStep(booking.currentStep + 1);
+   122→    }
+   123→  };
+   124→
+   125→  const prevStep = () => {
+   126→    if (booking.currentStep > 0) {
+   127→      setBookingStep(booking.currentStep - 1);
+   128→    }
+   129→  };
+   130→
+   131→  // Fetch distance when both cities are selected
+   132→  const fetchDistance = useCallback(async () => {
+   133→    const { originCity, destCity } = booking.formData;
+   134→    if (!originCity.city || !destCity.city || originCity.city === destCity.city) {
+   135→      updateBookingForm({ distanceKm: null, durationMin: null });
+   136→      setDistanceError('');
+   137→      return;
+   138→    }
+   139→
+   140→    setDistanceLoading(true);
+   141→    setDistanceError('');
+   142→
+   143→    try {
+   144→      const originQuery = originCity.neighborhood || originCity.district || originCity.city;
+   145→      const destQuery = destCity.neighborhood || destCity.district || destCity.city;
+   146→
+   147→      const res = await fetch(
+   148→        `/api/distance?origin=${encodeURIComponent(originQuery)}&destination=${encodeURIComponent(destQuery)}`
+   149→      );
+   150→
+   151→      if (!res.ok) {
+   152→        const err = await res.json();
+   153→        throw new Error(err.error || 'خطا در محاسبه فاصله');
+   154→      }
+   155→
+   156→      const data = await res.json();
+   157→      updateBookingForm({
+   158→        distanceKm: data.distanceKm,
+   159→        durationMin: data.durationMin,
+   160→      });
+   161→    } catch (err) {
+   162→      setDistanceError(err instanceof Error ? err.message : 'خطا در محاسبه فاصله');
+   163→      updateBookingForm({ distanceKm: null, durationMin: null });
+   164→    } finally {
+   165→      setDistanceLoading(false);
+   166→    }
+   167→  }, [booking.formData.originCity, booking.formData.destCity, updateBookingForm]);
+   168→
+   169→  useEffect(() => {
+   170→    const { originCity, destCity } = booking.formData;
+   171→    if (originCity.city && destCity.city && originCity.city !== destCity.city) {
+   172→      const timer = setTimeout(fetchDistance, 500);
+   173→      return () => clearTimeout(timer);
+   174→    }
+   175→  }, [booking.formData.originCity.city, booking.formData.destCity.city, fetchDistance]);
+   176→
+   177→  const handleSubmit = async () => {
+   178→    setBookingSubmitting(true);
+   179→    try {
+   180→      const { originCity, destCity, distanceKm, tripType, roundTrip } = booking.formData;
+   181→      const originDisplay = getCityDisplayName(originCity);
+   182→      const destDisplay = getCityDisplayName(destCity);
+   183→
+   184→      // Fetch price
+   185→      let price = 500000; // fallback base
+   186→      let duration = '';
+   187→      if (distanceKm) {
+   188→        try {
+   189→          const res = await fetch(
+   190→            `/api/pricing?tripType=${tripType}&distanceKm=${distanceKm}`
+   191→          );
+   192→          if (res.ok) {
+   193→            const data = await res.json();
+   194→            price = roundTrip ? data.price * 2 : data.price;
+   195→            duration = data.duration;
+   196→          }
+   197→        } catch {
+   198→          // use fallback
+   199→        }
+   200→      }
+   201→
+   202→      // Call booking API
+   203→      const bookingRes = await fetch('/api/booking', {
+   204→        method: 'POST',
+   205→        headers: { 'Content-Type': 'application/json' },
+   206→        body: JSON.stringify({
+   207→          originAddress: originDisplay,
+   208→          destAddress: destDisplay,
+   209→          distanceKm: distanceKm || 0,
+   210→          tripType,
+   211→          roundTrip,
+   212→          passengerCount: booking.formData.passengerCount,
+   213→          date: booking.formData.date,
+   214→          time: booking.formData.time,
+   215→          fullName: booking.formData.fullName,
+   216→          phone: booking.formData.phone,
+   217→          notes: booking.formData.notes,
+   218→          paymentMethod: booking.formData.paymentMethod,
+   219→          totalAmount: price,
+   220→        }),
+   221→      });
+   222→
+   223→      if (!bookingRes.ok) {
+   224→        const errData = await bookingRes.json().catch(() => ({ error: 'خطا در ثبت رزرو' }));
+   225→        throw new Error(errData.error || 'خطا در ثبت رزرو');
+   226→      }
+   227→
+   228→      const result = await bookingRes.json();
+   229→      const code = result.bookingCode || 'SV-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+   230→      setBookingCode(code);
+   231→      setEstimatedPrice(price, duration || `~${booking.formData.durationMin || 60} دقیقه`);
+   232→
+   233→      // Close modal immediately after success
+   234→      setOpen(false);
+   235→      resetBooking();
+   236→
+   237→      // Show success toast for 3 seconds
+   238→      toast.success(
+   239→        <div className="flex flex-col gap-1.5">
+   240→          <div className="flex items-center gap-2 text-green-600 font-bold text-sm">
+   241→            <Check className="h-4 w-4" />
+   242→            رزرو با موفقیت ثبت شد!
+   243→          </div>
+   244→          <div className="text-muted-foreground text-xs">
+   245→            کد رهگیری: <span className="font-bold text-foreground" dir="ltr">{code}</span>
+   246→          </div>
+   247→          {distanceKm && (
+   248→            <div className="text-muted-foreground text-xs">
+   249→              هزینه: <span className="font-bold text-foreground">{formatPrice(price)}</span>
+   250→            </div>
+   251→          )}
+   252→        </div>,
+   253→        {
+   254→          duration: 3000,
+   255→          className: 'toast-success-custom',
+   256→        }
+   257→      );
+   258→    } catch {
+   259→      toast.error('خطا در ثبت رزرو. لطفاً دوباره تلاش کنید.', { duration: 3000 });
+   260→    } finally {
+   261→      setBookingSubmitting(false);
+   262→    }
+   263→  };
+   264→
+   265→  const isStepValid = (): boolean => {
+   266→    switch (booking.currentStep) {
+   267→      case 0:
+   268→        return booking.formData.originCity.city.length > 0 && booking.formData.destCity.city.length > 0;
+   269→      case 1:
+   270→        return booking.formData.date.length > 0 && booking.formData.time.length > 0;
+   271→      case 2:
+   272→        return true;
+   273→      case 3:
+   274→        return booking.formData.fullName.length > 1 && booking.formData.phone.length >= 10;
+   275→      default:
+   276→        return false;
+   277→    }
+   278→  };
+   279→
+   280→  const canGoNext = (): boolean => {
+   281→    if (!isStepValid()) return false;
+   282→    if (booking.currentStep === 0 && distanceLoading) return false;
+   283→    return true;
+   284→  };
+   285→
+   286→  return (
+   287→    <Dialog open={dialogOpen} onOpenChange={handleClose}>
+   288→      <DialogContent className="bg-[#1a1a1a] border-[#333] max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+   289→        {/* Steps indicator */}
+   290→        <div className="bg-[#0a0a0a] border-b border-[#333] p-4 sticky top-0 z-10">
+   291→          <DialogHeader className="p-0 mb-3">
+   292→            <DialogTitle className="text-right text-[#fafafa] text-lg flex items-center gap-2 justify-end">
+   293→              <img src="/logo.png" alt="" className="h-6 w-6 rounded-full object-cover" />
+   294→              رزرو تاکسی سیوان
+   295→            </DialogTitle>
+   296→            <DialogDescription className="text-right text-[#a1a1aa] text-xs mt-1">
+   297→              مراحل رزرو سفر خود را تکمیل کنید
+   298→            </DialogDescription>
+   299→          </DialogHeader>
+   300→          <div className="flex items-center gap-2">
+   301→            {steps.map((step, idx) => (
+   302→              <div key={step.id} className="flex-1 flex items-center gap-2">
+   303→                <div
+   304→                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
+   305→                    idx === booking.currentStep
+   306→                      ? 'bg-[#D4AF37] text-[#0a0a0a]'
+   307→                      : idx < booking.currentStep
+   308→                        ? 'bg-[#D4AF37]/20 text-[#D4AF37]'
+   309→                        : 'bg-[#2d2d2d] text-[#a1a1aa]'
+   310→                  }`}
+   311→                >
+   312→                  {idx < booking.currentStep ? (
+   313→                    <Check className="h-3.5 w-3.5" />
+   314→                  ) : (
+   315→                    <step.icon className="h-3.5 w-3.5" />
+   316→                  )}
+   317→                  <span className="hidden sm:inline">{step.title}</span>
+   318→                </div>
+   319→                {idx < steps.length - 1 && (
+   320→                  <div
+   321→                    className={`w-6 h-0.5 rounded-full ${
+   322→                      idx < booking.currentStep ? 'bg-[#D4AF37]' : 'bg-[#333]'
+   323→                    }`}
+   324→                  />
+   325→                )}
+   326→              </div>
+   327→            ))}
+   328→          </div>
+   329→        </div>
+   330→
+   331→        <div className="p-6">
+   332→          <AnimatePresence mode="wait">
+   333→            {/* Step 0: Route */}
+   334→            {booking.currentStep === 0 && (
+   335→              <motion.div
+   336→                key="step-0"
+   337→                initial={{ opacity: 0, x: -20 }}
+   338→                animate={{ opacity: 1, x: 0 }}
+   339→                exit={{ opacity: 0, x: 20 }}
+   340→                transition={{ duration: 0.3 }}
+   341→                className="space-y-5"
+   342→              >
+   343→                <CitySelector
+   344→                  label="شهر مبدأ"
+   345→                  iconColor="#D4AF37"
+   346→                  value={booking.formData.originCity}
+   347→                  onChange={(val) => {
+   348→                    updateBookingForm({
+   349→                      originCity: val,
+   350→                      origin: val.neighborhood || val.district || val.city,
+   351→                    });
+   352→                  }}
+   353→                  placeholder="استان و شهر مبدأ را انتخاب کنید"
+   354→                />
+   355→
+   356→                <CitySelector
+   357→                  label="شهر مقصد"
+   358→                  iconColor="#E5C76B"
+   359→                  value={booking.formData.destCity}
+   360→                  onChange={(val) => {
+   361→                    updateBookingForm({
+   362→                      destCity: val,
+   363→                      destination: val.neighborhood || val.district || val.city,
+   364→                    });
+   365→                  }}
+   366→                  placeholder="استان و شهر مقصد را انتخاب کنید"
+   367→                />
+   368→
+   369→                {/* Distance info */}
+   370→                {(distanceLoading || booking.formData.distanceKm || distanceError) && (
+   371→                  <div className="p-4 bg-[#0a0a0a] rounded-xl border border-[#333]">
+   372→                    {distanceLoading && (
+   373→                      <div className="flex items-center gap-3 text-[#D4AF37]">
+   374→                        <Loader2 className="h-5 w-5 animate-spin" />
+   375→                        <span className="text-sm">در حال محاسبه فاصله از نقشه...</span>
+   376→                      </div>
+   377→                    )}
+   378→                    {booking.formData.distanceKm && !distanceLoading && (
+   379→                      <div className="space-y-2">
+   380→                        <div className="flex items-center gap-2 text-[#fafafa]">
+   381→                          <Route className="h-5 w-5 text-[#D4AF37]" />
+   382→                          <span className="font-bold">
+   383→                            {new Intl.NumberFormat('fa-IR').format(booking.formData.distanceKm)} کیلومتر
+   384→                          </span>
+   385→                        </div>
+   386→                        {booking.formData.durationMin && (
+   387→                          <div className="flex items-center gap-2 text-[#a1a1aa]">
+   388→                            <Navigation className="h-4 w-4" />
+   389→                            <span className="text-sm">
+   390→                              زمان تقریبی:{' '}
+   391→                              {booking.formData.durationMin >= 60
+   392→                                ? `${Math.floor(booking.formData.durationMin / 60)} ساعت و ${booking.formData.durationMin % 60} دقیقه`
+   393→                                : `${booking.formData.durationMin} دقیقه`}
+   394→                            </span>
+   395→                          </div>
+   396→                        )}
+   397→                      </div>
+   398→                    )}
+   399→                    {distanceError && !distanceLoading && (
+   400→                      <div className="flex items-start gap-2 text-red-400">
+   401→                        <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+   402→                        <span className="text-sm">{distanceError}</span>
+   403→                      </div>
+   404→                    )}
+   405→                  </div>
+   406→                )}
+   407→
+   408→                <div className="flex items-center gap-3 p-4 bg-[#0a0a0a] rounded-xl border border-[#333]">
+   409→                  <label className="flex items-center gap-2 cursor-pointer">
+   410→                    <input
+   411→                      type="checkbox"
+   412→                      checked={booking.formData.roundTrip}
+   413→                      onChange={(e) => updateBookingForm({ roundTrip: e.target.checked })}
+   414→                      className="rounded border-[#D4AF37] text-[#D4AF37] focus:ring-[#D4AF37]"
+   415→                    />
+   416→                    <span className="text-sm text-[#a1a1aa]">سفر رفت و برگشت</span>
+   417→                  </label>
+   418→                </div>
+   419→              </motion.div>
+   420→            )}
+   421→
+   422→            {/* Step 1: Time */}
+   423→            {booking.currentStep === 1 && (
+   424→              <motion.div
+   425→                key="step-1"
+   426→                initial={{ opacity: 0, x: -20 }}
+   427→                animate={{ opacity: 1, x: 0 }}
+   428→                exit={{ opacity: 0, x: 20 }}
+   429→                transition={{ duration: 0.3 }}
+   430→                className="space-y-5"
+   431→              >
+   432→                <div className="space-y-2">
+   433→                  <JalaliDatePicker
+   434→                    value={booking.formData.date}
+   435→                    onChange={(val) => updateBookingForm({ date: val })}
+   436→                    placeholder="انتخاب تاریخ سفر"
+   437→                    label="تاریخ سفر"
+   438→                  />
+   439→                </div>
+   440→                <div className="space-y-2">
+   441→                  <Label className="text-[#fafafa]">
+   442→                    <Clock className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
+   443→                    ساعت حرکت
+   444→                  </Label>
+   445→                  <Input
+   446→                    type="time"
+   447→                    value={booking.formData.time}
+   448→                    onChange={(e) => updateBookingForm({ time: e.target.value })}
+   449→                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa]"
+   450→                  />
+   451→                </div>
+   452→                <div className="space-y-2">
+   453→                  <Label className="text-[#fafafa]">
+   454→                    <Users className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
+   455→                    تعداد مسافران
+   456→                  </Label>
+   457→                  <div className="flex items-center gap-3">
+   458→                    <Button
+   459→                      variant="outline"
+   460→                      size="icon"
+   461→                      onClick={() =>
+   462→                        updateBookingForm({
+   463→                          passengerCount: Math.max(1, booking.formData.passengerCount - 1),
+   464→                        })
+   465→                      }
+   466→                      className="border-[#333] text-[#fafafa]"
+   467→                    >
+   468→                      -
+   469→                    </Button>
+   470→                    <span className="text-[#fafafa] text-lg font-bold w-8 text-center">
+   471→                      {booking.formData.passengerCount}
+   472→                    </span>
+   473→                    <Button
+   474→                      variant="outline"
+   475→                      size="icon"
+   476→                      onClick={() =>
+   477→                        updateBookingForm({
+   478→                          passengerCount: Math.min(8, booking.formData.passengerCount + 1),
+   479→                        })
+   480→                      }
+   481→                      className="border-[#333] text-[#fafafa]"
+   482→                    >
+   483→                      +
+   484→                    </Button>
+   485→                  </div>
+   486→                </div>
+   487→              </motion.div>
+   488→            )}
+   489→
+   490→            {/* Step 2: Vehicle */}
+   491→            {booking.currentStep === 2 && (
+   492→              <motion.div
+   493→                key="step-2"
+   494→                initial={{ opacity: 0, x: -20 }}
+   495→                animate={{ opacity: 1, x: 0 }}
+   496→                exit={{ opacity: 0, x: 20 }}
+   497→                transition={{ duration: 0.3 }}
+   498→                className="space-y-3"
+   499→              >
+   500→                <RadioGroup
+   501→                  value={booking.formData.tripType}
+   502→                  onValueChange={(val) =>
+   503→                    updateBookingForm({ tripType: val as 'economy' | 'vip' | 'luxury' | 'van' | 'electric' })
+   504→                  }
+   505→                  className="space-y-3"
+   506→                >
+   507→                  {carOptions.map((car) => (
+   508→                    <label
+   509→                      key={car.value}
+   510→                      className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
+   511→                        booking.formData.tripType === car.value
+   512→                          ? 'border-[#D4AF37] bg-[#D4AF37]/10'
+   513→                          : 'border-[#333] bg-[#0a0a0a] hover:border-[#D4AF37]/30'
+   514→                      }`}
+   515→                    >
+   516→                      <div className="flex items-center gap-3">
+   517→                        <RadioGroupItem value={car.value} className="border-[#D4AF37] text-[#D4AF37]" />
+   518→                        <div>
+   519→                          <div className="text-[#fafafa] font-medium text-sm">{car.label}</div>
+   520→                          <div className="text-[#a1a1aa] text-xs">{car.desc}</div>
+   521→                        </div>
+   522→                      </div>
+   523→                      <Badge variant="outline" className="border-[#D4AF37]/30 text-[#D4AF37] text-xs">
+   524→                        {car.price}
+   525→                      </Badge>
+   526→                    </label>
+   527→                  ))}
+   528→                </RadioGroup>
+   529→              </motion.div>
+   530→            )}
+   531→
+   532→            {/* Step 3: Passenger Info + Payment + Submit */}
+   533→            {booking.currentStep === 3 && (
+   534→              <motion.div
+   535→                key="step-3"
+   536→                initial={{ opacity: 0, x: -20 }}
+   537→                animate={{ opacity: 1, x: 0 }}
+   538→                exit={{ opacity: 0, x: 20 }}
+   539→                transition={{ duration: 0.3 }}
+   540→                className="space-y-5"
+   541→              >
+   542→                {/* Trip Summary Card */}
+   543→                <div className="bg-[#0a0a0a] rounded-xl border border-[#333] p-4 space-y-2">
+   544→                  <h4 className="text-[#fafafa] font-bold text-sm mb-3">خلاصه سفر</h4>
+   545→                  <div className="space-y-2 text-xs">
+   546→                    <div className="flex justify-between text-[#a1a1aa]">
+   547→                      <span>مسیر:</span>
+   548→                      <span className="text-[#fafafa] text-left max-w-[60%]">
+   549→                        {getCityDisplayName(booking.formData.originCity)} → {getCityDisplayName(booking.formData.destCity)}
+   550→                      </span>
+   551→                    </div>
+   552→                    {booking.formData.distanceKm && (
+   553→                      <div className="flex justify-between text-[#a1a1aa]">
+   554→                        <span>فاصله:</span>
+   555→                        <span className="text-[#fafafa]">
+   556→                          {new Intl.NumberFormat('fa-IR').format(booking.formData.distanceKm)} کیلومتر
+   557→                        </span>
+   558→                      </div>
+   559→                    )}
+   560→                    <div className="flex justify-between text-[#a1a1aa]">
+   561→                      <span>تاریخ:</span>
+   562→                      <span className="text-[#fafafa]">
+   563→                        {booking.formData.date ? formatJalaaliDate(booking.formData.date) : '---'}
+   564→                      </span>
+   565→                    </div>
+   566→                    <div className="flex justify-between text-[#a1a1aa]">
+   567→                      <span>ساعت:</span>
+   568→                      <span className="text-[#fafafa]" dir="ltr">
+   569→                        {booking.formData.time ? toPersianDigits(booking.formData.time) : '---'}
+   570→                      </span>
+   571→                    </div>
+   572→                    <div className="flex justify-between text-[#a1a1aa]">
+   573→                      <span>خودرو:</span>
+   574→                      <span className="text-[#fafafa]">
+   575→                        {carOptions.find((c) => c.value === booking.formData.tripType)?.label || '---'}
+   576→                      </span>
+   577→                    </div>
+   578→                    <div className="flex justify-between text-[#a1a1aa]">
+   579→                      <span>مسافران:</span>
+   580→                      <span className="text-[#fafafa]">{booking.formData.passengerCount} نفر</span>
+   581→                    </div>
+   582→                    {booking.formData.roundTrip && (
+   583→                      <div className="flex justify-between text-[#a1a1aa]">
+   584→                        <span>نوع سفر:</span>
+   585→                        <span className="text-[#D4AF37]">رفت و برگشت</span>
+   586→                      </div>
+   587→                    )}
+   588→                  </div>
+   589→                </div>
+   590→
+   591→                {/* Passenger Info */}
+   592→                <div className="space-y-2">
+   593→                  <Label className="text-[#fafafa]">
+   594→                    <User className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
+   595→                    نام و نام خانوادگی
+   596→                  </Label>
+   597→                  <Input
+   598→                    placeholder="نام خود را وارد کنید"
+   599→                    value={booking.formData.fullName}
+   600→                    onChange={(e) => updateBookingForm({ fullName: e.target.value })}
+   601→                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa]"
+   602→                  />
+   603→                </div>
+   604→                <div className="space-y-2">
+   605→                  <Label className="text-[#fafafa]">
+   606→                    <Phone className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
+   607→                    شماره موبایل
+   608→                  </Label>
+   609→                  <Input
+   610→                    placeholder="۰۹۱۲XXXXXXX"
+   611→                    value={booking.formData.phone}
+   612→                    onChange={(e) => updateBookingForm({ phone: e.target.value })}
+   613→                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa]"
+   614→                    dir="ltr"
+   615→                  />
+   616→                </div>
+   617→                <div className="space-y-2">
+   618→                  <Label className="text-[#fafafa]">توضیحات (اختیاری)</Label>
+   619→                  <textarea
+   620→                    placeholder="نکات خاصی وجود دارد؟"
+   621→                    value={booking.formData.notes}
+   622→                    onChange={(e) => updateBookingForm({ notes: e.target.value })}
+   623→                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] rounded-md border px-3 py-2 text-sm min-h-[80px] w-full focus-visible:border-[#D4AF37]/50 focus-visible:ring-[#D4AF37]/50 focus-visible:ring-[3px] outline-none resize-none"
+   624→                  />
+   625→                </div>
+   626→
+   627→                {/* Payment Method */}
+   628→                <div className="space-y-3">
+   629→                  <Label className="text-[#fafafa]">روش پرداخت</Label>
+   630→                  <RadioGroup
+   631→                    value={booking.formData.paymentMethod}
+   632→                    onValueChange={(val) =>
+   633→                      updateBookingForm({ paymentMethod: val as 'cash' | 'online' | 'wallet' })
+   634→                    }
+   635→                    className="space-y-2"
+   636→                  >
+   637→                    {paymentMethods.map((pm) => (
+   638→                      <label
+   639→                        key={pm.value}
+   640→                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+   641→                          booking.formData.paymentMethod === pm.value
+   642→                            ? 'border-[#D4AF37] bg-[#D4AF37]/10'
+   643→                            : 'border-[#333] bg-[#0a0a0a] hover:border-[#D4AF37]/30'
+   644→                        }`}
+   645→                      >
+   646→                        <RadioGroupItem value={pm.value} className="border-[#D4AF37] text-[#D4AF37]" />
+   647→                        <pm.icon className="h-4 w-4 text-[#D4AF37]" />
+   648→                        <span className="text-[#fafafa] text-sm">{pm.label}</span>
+   649→                      </label>
+   650→                    ))}
+   651→                  </RadioGroup>
+   652→                </div>
+   653→              </motion.div>
+   654→            )}
+   655→          </AnimatePresence>
+   656→
+   657→          {/* Navigation buttons */}
+   658→          {booking.currentStep >= 0 && booking.currentStep <= 3 && (
+   659→            <div className="flex items-center justify-between mt-8 pt-6 border-t border-[#333]">
+   660→              <Button
+   661→                variant="ghost"
+   662→                onClick={prevStep}
+   663→                disabled={booking.currentStep === 0}
+   664→                className="text-[#a1a1aa] hover:text-[#fafafa]"
+   665→              >
+   666→                <ArrowRight className="h-4 w-4 mr-1" />
+   667→                مرحله قبل
+   668→              </Button>
+   669→              <Button
+   670→                onClick={booking.currentStep === 3 ? handleSubmit : nextStep}
+   671→                disabled={!canGoNext() || booking.isSubmitting}
+   672→                className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B]"
+   673→              >
+   674→                {booking.isSubmitting ? (
+   675→                  <>
+   676→                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   677→                    در حال ثبت...
+   678→                  </>
+   679→                ) : booking.currentStep === 3 ? (
+   680→                  <>
+   681→                    <Check className="h-4 w-4 mr-1.5" />
+   682→                    ثبت نهایی
+   683→                  </>
+   684→                ) : (
+   685→                  <>
+   686→                    مرحله بعد
+   687→                    <ArrowLeft className="h-4 w-4 ml-1" />
+   688→                  </>
+   689→                )}
+   690→              </Button>
+   691→            </div>
+   692→          )}
+   693→        </div>
+   694→      </DialogContent>
+   695→    </Dialog>
+   696→  );
+   697→}
+   698→

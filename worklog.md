@@ -418,3 +418,222 @@ Stage Summary:
   4. Push notification system: admin gets browser/phone notifications on new booking or email (VAPID web-push + live polling fallback + sound)
   5. Button-in-button hydration error eliminated (restructured CitySelector trigger)
 - Files changed: src/components/sivan/CitySelector.tsx, src/components/sivan/HeroSection.tsx, src/components/sivan/JalaliDatePicker.tsx, src/components/sivan/PWARegister.tsx (new), src/components/sivan/AdminPanel.tsx (NotificationsTab + polling effect + helpers), src/app/layout.tsx, src/lib/store.ts, src/lib/push.ts (new), src/app/api/push/{vapid-public,subscribe,unsubscribe,test,subscriptions}/route.ts (new), src/app/api/booking/route.ts, prisma/schema.prisma, .env, scripts/gen-icons.js (new), public/manifest.json (new), public/sw.js (new), public/icon-{192,512,maskable-192,maskable-512}.png + apple-touch-icon.png + favicon-32.png (generated)
+
+---
+Task ID: 2a
+Agent: full-stack-developer
+Task: Rewrite PopularRoutes.tsx to fetch live popular-route prices from backend (/api/routes/popular) instead of using hardcoded data
+
+Work Log:
+- Read worklog.md and confirmed existing dark+gold theme conventions used throughout project
+- Confirmed /api/routes/popular returns: { id, origin, destination, distanceKm, duration, tripType, tripTypeLabel, price, priceLabel, image, isPopular, sortOrder }
+- Confirmed useAppStore exposes updateBookingForm + setBookingStep (unchanged from current usage)
+- Confirmed toPersianDigits is exported from @/lib/jalaali
+- Rewrote src/components/sivan/PopularRoutes.tsx as 'use client' with:
+  - useEffect on mount -> fetch('/api/routes/popular', { cache: 'no-store' })
+  - useState for routes[], loading, error
+  - Graceful cancellation via `cancelled` flag in useEffect cleanup
+  - Loading state: 6 skeleton cards (RouteCardSkeleton) with pulse animation mimicking the real card layout
+  - Error/empty fallback: centered Persian message ("در حال بارگذاری مسیرها..." / "مسیری یافت نشد")
+  - Each card now renders backend fields:
+      * Origin -> Destination with MapPin + ArrowLeft (unchanged visual)
+      * Gold Badge with tripTypeLabel (e.g. "ویژه", "لوکس", "اقتصادی") replacing the old static "محبوب" badge
+      * Duration (Clock icon) + distance as "{toPersianDigits(distanceKm)} کیلومتر" (Route icon)
+      * Price: "شروع از" label + priceLabel (gold bold) + "تومان"
+      * "رزرو این مسیر" Button (ArrowLeft) calling handleRouteClick(origin, destination)
+  - handleRouteClick unchanged: updateBookingForm({ origin, destination }) -> setBookingStep(1) -> scroll to #hero
+  - Preserved framer-motion containerVariants/itemVariants stagger, section header Badge "محبوب‌ترین مسیرها" + title "مسیرهای پرطرفدار" + subtitle
+  - Preserved section id="routes", py-20 sm:py-24 bg-[#0a0a0a], decorative gold divider at top
+  - Preserved grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6
+  - Theme tokens kept identical: bg-[#1a1a1a], border-[#333], hover:border-[#D4AF37]/30, text-[#D4AF37] accents, text-[#fafafa] headings, text-[#a1a1aa] body
+- Ran `bun run lint` -> clean, no errors/warnings
+
+Stage Summary:
+- PopularRoutes is now fully data-driven; homepage prices always reflect the admin's current PricingConfig per-km rates (computed live by the backend)
+- No other files touched; API was already implemented and was not modified
+- Lint passes cleanly
+
+---
+Task ID: 2d
+Agent: full-stack-developer
+Task: Improve TestimonialsSection with 12 testimonials, DB merge, autoplay slider, arrows, and dots
+
+Work Log:
+- Read existing TestimonialsSection.tsx, ui/carousel.tsx, /api/testimonials/route.ts and Prisma Testimonial schema to understand shape (DB items: name, rating, comment, tripRoute?, avatarUrl?, no role).
+- Expanded static testimonials array from 6 to 12 entries. Added 6 new realistic Persian testimonials (کارآفرین, معلم, طراح گرافیک, پرستار, وکیل, مدیر بازاریابی) with trips تهران→اهواز/کرمان/قم/اردبیل/قزوین/ساری and ratings 4-5, matching the existing style.
+- Added typed DbTestimonial + Normalized Testimonial types; `normalizeDbItem` maps DB rows to the card shape (trip falls back to "سفر با سیوان", role to "مسافر سیوان").
+- On mount, fetches /api/testimonials, normalizes, and merges (DB first, then static). Empty/error falls back to static-only via try/catch with cancelled flag.
+- Wired up embla API via `setApi={handleSetApi}` callback (CarouselApi typed). Initial count/current set inside the callback to satisfy react-hooks/set-state-in-effect rule.
+- Added select/reInit listeners in a dedicated effect to keep `current`/`count` in sync (no setState in effect body — only inside event-handler callbacks).
+- Autoplay: 5s `setInterval` calling `api.scrollNext()` (works because `loop: true`). Pause-on-hover via `onMouseEnter/onMouseLeave` updating `paused` state synced to a `pauseRef` through a separate effect (avoids ref-write-during-render lint error).
+- Added `CarouselPrevious`/`CarouselNext` with custom gold styling: `variant="ghost" className="text-[#D4AF37] hover:bg-[#D4AF37]/10 disabled:opacity-30"`. Carousel wrapper padded with `px-2 sm:px-8` so the absolutely-positioned arrows (-left-12/-right-12) don't overlap cards.
+- Carousel options `{ align: 'start', loop: true }`; items use `pl-4 sm:basis-1/2 lg:basis-1/3`. Each card keeps Quote icon, quoted comment, RatingStars, author name+role, and trip badge.
+- Added a dots indicator below the carousel: gold stretched dot for the active slide, gray dots that turn gold on hover, clickable to scroll via `api.scrollTo(i)`. Hidden until `count > 0`.
+- Header kept as-is: "نظرات مسافران" with gold gradient on "مسافران" + subtitle "ببینید مسافران ما درباره سفر با سیوان چه می‌گویند".
+- Stats grid (4 cards) kept untouched.
+- Fixed two ESLint errors: (1) ref written during render → moved ref update into a useEffect; (2) synchronous setState in effect body → moved initialization into the `setApi` callback and event listeners.
+- Removed now-unused imports (Button, ChevronLeft, ChevronRight) and added `useCallback` + `cn`.
+- `bun run lint` passes with zero errors. Dev server log shows GET /api/testimonials 200 with the merged list rendering.
+
+Stage Summary:
+- TestimonialsSection is now a smooth, auto-playing, looping carousel with 12 static reviews (expandable via DB).
+- Fetches approved DB testimonials at mount and merges them first, falling back gracefully to the static list on error.
+- Autoplay advances every 5s and pauses on hover; gold-styled arrow buttons + clickable dots indicator provide manual navigation.
+- No other files touched; lint clean; dev server compiles without errors.
+
+---
+Task ID: 2b
+Agent: full-stack-developer
+Task: Rewrite ServicesSection to show exactly 5 service types matching site trip types
+
+Work Log:
+- Replaced 3-service array with 5 services: اقتصادی (economy), ویژه (vip), لوکس (luxury), سوپر لوکس (electric), خانوادگی (van)
+- Added `TripType` union type covering all 5 trip types
+- Updated grid layout to `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5` with `gap-4 sm:gap-6`
+- Removed unused imports (Users, Shield), kept ArrowLeft + Sparkles
+- Updated handleServiceClick to accept the full TripType union
+- All descriptions, features, badges, and images match the specification exactly
+- `bun run lint` passes with zero errors.
+
+Stage Summary:
+- ServicesSection now displays all 5 service types with responsive grid (1→2→3→5 columns)
+- Each card triggers booking flow with correct tripType via handleServiceClick
+- Lint clean, no other files modified.
+
+---
+Task ID: 2c
+Agent: full-stack-developer
+Task: Rewrite FleetSection with 5 luxury vehicles, generate 3 new car images
+
+Work Log:
+- Generated 3 new car images via z-ai CLI (1344x768):
+  - `/public/images/bmw-car.png` — BMW 5 Series sedan, black, studio lighting
+  - `/public/images/audi-car.png` — Audi A6 sedan, black, studio lighting
+  - `/public/images/landcruiser-car.png` — Toyota Land Cruiser SUV, black, studio lighting
+- Reused existing `/images/vip-car.png` and `/images/luxury-car.png`
+- Rewrote `src/components/sivan/FleetSection.tsx`:
+  - Replaced 4-vehicle fleet with 5 luxury vehicles
+  - New fleet: Sonata (vip), Mercedes E-Class (luxury), BMW 5 Series (luxury), Audi A6 (electric), Land Cruiser (van)
+  - Removed plain van and plain electric car options
+  - TabsList: added overflow-x-auto max-w-full flex-nowrap for mobile scroll
+  - Each tab shows last word of vehicle name
+  - handleSelectVehicle maps id to tripType and scrolls to #hero
+  - Updated subtitle text
+  - Removed unused imports
+- `bun run lint` passes with zero errors
+
+Stage Summary:
+- FleetSection now shows 5 luxury vehicles with mobile-scrollable tabs
+- 3 new AI-generated car images (BMW, Audi, Land Cruiser)
+- All tripType mappings match booking store values
+- Lint clean, no other files modified.
+
+---
+Task ID: 2f
+Agent: full-stack-developer
+Task: Replace native time picker with custom time-slot grid picker in booking step 1
+
+Work Log:
+- Added showCustomTime useState to BookingModal component
+- Replaced native Input type=time with custom time-slot grid picker
+- Grid has 4 period sections with clickable chips showing Persian digits
+- Selected chip uses gold bg/text, unselected uses dark bg with hover effects
+- Added current selection display in gold or placeholder text
+- Added custom time toggle button to reveal native time input as fallback
+- Wrapped grid in max-h-64 overflow-y-auto container with thin scrollbar
+- All time values stored as HH:MM latin digits internally
+- Lint passes clean, dev server compiles without errors
+
+Stage Summary:
+- Native time input replaced with mobile-friendly Persian digit time-slot grid
+- 18 preset slots across 4 time periods with custom time fallback
+- Step validation still works correctly, dark+gold theme maintained
+
+---
+Task ID: 2e
+Agent: full-stack-developer
+Task: Make blog section fetch real posts from backend and open posts in a modal
+
+Work Log:
+- Created `src/components/sivan/BlogPostModal.tsx` — full modal with Dialog/DialogContent from shadcn
+- Modal handles 3 states: loading spinner, error display, and content rendering
+- Supports both API-fetched posts (by slug) and static fallback posts
+- Content rendered via dangerouslySetInnerHTML with justified Persian text styling
+- Includes featured image (h-56 sm:h-72), category Badge, meta row (author, Jalali date, read time, view count)
+- Rewrote `src/components/sivan/BlogPreview.tsx` with:
+  - Fetches `/api/blog?status=published&limit=6` on mount
+  - Shows 3 animate-pulse skeleton cards while loading
+  - Falls back to 3 static posts on fetch error or empty response
+  - Each card + "ادامه مطلب" button opens BlogPostModal
+  - API posts pass slug to modal for full post fetch; static posts pass fallbackPost data
+  - Jalali date formatting via formatJalaaliDate for API posts, static string for fallback
+  - Read time estimated from content length for API posts
+- No other files modified, lint passes clean
+
+Stage Summary:
+- Blog section now dynamically fetches published posts from backend API
+- Graceful fallback to static posts ensures section is never empty
+- Full post modal with loading/error states, justified Persian HTML content
+- Gold/dark theme maintained throughout, framer-motion stagger preserved
+
+---
+Task ID: 3
+Agent: general-purpose
+Task: Create blog-generator mini-service that auto-generates and publishes AI blog articles every 6 hours
+
+Work Log:
+- Read worklog.md and studied mail-service mini-service pattern
+- Invoked image-generation and LLM skills to learn z-ai-web-dev-sdk usage
+- Explored ZAI SDK structure: zai.chat.completions.create() for LLM, zai.images.generate() for image generation (returns base64 string)
+- Created mini-services/blog-generator/package.json with dependencies
+- Ran bun install to install deps
+- Created mini-services/blog-generator/index.ts (port 3005) with:
+  - PrismaClient connected to file:/home/z/my-project/db/custom.db
+  - 12 Persian VIP taxi travel topics in rotating list
+  - generateArticle() function with LLM text generation, parsing, image generation, DB save
+  - 6-hour interval scheduling via setInterval
+  - Startup logic: generates immediately if <3 published posts or latest >6h old
+  - HTTP server with GET /health and POST /generate endpoints
+  - Robust error handling with try/catch and LLM retry
+- Started service in background with setsid
+- Verified service running and health endpoint responding
+- Confirmed blog post generated with title, slug, content, excerpt, tags, and cover image
+
+Stage Summary:
+- Blog generator service running on port 3005
+- Auto-generates Persian blog articles every 6 hours
+- LLM generates title, excerpt, HTML content, and tags
+- AI-generated cover images saved to public/images/blog/
+- Posts saved to BlogPost table with status: published
+- Health endpoint: GET http://localhost:3005/health
+- Manual trigger: POST http://localhost:3005/generate
+
+
+---
+Task ID: 1 + 3 (Main Agent)
+Task: Foundation (TRIP_TYPE_LABELS rename, PopularRoute schema, popular-routes API) + AI blog-generator mini-service (subagent for Task 3 timed out, completed by main agent)
+
+Work Log:
+- Task 1 (foundation): Updated src/lib/pricing.ts TRIP_TYPE_LABELS: economy→اقتصادی, vip→ویژه, luxury→لوکس, electric→سوپر لوکس, van→خانوادگی. Added DEFAULT_PREVIEW_TRIP_TYPE='vip'.
+- Updated BookingModal.tsx carOptions labels to match (vip→ویژه, luxury→لوکس, van→خانوادگی, electric→سوپر لوکس).
+- Added fields to PopularRoute model: distanceKm Float, tripType String, duration String (with defaults). Ran db:push.
+- Seeded 6 default popular routes (تهران→مشهد/اصفهان/تبریز/شیراز/رشت/کرمانشاه) with distanceKm + tripType via scripts/seed-routes.mjs.
+- Rewrote /api/routes/popular GET: now computes live price for each route via getPricingConfig() + calculateFare(config, tripType, distanceKm). Returns priceLabel (Persian digits) + tripTypeLabel + distanceKm. Prices always reflect admin's PricingConfig per-km rates.
+- Created /api/admin/popular-routes CRUD (GET/POST) and /api/admin/popular-routes/[id] (PUT/DELETE) for admin route management.
+- Task 3 (blog-generator): subagent timed out; main agent built mini-services/blog-generator.
+  - package.json: empty deps (resolves @prisma/client + z-ai-web-dev-sdk from parent project node_modules, same pattern as mail-service).
+  - index.ts (port 3005): PrismaClient (DB at file:/home/z/my-project/db/custom.db), ZAI SDK.
+  - 15 rotating Persian blog topics about VIP taxi travel.
+  - generateArticle(): LLM chat.completions.create with system prompt (professional Persian travel writer for تاکسی ویژه سیوان) + user prompt requiring title/excerpt/HTML body (h2/h3/p, 600-900 words, justified-friendly paragraphs)/tags. Parses output, makes Persian-safe unique slug, generates 1344x768 cover image via zai.images.generations.create (base64 → public/images/blog/{slug}.png), saves BlogPost (status=published, publishedAt=now).
+  - Retry-once on LLM failure. Robust try/catch, never crashes process.
+  - Schedules generateArticle every 6h (setInterval). On startup: if <3 published posts → generate one after 5s; else if last post >6h old → generate one; else wait for next 6h cycle.
+  - Bun.serve HTTP on 3005: GET /health, POST /generate (fire-and-forget trigger).
+  - Started with setsid --fork bun run dev; verified /health returns {"ok":true,...}.
+  - First article generated successfully: "سفر امن و آسوده: مقایسه ایمنی خودروی شخصی و تاکسی VIP" with cover image at /images/blog/....png. Confirmed in DB (status=published, featuredImageUrl set).
+- Lint: passes clean (0 errors).
+
+Stage Summary:
+- Homepage popular-route prices now computed live from admin's PricingConfig per-km rates (no more hardcoded prices).
+- Trip type labels standardized: اقتصادی، ویژه، لوکس، سوپر لوکس، خانوادگی.
+- AI blog auto-generator running on port 3005: generates + publishes a new Persian article with AI cover image every 6 hours. Justified text applied by BlogPostModal CSS (text-justify). First post already published.
+- Files changed: src/lib/pricing.ts, prisma/schema.prisma, src/components/sivan/BookingModal.tsx (carOptions), src/app/api/routes/popular/route.ts, src/app/api/admin/popular-routes/route.ts (new), src/app/api/admin/popular-routes/[id]/route.ts (new), scripts/seed-routes.mjs (new), mini-services/blog-generator/{package.json,index.ts} (new).

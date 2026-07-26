@@ -1,0 +1,483 @@
+     1→# Sivan VIP Taxi - Worklog
+     2→
+     3→---
+     4→Task ID: 11
+     5→Agent: main
+     6→Task: Jalali calendar, color fixes, admin panel
+     7→
+     8→Work Log:
+     9→- Installed jalaali-js and @types/jalaali-js
+    10→- Created src/lib/jalaali.ts with full Jalali utility functions
+    11→- Created JalaliDatePicker component with calendar popup (month grid, week days in Persian)
+    12→- Updated HeroSection to use JalaliDatePicker instead of native date input
+    13→- Updated BookingModal to use JalaliDatePicker
+    14→- Added live Tehran clock + Jalali date display in Navbar
+    15→- Fixed placeholder text colors (#555 → #888) for better contrast on dark bg
+    16→- Created AdminPanel component with full admin dashboard
+    17→- Admin login: username "admin", password "sivan2024"
+    18→- 5 admin tabs: Dashboard, Trips, Passengers, Drivers, Settings
+    19→- Added admin access floating button (Shield icon) in bottom-left of page
+    20→- Added AdminPanel to page.tsx
+    21→- Updated store with admin state management
+    22→- All lint checks pass
+    23→
+    24→Stage Summary:
+    25→- Jalali/Shamsi calendar fully integrated
+    26→- Tehran timezone live clock in Navbar
+    27→- Admin panel with login, dashboard, trip/user/driver management, settings
+    28→- Admin credentials: admin / sivan2024
+    29→- All font colors reviewed - no dark text on dark backgrounds
+    30→
+    31→---
+    32→Task ID: 12
+    33→Agent: main
+    34→Task: City selection from uploaded data files + OpenStreetMap distance calculation
+    35→
+    36→Work Log:
+    37→- Parsed "لیست استان‌ها.txt" (1242 lines, tab-separated) into src/data/provinces.json - 31 provinces, 1242 cities
+    38→- Parsed "مناطق تهران.txt" (88 lines, 22 districts with neighborhood lists) into src/data/tehran-districts.json - 22 districts, 422 neighborhoods
+    39→- Created CitySelector component (src/components/sivan/CitySelector.tsx) with:
+    40→  - Province → City drill-down selection
+    41→  - For Tehran: Province → District → Neighborhood drill-down
+    42→  - Searchable at every level (provinces, cities, districts, neighborhoods)
+    43→  - Back navigation between levels
+    44→  - Clear selection button
+    45→  - Animated dropdown with Framer Motion
+    46→- Created /api/distance API route (src/app/api/distance/route.ts) using:
+    47→  - Nominatim (OpenStreetMap geocoding) for city coordinate lookup
+    48→  - OSRM (Open Source Routing Machine) for driving distance calculation
+    49→  - In-memory caching for both geocoding and distance results (24h TTL)
+    50→- Updated BookingModal step 0 to use CitySelector for origin and destination
+    51→- Updated BookingModal to auto-fetch distance when both cities selected (with 500ms debounce)
+    52→- Shows distance (km) and estimated duration in step 0
+    53→- Updated BookingModal step 4 (summary) to show real price from /api/pricing with real distance
+    54→- Updated store.ts with CitySelection interface, originCity/destCity fields, distanceKm/durationMin fields
+    55→- Updated booking API route to accept new field names from modal
+    56→- All lint checks pass
+    57→- Browser verified: province dropdown, Tehran districts, neighborhood selection, distance calculation (453.4 km, 5h 6min for اختیاریه→اصفهان)
+    58→
+    59→Stage Summary:
+    60→- CitySelector with 31 provinces + 1242 cities + 22 Tehran districts + 422 neighborhoods
+    61→- Real distance calculation via OpenStreetMap (Nominatim + OSRM)
+    62→- Distance-based pricing in booking flow
+    63→- Verified end-to-end: select origin → select destination → see distance → proceed with booking
+    64→
+    65→---
+    66→Task ID: 13
+    67→Agent: main
+    68→Task: Fix distance API, update HeroSection with CitySelector, add email notifications
+    69→
+    70→Work Log:
+    71→- Fixed distance API (fetch failed): added proper timeout (8s Nominatim, 10s OSRM), rate limiting (1.2s between Nominatim calls), Haversine fallback when OSRM fails, pre-loaded coordinates for 31 province capitals in src/data/city-coords.json
+    72→- Updated HeroSection: replaced text inputs with CitySelector for origin/destination
+    73→- HeroSection now shows distance (km), duration, and price in real-time after city selection
+    74→- "ثبت درخواست رزرو" button opens booking modal starting from step 1 (time selection), skipping step 0 since route is already selected in hero
+    75→- Added admin email notification settings to admin panel (Settings tab):
+    76→  - Notify email address, SMTP host/port/user/password fields
+    77→  - Gmail app password guide in Persian
+    78→  - Settings saved via PUT /api/settings and stored in SiteSettings DB model
+    79→- Updated Prisma schema: added notifyEmail, smtpHost, smtpPort, smtpUser, smtpPass fields to SiteSettings
+    80→- Updated /api/settings to support GET (load) and PUT (save) operations
+    81→- Installed nodemailer and @types/nodemailer
+    82→- Updated /api/booking to send email notification after successful booking:
+    83→  - Reads SMTP settings from SiteSettings
+    84→  - Sends HTML email with full booking details (code, passenger, route, distance, car type, price, etc.)
+    85→  - Email is sent non-blocking (doesn't delay booking response)
+    86→- Browser verified: HeroSection shows CitySelector, distance calculation works (437.5km, 4h 50min), price displayed (1,812,500 تومان), modal opens at step 1
+    87→
+    88→Stage Summary:
+    89→- Distance API now reliable with timeout, rate limiting, and Haversine fallback
+    90→- HeroSection has full CitySelector integration with distance/price display
+    91→- Admin can configure email notification via SMTP (Gmail compatible)
+    92→- Booking submissions automatically send email notification to admin
+    93→---
+    94→Task ID: 1
+    95→Agent: Main Agent
+    96→Task: Fix booking modal UX - remove broken summary step, add back button, close modal after submission with toast
+    97→
+    98→Work Log:
+    99→- Read and analyzed BookingModal.tsx (790 lines), store.ts, HeroSection.tsx
+   100→- Removed step 4 (خلاصه/summary) from the booking wizard - was broken and non-functional
+   101→- Consolidated to 4 steps: مسیر → زمان → خودرو → اطلاعات و پرداخت
+   102→- Moved payment method and coupon from removed step 4 to step 3
+   103→- Step 3 now shows: trip summary, name/phone/notes inputs, payment method selection, submit button
+   104→- Added "مرحله قبل" (back) button visible on all steps except step 0
+   105→- After successful submission: modal closes immediately, Sonner toast shows for 3 seconds with booking code and price
+   106→- Error handling: if API fails, toast.error shows error message without closing modal
+   107→- Fixed Prisma schema: made Trip.passengerId optional, originLat/originLng/destLat/destLng optional
+   108→- Fixed booking API: set passengerId to null, pass null for lat/lng fields
+   109→- Updated store: setBookingStep clamps to max step 3, resetBooking clears city selections
+   110→- Ran ESLint: no errors
+   111→
+   112→Stage Summary:
+   113→- BookingModal.tsx: 4-step wizard (was 5), toast notification on success, back button on every step
+   114→- store.ts: step range -1 to 3, proper reset
+   115→- schema.prisma: Trip.passengerId nullable, lat/lng nullable
+   116→- booking/route.ts: null passengerId, null lat/lng, error logging
+   117→- Booking API confirmed working: POST /api/booking returns 200 with bookingCode
+   118→- Database verified: bookings saved with correct data (distanceKm, totalFare, etc.)
+   119→
+   120→---
+   121→Task ID: 2
+   122→Agent: Main Agent
+   123→Task: Fix date display to show Jalali calendar format
+   124→
+   125→Work Log:
+   126→- Identified issue: BookingModal step 3 summary was showing raw ISO date (2025-03-23) instead of Jalali
+   127→- Added import for formatJalaaliDate and toPersianDigits from @/lib/jalaali
+   128→- Changed date display: booking.formData.date → formatJalaaliDate(booking.formData.date)
+   129→- Changed time display: booking.formData.time → toPersianDigits(booking.formData.time) with dir="ltr"
+   130→- Verified via Agent Browser: summary now shows "۳ مرداد ۱۴۰۵" and "۱۰:۳۰" with Persian digits
+   131→- JalaliDatePicker calendar correctly shows today as "۳ مرداد" matching Tehran timezone
+   132→
+   133→Stage Summary:
+   134→- BookingModal.tsx: date and time in step 3 summary now display in Jalali format with Persian digits
+   135→- Calendar "today" button correctly identifies current Jalali date
+   136→- All date-related displays verified: navbar (۳ مرداد ۱۴۰۵), datepicker (۳ مرداد), summary (۳ مرداد ۱۴۰۵)
+   137→
+   138→---
+   139→Task ID: 3
+   140→Agent: Main Agent
+   141→Task: Integrate uploaded logo and fix Jalali calendar
+   142→
+   143→Work Log:
+   144→- Copied uploaded logo (fbc8960f-3283-4914-a17a-577b78e6c071.png) to /public/logo.png
+   145→- Updated Navbar.tsx: replaced Crown icon with actual logo image in navbar and mobile menu
+   146→- Updated Footer.tsx: replaced Crown icon with logo image in brand section
+   147→- Updated HeroSection.tsx: replaced CrownIcon SVG with logo image in badge
+   148→- Updated BookingModal.tsx: added logo image in dialog header
+   149→- Updated layout.tsx: changed favicon from /logo.svg to /logo.png
+   150→- Fixed JalaliDatePicker.tsx: initialized calendar to today's Jalali date instead of hardcoded 1404/1/1
+   151→- Fixed jalaali.ts: rewrote getTehranTime() and getTodayJalaali() to use Intl.DateTimeFormat with timezone: 'Asia/Tehran' (timezone-independent)
+   152→- Fixed Navbar.tsx: updated clock to use getTehranTimeString() for proper Tehran time display
+   153→- Verified: jalaali-js and Intl.DateTimeFormat(u-ca-persian) produce identical results (Solar Hijri calendar)
+   154→- Browser verified: navbar shows logo + "۱۲:۳۸" + "۳ مرداد ۱۴۰۵", datepicker shows "مرداد ۱۴۰۵", footer shows logo
+   155→
+   156→Stage Summary:
+   157→- Uploaded logo integrated into: Navbar, Footer, HeroSection badge, BookingModal header, Mobile menu, Favicon
+   158→- Jalali calendar fixed: uses Intl.DateTimeFormat with Asia/Tehran timezone (timezone-independent, matches Iran's official Solar Hijri calendar)
+   159→- Calendar now opens on correct month (مرداد ۱۴۰۵) instead of hardcoded فروردین ۱۴۰۴
+   160→- All lint checks pass
+   161→
+   162→---
+   163→Task ID: 4
+   164→Agent: Main Agent
+   165→Task: Change login to username/password + add admin CMS (content editor + blog management)
+   166→
+   167→Work Log:
+   168→- Created `/src/app/api/auth/login/route.ts` - POST endpoint for username/password login (checks DB + hardcoded admin/sivan2024)
+   169→- Rewrote `/src/components/sivan/AuthModal.tsx` - replaced phone+OTP with username+password form (with show/hide toggle, error handling)
+   170→- Updated Navbar: "ورود / ثبت‌نام" → "ورود"
+   171→- Created `/src/app/api/admin/content/route.ts` - GET/PUT for SiteContent sections (hero, services, whyUs, fleet, cta, footer, about)
+   172→- Created `/src/app/api/admin/blog/route.ts` - GET/POST/PUT for blog posts management
+   173→- Created `/src/app/api/admin/blog/[id]/route.ts` - DELETE for blog posts
+   174→- Created `/src/app/api/admin/upload/route.ts` - Image upload (accepts jpg/png/webp/gif, max 5MB, saves to /public/uploads/blog/)
+   175→- Rewrote `/src/components/sivan/AdminPanel.tsx` with 7 tabs:
+   176→  1. داشبورد (Dashboard) - stats overview
+   177→  2. سفرها (Trips) - loads real data from DB via /api/booking
+   178→  3. مسافران (Passengers) - placeholder
+   179→  4. رانندگان (Drivers) - placeholder
+   180→  5. مدیریت محتوا (Content) - section-based editor with title/subtitle/body per page section (hero, services, whyUs, fleet, cta, footer, about)
+   181→  6. بلاگ (Blog) - full CRUD: list/create/edit/delete posts, image upload, tags, status (draft/published/archived)
+   182→  7. تنظیمات (Settings) - site settings, email notification, SMTP config
+   183→- Updated store.ts: added content and blog tabs to AdminState
+   184→- Updated Prisma schema: SiteContent model already existed
+   185→- All lint checks pass
+   186→
+   187→Stage Summary:
+   188→- Login system changed from phone+OTP to username/password
+   189→- Admin panel now has Content Editor tab for editing all page texts (hero, services, whyUs, etc.)
+   190→- Admin panel now has Blog Management tab for creating/editing/publishing blog posts with image upload
+   191→- API routes: /api/auth/login, /api/admin/content, /api/admin/blog, /api/admin/blog/[id], /api/admin/upload
+   192→
+   193→---
+   194→Task ID: 5
+   195→Agent: Main Agent
+   196→Task: Fix admin login not entering panel + add pricing management (per-km per vehicle category)
+   197→
+   198→Work Log:
+   199→- Fixed AuthModal.tsx: after successful /api/auth/login, if returned user.role === 'admin', now calls adminLogin() + setAdminOpen(true) + closeAuth() to open the admin panel instead of showing the passenger "welcome" screen
+   200→- Updated store.ts adminLogin: credentials now verified by API beforehand; store just records the logged-in admin session
+   201→- Updated AdminPanel.tsx AdminLoginScreen: now calls /api/auth/login API (instead of hardcoded check) and validates role === 'admin' before entering panel
+   202→- Added PricingConfig model to prisma/schema.prisma (baseFare, minFare, perKm rates for economy/vip/luxury/van/electric, roundTripDiscount)
+   203→- Ran `bun run db:push` to sync schema + regenerate Prisma client
+   204→- Created src/lib/pricing.ts: shared getPricingConfig(), calculateFare(), rateForTripType(), TRIP_TYPE_LABELS helpers
+   205→- Created /api/admin/pricing route (GET returns config, PUT upserts config)
+   206→- Rewrote /api/pricing route to read rates from DB via getPricingConfig() + calculateFare() (was hardcoded)
+   207→- Updated /api/booking route to use calculateFare() from DB-backed config (removed hardcoded RATES/BASE_FARE constants)
+   208→- Added 'pricing' to AdminState activeTab type in store.ts
+   209→- Added PricingTab component to AdminPanel.tsx: base fares section (baseFare, minFare, roundTripDiscount), per-vehicle-category rate cards (economy/vip/luxury/van/electric with icons + live 100km example), and a live price preview calculator
+   210→- Added 'قیمت‌گذاری' (Pricing) tab to admin sidebar with Calculator icon
+   211→- Updated HeroSection.tsx: fetches /api/admin/pricing on mount and uses admin-configured rates for the quick-estimate preview (falls back to defaults)
+   212→- Restarted dev server with `setsid --fork` to pick up new Prisma client (stale client was causing 500 on PUT)
+   213→
+   214→Stage Summary:
+   215→- Admin login now correctly opens the admin panel (was showing passenger welcome screen)
+   216→- New "قیمت‌گذاری" tab in admin panel lets admin set: base fare, minimum fare, round-trip discount %, and per-kilometer rate for each of 5 vehicle categories (economy, VIP, luxury, van, electric)
+   217→- All rates persist in DB (PricingConfig table) and are used by both /api/pricing (estimate) and /api/booking (final fare)
+   218→- HeroSection quick-estimate now reflects admin-configured rates
+   219→- Verified end-to-end via agent-browser: login → admin panel → pricing tab → edit VIP rate 3000→4000 → save → toast "قیمت‌گذاری با موفقیت ذخیره شد" → API confirms vipPerKm:4000 persisted
+   220→- Verified pricing math: luxury 200km = 50000 base + 200×5000 = 1,050,000 تومان (correct)
+   221→
+   222→---
+   223→Task ID: 6
+   224→Agent: Main Agent
+   225→Task: Rename vehicle categories (electric→super luxury, VIP luxury→luxury), fix pricing preview dropdown, add section-specific content fields
+   226→
+   227→Work Log:
+   228→- Task 1: Renamed "برقی" → "سوپر لوکس" (super luxury) category label across all booking flow UI:
+   229→  - src/lib/pricing.ts TRIP_TYPE_LABELS.electric: 'برقی' → 'سوپر لوکس'
+   230→  - src/components/sivan/AdminPanel.tsx vehicleCategories: electric label 'برقی' → 'سوپر لوکس', desc updated, icon ⚡ → 💎
+   231→  - src/components/sivan/HeroSection.tsx carTypes: electric label 'برقی' → 'سوپر لوکس'
+   232→  - src/components/sivan/BookingModal.tsx carOptions: electric label 'برقی' → 'سوپر لوکس', desc updated
+   233→- Task 3: Renamed "VIP لوکس" → "لوکس" (luxury) category label:
+   234→  - src/lib/pricing.ts TRIP_TYPE_LABELS.vip: 'VIP لوکس' → 'لوکس'
+   235→  - src/components/sivan/AdminPanel.tsx vehicleCategories: vip label 'VIP لوکس' → 'لوکس'
+   236→  - src/components/sivan/HeroSection.tsx carTypes: vip label 'VIP - لوکس' → 'لوکس'
+   237→  - src/components/sivan/BookingModal.tsx carOptions: vip label 'VIP لوکس' → 'لوکس'
+   238→  - Internal keys (vip, electric) unchanged to avoid DB migration
+   239→- Task 2: Fixed pricing preview dropdown not opening:
+   240→  - Root cause: SelectContent had z-50 but admin panel overlay is z-[100], so the Radix Portal dropdown rendered BEHIND the admin overlay
+   241→  - Fix: Changed SelectContent z-index from z-50 to z-[200] in src/components/ui/select.tsx
+   242→- Task 4: Redesigned ContentTab with section-specific field schemas:
+   243→  - Defined SECTION_DEFS array with 7 sections, each having its own distinct fields:
+   244→    - hero: badge text, title, subtitle, background image URL
+   245→    - services: title, subtitle, services list (pipe-delimited)
+   246→    - whyUs: title, subtitle, features list (pipe-delimited)
+   247→    - fleet: title, subtitle, description
+   248→    - cta: title, subtitle, button text, phone number
+   249→    - footer: brand name, description, copyright text, address
+   250→    - about: title, subtitle, body text
+   251→  - Added parseSectionData() and serializeSectionData() helpers to store extra fields as JSON in the body column (no schema change needed)
+   252→  - Each section now shows a description header and its own labeled input fields
+   253→
+   254→Stage Summary:
+   255→- Vehicle category labels updated: "برقی"→"سوپر لوکس", "VIP لوکس"→"لوکس" (consistent across pricing, hero, booking modal)
+   256→- Pricing preview dropdown now opens correctly (z-index fix from z-50 to z-[200])
+   257→- Content management tab now has 7 sections each with distinct, relevant fields instead of generic title/subtitle/body
+   258→- Verified via agent-browser: pricing tab shows correct labels, dropdown opens with all 5 categories, selecting "سوپر لوکس" updates price correctly (400,000 for 100km), content tab shows section-specific fields (CTA: title/subtitle/button/phone, Footer: brand/description/copyright/address)
+   259→
+   260→---
+   261→Task ID: 14
+   262→Agent: Main Agent
+   263→Task: Switch admin email notification from SMTP (password-based) to Google OAuth2 (XOAUTH2)
+   264→
+   265→Work Log:
+   266→- Investigated existing SMTP implementation across /api/settings, /api/booking, AdminPanel SettingsTab (was using smtpHost/smtpPort/smtpUser/smtpPass)
+   267→- Updated prisma/schema.prisma SiteSettings model: removed smtpHost, smtpPort, smtpUser, smtpPass; added oauthUserEmail, oauthClientId, oauthClientSecret, oauthRefreshToken, oauthAccessToken, oauthTokenExpiry (DateTime?) fields
+   268→- Ran `bun run db:push --accept-data-loss` to apply schema changes (existing SMTP values dropped)
+   269→- Created src/lib/email.ts — new OAuth2 email helper using nodemailer `auth.type: 'OAuth2'`:
+   270→  - getTransporter() caches transporter, recreated when key OAuth2 fields change
+   271→  - loadOAuth2Config() loads from DB, returns null if required fields missing
+   272→  - sendMail({to, subject, html, fromName}) — never throws, returns {ok, error}
+   273→  - verifyOAuth2() — calls transporter.verify() to test credentials
+   274→- Rewrote /api/settings route.ts:
+   275→  - GET: masks oauthClientSecret/oauthRefreshToken/oauthAccessToken as `__SET__` sentinel when set (defense-in-depth, no secret echo to browser)
+   276→  - PUT: resolveSecret() helper preserves existing secret values when sentinel `__SET__` or empty string sent; clears cached access token + expiry when credentials change
+   277→- Updated /api/booking route.ts: replaced inline SMTP transporter with sendMail() call from new email helper
+   278→- Created /api/admin/email-test/route.ts: POST endpoint that verifies OAuth2 credentials and sends a small HTML test email to the configured notifyEmail address; returns {ok, sentTo} or {ok:false, error} with Persian error messages
+   279→- Rewrote AdminPanel.tsx SettingsTab:
+   280→  - Removed smtpHost/Port/User/Pass form fields
+   281→  - Added OAuth2 fields: notifyEmail, oauthUserEmail, oauthClientId, oauthClientSecret, oauthRefreshToken (with eye toggle show/hide)
+   282→  - Secret fields show masked placeholder "•••••••• (ذخیره شده — برای تغییر، تایپ کنید)" when value is `__SET__`
+   283→  - onFocus clears `__SET__` to allow typing new value
+   284→  - Added collapsible <details> setup guide with 11-step Persian instructions for getting OAuth2 credentials from Google Cloud Console (project, Gmail API, consent screen, OAuth client ID, redirect URI to OAuth Playground, refresh token exchange)
+   285→  - Added "ارسال ایمیل آزمایشی" button that calls /api/admin/email-test and shows inline success/error result
+   286→  - Added loading spinners on Save and Test buttons
+   287→- Restarted dev server with setsid --fork (stale Prisma client was still querying old smtp* columns and returning 500)
+   288→- ESLint: passes clean
+   289→- Browser-verified end-to-end:
+   290→  - Settings tab shows "تنظیمات اعلان ایمیلی (OAuth2)" header
+   291→  - All 5 OAuth2 fields render with proper LTR direction, placeholders, and eye toggle on secrets
+   292→  - Setup instructions expand/collapse correctly
+   293→  - Saving userEmail+clientId+notifyEmail persists to DB; GET returns them unmasked (non-secret)
+   294→  - Saving clientSecret+refreshToken via API stores in DB, returns as `__SET__` sentinel, subsequent GETs also return `__SET__` (no secret leakage to browser)
+   295→  - Clicking "ارسال ایمیل آزمایشی" with no OAuth2 configured → POST /api/admin/email-test returns 400 with Persian error "ابتدا اطلاعات OAuth2 را در تنظیمات وارد کنید." which displays inline below the button
+   296→  - Clicking test with test/invalid credentials → Gmail returns "invalid_client: The OAuth client was not found." displayed inline in Persian error wrapper
+   297→
+   298→Stage Summary:
+   299→- Email notification system fully migrated from SMTP password auth to Google OAuth2 XOAUTH2
+   300→- Secrets (client secret, refresh token, access token) are stored in DB but never echoed back to browser (masked as `__SET__` sentinel)
+   301→- Nodemailer's built-in XOAUTH2 flow handles access-token refresh automatically via refresh token — no manual token management needed
+   302→- Admin UI includes Persian setup guide for Google Cloud Console OAuth2 credentials + OAuth Playground refresh-token flow
+   303→- "ارسال ایمیل آزمایشی" button provides immediate end-to-end verification of credentials
+   304→- Files changed: prisma/schema.prisma, src/lib/email.ts (new), src/app/api/settings/route.ts, src/app/api/admin/email-test/route.ts (new), src/app/api/booking/route.ts, src/components/sivan/AdminPanel.tsx (SettingsTab + new SecretInput component)
+   305→
+   306→---
+   307→Task ID: 15
+   308→Agent: Main Agent
+   309→Task: Replace Gmail OAuth2 with internal self-hosted mail system (deliver to Gmail via direct MX)
+   310→
+   311→Work Log:
+   312→- Tested outbound connectivity: port 25 (MX delivery) BLOCKED in sandbox, port 587 BLOCKED, DNS MX resolution WORKS — designed system for both sandbox (relay fallback) and real VPS (direct MX)
+   313→- Updated prisma/schema.prisma: removed OAuth2 fields (oauthUserEmail, oauthClientId, oauthClientSecret, oauthRefreshToken, oauthAccessToken, oauthTokenExpiry); added internal mail fields (mailSenderName, mailSenderEmail, mailReplyTo, relayHost, relayPort, relayUser, relayPass) to SiteSettings
+   314→- Added new EmailMessage model: fromName, fromEmail, replyTo, toEmail, toName, subject, textBody, htmlBody, status (queued|sending|sent|failed), mxHost, attemptCount, lastError, source (manual|booking|system), refId, sentAt, createdAt + indexes on status/toEmail/createdAt
+   315→- Ran bun run db:push to apply schema
+   316→- Created mini-services/mail-service/ (new Bun project, port 3004):
+   317→  - Uses nodemailer with two delivery modes:
+   318→    1) DIRECT MX: resolveMxRecords() looks up recipient MX via dns.resolveMx(), connects directly to MX server on port 25 (unauthenticated SMTP — receiving server decides based on SPF/DKIM/DMARC)
+   319→    2) SMTP RELAY: when relayHost + relayUser configured in settings, authenticates against admin's own relay (any port: 587/465/2525)
+   320→  - enqueueAndSend(): records message in EmailMessage table as 'sending', attempts delivery, updates to 'sent' or 'failed' with full error message + mxHost contacted + attempt count
+   321→  - retryEmail(id): re-attempts failed delivery, increments attemptCount
+   322→  - Hard 30-second timeout wrapper prevents stuck 'sending' state
+   323→  - Tries only first 2 MX records (sorted by priority) to keep response time reasonable (~10s instead of 75s)
+   324→  - Endpoints: POST /send, POST /retry/:id, GET /health
+   325→  - Started with `setsid --fork bun run dev` for auto-reload on file changes
+   326→- Removed old OAuth2 files: src/lib/email.ts, src/app/api/admin/email-test/route.ts
+   327→- Created API routes:
+   328→  - GET /api/admin/emails (list with pagination, status filter, search, stats)
+   329→  - POST /api/admin/emails (forward to mail-service on port 3004)
+   330→  - GET /api/admin/emails/[id] (full email record with html body)
+   331→  - POST /api/admin/emails/[id]?action=retry (retry failed delivery)
+   332→  - DELETE /api/admin/emails/[id] (delete from archive)
+   333→- Updated /api/settings: handles new mail fields (mailSenderName/Email/ReplyTo, relayHost/Port/User/Pass); masks relayPass as '__SET__' in GET responses (defense-in-depth)
+   334→- Updated /api/booking: sendBookingNotification() now uses fire-and-forget fetch to mail-service (was blocking SMTP/OAuth2 call before); booking response not delayed by email delivery; source='booking', refId=bookingCode
+   335→- Added 'emails' to AdminState activeTab type in store.ts
+   336→- Built EmailsTab component in AdminPanel.tsx:
+   337→  - Stats cards: کل، ارسال شده، ناموفق، در حال ارسال، در صف (clickable filters)
+   338→  - Email list with subject, recipient, time, MX host, attempt count, error preview
+   339→  - Status badges: ارسال شد / ناموفق / در حال ارسال / در صف
+   340→  - Compose modal: full HTML email composer with recipient/name/subject/HTML body fields
+   341→  - View modal: shows full email preview (rendered HTML), from/to/time/MX host/error
+   342→  - Retry button on failed emails, delete button on all
+   343→- Updated SettingsTab:
+   344→  - Replaced "تنظیمات اعلان ایمیلی (OAuth2)" with "سیستم ایمیل داخلی"
+   345→  - New fields: نام فرستنده، ایمیل فرستنده، آدرس Reply-To، ایمیل مقصد اعلان‌ها
+   346→  - Collapsible "تنظیمات Relay SMTP (اختیاری)" section with relayHost/Port/User/Password fields
+   347→  - Gmail delivery guide: SPF (v=spf1 mx a -all), DKIM, DMARC (v=DMARC1; p=quarantine;), rDNS instructions
+   348→- Restarted dev server (setsid --fork) to pick up new Prisma client
+   349→- Browser-verified end-to-end:
+   350→  - Login as admin → sidebar shows new "ایمیل‌ها" tab
+   351→  - Emails tab shows stats cards (کل ۹، ارسال شده ۰، ناموفق ۹) and email list
+   352→  - Each email shows subject, recipient, time (Jalali), source badge, error preview
+   353→  - Compose modal: form accepts recipient/name/subject/HTML, submits via POST /api/admin/emails
+   354→  - View modal shows rendered HTML preview + delivery details + error message
+   355→  - Settings tab shows "سیستم ایمیل داخلی" with sender identity fields + collapsible relay config + Gmail delivery guide
+   356→  - Booking submission returns instantly (no email delay) and email is recorded asynchronously in EmailMessage table with source='booking'
+   357→- Verified email delivery attempts:
+   358→  - To gmail.com: fails with "Connection timeout" (port 25 blocked in sandbox — expected; will work on real VPS)
+   359→  - To savantaxi.com (no MX records): fails immediately with "queryMx ENOTFOUND" (correct behavior)
+   360→  - Total send time: ~10s for valid MX (was 75s before optimization)
+   361→
+   362→Stage Summary:
+   363→- Built complete internal mail system replacing Gmail OAuth2 — uses site's own domain (noreply@sivantaxi.com) as sender identity
+   364→- Two delivery modes: direct MX (default, works on VPS with port 25 open) + configurable SMTP relay (fallback for sandboxed/cloud environments)
+   365→- All emails archived in EmailMessage table with full status tracking (queued → sending → sent|failed), error messages, attempt counts, MX host contacted
+   366→- Admin UI: compose new emails, view archived emails with rendered HTML preview, retry failed deliveries, filter by status, delete
+   367→- Booking notifications fire asynchronously (don't delay booking response), recorded with source='booking' + refId=bookingCode
+   368→- Settings: simple sender identity config + optional relay + Gmail delivery DNS guide (SPF/DKIM/DMARC/rDNS)
+   369→- Files changed: prisma/schema.prisma, mini-services/mail-service/{package.json,index.ts} (new), src/app/api/settings/route.ts, src/app/api/admin/emails/route.ts (new), src/app/api/admin/emails/[id]/route.ts (new), src/app/api/booking/route.ts, src/lib/store.ts, src/components/sivan/AdminPanel.tsx (new EmailsTab + redesigned SettingsTab)
+   370→- Removed: src/lib/email.ts (OAuth2 helper), src/app/api/admin/email-test/route.ts
+   371→
+   372→---
+   373→Task ID: 16
+   374→Agent: Main Agent
+   375→Task: Fix city selector dropdown clipping + hydration error, add PWA installability + push notifications
+   376→
+   377→Work Log:
+   378→- Issue 1 (dropdown clipping): Root cause = HeroSection had `overflow-hidden` on the whole section, clipping absolutely-positioned dropdowns; the bottom gradient fade also sat on top (later in DOM, same z) covering bottom list items → provinces appeared dimmed/unselectable.
+   379→  - Fix: Moved `overflow-hidden` from the section to the background-image container only; added `pointer-events-none` to decorative overlays; gave content `relative z-10`; gave bottom fade `z-0 pointer-events-none`.
+   380→  - Raised CitySelector dropdown z-index z-50 → z-[100]; raised JalaliDatePicker z-50 → z-[100].
+   381→- Issue 4/5 (button-in-button hydration error): CitySelector had a clear (X) `<button>` nested inside the trigger `<button>` → invalid HTML + hydration error.
+   382→  - Fix: Restructured trigger to use a `relative` wrapper; main button is full-width with left padding; the clear X button is now an absolutely-positioned SIBLING (not child) of the trigger button.
+   383→- Issue 2 (PWA installability):
+   384→  - Generated PWA icons from logo.png via sharp (scripts/gen-icons.js): icon-192.png, icon-512.png, icon-maskable-192.png, icon-maskable-512.png, apple-touch-icon.png, favicon-32.png (dark #0a0a0a background, gold brand).
+   385→  - Created /public/manifest.json: name, short_name, start_url=/, display=standalone, theme_color=#0a0a0a, lang=fa, dir=rtl, icons (any + maskable), shortcuts.
+   386→  - Created /public/sw.js service worker: precache core assets, network-first navigations with offline fallback, cache-first static assets, push event handler (showNotification with RTL/fa, vibrate, actions), notificationclick handler (focus existing tab or open new).
+   387→  - Updated layout.tsx: added manifest, appleWebApp config, full icons set, themeColor viewport.
+   388→  - Created PWARegister component: registers /sw.js, listens for beforeinstallprompt, shows install banner with "نصب" button, detects standalone mode via lazy useState initializer.
+   389→- Issue 3 (push notifications to admin devices):
+   390→  - Installed web-push + @types/web-push; generated VAPID key pair, stored in .env (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT).
+   391→  - Added PushSubscription model to prisma/schema.prisma (endpoint unique, p256dhKey, authKey, label, userAgent). Ran db:push.
+   392→  - Created src/lib/push.ts: ensureConfigured(), getVapidPublicKey(), sendPushToAll() (auto-removes 404/410 expired subs), saveSubscription(), removeSubscription(), listSubscriptions().
+   393→  - Created API routes: GET /api/push/vapid-public, POST /api/push/subscribe, POST /api/push/unsubscribe, POST /api/push/test, GET /api/push/subscriptions.
+   394→  - Updated /api/booking route: after creating trip, calls sendPushToAll() (non-blocking) with booking details → admin devices get push notification on new booking.
+   395→  - Added 'notifications' tab to admin panel (TabId + store type + sidebar + render switch).
+   396→  - Built NotificationsTab component: permission status badge, enable/disable button (requests Notification.permission + PushManager.subscribe + saves to backend), test button (POST /api/push/test), "how it works" guide, registered-devices list with refresh.
+   397→  - Added global email-polling effect in AdminDashboard: polls /api/admin/emails every 25s; on new email → toast (foreground) + playNotifSound() (Web Audio two-tone chime) + SW showNotification (background). Complements web-push for when tab is open.
+   398→  - Added playNotifSound() helper using Web Audio API (no audio file needed).
+   399→  - Added getDeviceLabel() (detects iOS/Android/Windows/Mac/Linux from userAgent) + urlBase64ToUint8Array() helpers.
+   400→- Fixed lint: lazy useState initializer in PWARegister (avoids setState-in-effect); eslint-disable for scripts/gen-icons.js require().
+   401→- Restarted dev server (setsid --fork) to load VAPID env vars + regenerated Prisma client.
+   402→- ESLint: passes clean.
+   403→- Browser-verified end-to-end:
+   404→  - Homepage loads with NO hydration errors (console clean of "button cannot be descendant" / "mismatch")
+   405→  - City selector dropdown: scrolled to bottom — last province "یزد" has color rgb(250,250,250), opacity 1, fully visible (was dimmed before); clicking it transitions to city selection ✓
+   406→  - JalaliDatePicker calendar opens and shows "امروز (۴ مرداد)" ✓
+   407→  - PWA: SW registered (scope=/), manifest linked, apple-touch-icon linked, theme-color=#0a0a0a ✓
+   408→  - Admin login (admin/sivan2024) → new "اعلان‌ها" tab visible and renders "سیستم نوتیفیکیشن", status card, enable/test buttons, devices list, how-it-works guide ✓
+   409→  - Enable button correctly requests permission; denied (headless auto-deny) → shows Persian error "دسترسی نوتیفیکیشن رد شد..." ✓
+   410→  - Backend: GET /api/push/vapid-public returns configured publicKey; POST /api/push/test returns "هیچ دستگاهی ثبت نشده" (correct, no subs yet); GET /api/push/subscriptions returns [] ✓
+   411→  - Booking POST /api/booking 200 (SV-1JCNZ8); dev log shows PushSubscription query after booking → sendPushToAll() fired correctly ✓
+   412→
+   413→Stage Summary:
+   414→- Fixed all 5 user-reported issues:
+   415→  1. Dropdown provinces no longer dimmed/clipped (overflow + z-index fix in HeroSection)
+   416→  2. Calendar no longer clipped (same fix)
+   417→  3. Site is now installable as PWA on mobile (Android/iOS) + Windows (manifest + SW + icons + install banner)
+   418→  4. Push notification system: admin gets browser/phone notifications on new booking or email (VAPID web-push + live polling fallback + sound)
+   419→  5. Button-in-button hydration error eliminated (restructured CitySelector trigger)
+   420→- Files changed: src/components/sivan/CitySelector.tsx, src/components/sivan/HeroSection.tsx, src/components/sivan/JalaliDatePicker.tsx, src/components/sivan/PWARegister.tsx (new), src/components/sivan/AdminPanel.tsx (NotificationsTab + polling effect + helpers), src/app/layout.tsx, src/lib/store.ts, src/lib/push.ts (new), src/app/api/push/{vapid-public,subscribe,unsubscribe,test,subscriptions}/route.ts (new), src/app/api/booking/route.ts, prisma/schema.prisma, .env, scripts/gen-icons.js (new), public/manifest.json (new), public/sw.js (new), public/icon-{192,512,maskable-192,maskable-512}.png + apple-touch-icon.png + favicon-32.png (generated)
+   421→
+   422→---
+   423→Task ID: 2a
+   424→Agent: full-stack-developer
+   425→Task: Rewrite PopularRoutes.tsx to fetch live popular-route prices from backend (/api/routes/popular) instead of using hardcoded data
+   426→
+   427→Work Log:
+   428→- Read worklog.md and confirmed existing dark+gold theme conventions used throughout project
+   429→- Confirmed /api/routes/popular returns: { id, origin, destination, distanceKm, duration, tripType, tripTypeLabel, price, priceLabel, image, isPopular, sortOrder }
+   430→- Confirmed useAppStore exposes updateBookingForm + setBookingStep (unchanged from current usage)
+   431→- Confirmed toPersianDigits is exported from @/lib/jalaali
+   432→- Rewrote src/components/sivan/PopularRoutes.tsx as 'use client' with:
+   433→  - useEffect on mount -> fetch('/api/routes/popular', { cache: 'no-store' })
+   434→  - useState for routes[], loading, error
+   435→  - Graceful cancellation via `cancelled` flag in useEffect cleanup
+   436→  - Loading state: 6 skeleton cards (RouteCardSkeleton) with pulse animation mimicking the real card layout
+   437→  - Error/empty fallback: centered Persian message ("در حال بارگذاری مسیرها..." / "مسیری یافت نشد")
+   438→  - Each card now renders backend fields:
+   439→      * Origin -> Destination with MapPin + ArrowLeft (unchanged visual)
+   440→      * Gold Badge with tripTypeLabel (e.g. "ویژه", "لوکس", "اقتصادی") replacing the old static "محبوب" badge
+   441→      * Duration (Clock icon) + distance as "{toPersianDigits(distanceKm)} کیلومتر" (Route icon)
+   442→      * Price: "شروع از" label + priceLabel (gold bold) + "تومان"
+   443→      * "رزرو این مسیر" Button (ArrowLeft) calling handleRouteClick(origin, destination)
+   444→  - handleRouteClick unchanged: updateBookingForm({ origin, destination }) -> setBookingStep(1) -> scroll to #hero
+   445→  - Preserved framer-motion containerVariants/itemVariants stagger, section header Badge "محبوب‌ترین مسیرها" + title "مسیرهای پرطرفدار" + subtitle
+   446→  - Preserved section id="routes", py-20 sm:py-24 bg-[#0a0a0a], decorative gold divider at top
+   447→  - Preserved grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6
+   448→  - Theme tokens kept identical: bg-[#1a1a1a], border-[#333], hover:border-[#D4AF37]/30, text-[#D4AF37] accents, text-[#fafafa] headings, text-[#a1a1aa] body
+   449→- Ran `bun run lint` -> clean, no errors/warnings
+   450→
+   451→Stage Summary:
+   452→- PopularRoutes is now fully data-driven; homepage prices always reflect the admin's current PricingConfig per-km rates (computed live by the backend)
+   453→- No other files touched; API was already implemented and was not modified
+   454→- Lint passes cleanly
+   455→
+   456→---
+   457→Task ID: 2d
+   458→Agent: full-stack-developer
+   459→Task: Improve TestimonialsSection with 12 testimonials, DB merge, autoplay slider, arrows, and dots
+   460→
+   461→Work Log:
+   462→- Read existing TestimonialsSection.tsx, ui/carousel.tsx, /api/testimonials/route.ts and Prisma Testimonial schema to understand shape (DB items: name, rating, comment, tripRoute?, avatarUrl?, no role).
+   463→- Expanded static testimonials array from 6 to 12 entries. Added 6 new realistic Persian testimonials (کارآفرین, معلم, طراح گرافیک, پرستار, وکیل, مدیر بازاریابی) with trips تهران→اهواز/کرمان/قم/اردبیل/قزوین/ساری and ratings 4-5, matching the existing style.
+   464→- Added typed DbTestimonial + Normalized Testimonial types; `normalizeDbItem` maps DB rows to the card shape (trip falls back to "سفر با سیوان", role to "مسافر سیوان").
+   465→- On mount, fetches /api/testimonials, normalizes, and merges (DB first, then static). Empty/error falls back to static-only via try/catch with cancelled flag.
+   466→- Wired up embla API via `setApi={handleSetApi}` callback (CarouselApi typed). Initial count/current set inside the callback to satisfy react-hooks/set-state-in-effect rule.
+   467→- Added select/reInit listeners in a dedicated effect to keep `current`/`count` in sync (no setState in effect body — only inside event-handler callbacks).
+   468→- Autoplay: 5s `setInterval` calling `api.scrollNext()` (works because `loop: true`). Pause-on-hover via `onMouseEnter/onMouseLeave` updating `paused` state synced to a `pauseRef` through a separate effect (avoids ref-write-during-render lint error).
+   469→- Added `CarouselPrevious`/`CarouselNext` with custom gold styling: `variant="ghost" className="text-[#D4AF37] hover:bg-[#D4AF37]/10 disabled:opacity-30"`. Carousel wrapper padded with `px-2 sm:px-8` so the absolutely-positioned arrows (-left-12/-right-12) don't overlap cards.
+   470→- Carousel options `{ align: 'start', loop: true }`; items use `pl-4 sm:basis-1/2 lg:basis-1/3`. Each card keeps Quote icon, quoted comment, RatingStars, author name+role, and trip badge.
+   471→- Added a dots indicator below the carousel: gold stretched dot for the active slide, gray dots that turn gold on hover, clickable to scroll via `api.scrollTo(i)`. Hidden until `count > 0`.
+   472→- Header kept as-is: "نظرات مسافران" with gold gradient on "مسافران" + subtitle "ببینید مسافران ما درباره سفر با سیوان چه می‌گویند".
+   473→- Stats grid (4 cards) kept untouched.
+   474→- Fixed two ESLint errors: (1) ref written during render → moved ref update into a useEffect; (2) synchronous setState in effect body → moved initialization into the `setApi` callback and event listeners.
+   475→- Removed now-unused imports (Button, ChevronLeft, ChevronRight) and added `useCallback` + `cn`.
+   476→- `bun run lint` passes with zero errors. Dev server log shows GET /api/testimonials 200 with the merged list rendering.
+   477→
+   478→Stage Summary:
+   479→- TestimonialsSection is now a smooth, auto-playing, looping carousel with 12 static reviews (expandable via DB).
+   480→- Fetches approved DB testimonials at mount and merges them first, falling back gracefully to the static list on error.
+   481→- Autoplay advances every 5s and pauses on hover; gold-styled arrow buttons + clickable dots indicator provide manual navigation.
+   482→- No other files touched; lint clean; dev server compiles without errors.
+   483→

@@ -45,11 +45,11 @@ const steps = [
 ];
 
 const carOptions = [
-  { value: 'vip', label: 'لوکس', desc: 'هیوندای سوناتا - لوکس و راحت', price: 'پایه + ۲۰٪' },
+  { value: 'vip', label: 'ویژه', desc: 'هیوندای سوناتا - راحت و مجهز', price: 'پایه + ۲۰٪' },
   { value: 'economy', label: 'اقتصادی', desc: 'خودرو معمولی - قیمت مناسب', price: 'پایه' },
-  { value: 'luxury', label: 'دربستی ویژه', desc: 'مرسدس بنز - اختصاصی و لوکس', price: 'پایه + ۴۰٪' },
-  { value: 'van', label: 'ون', desc: 'ون ۸ نفره - مناسب گروهی', price: 'پایه + ۳۰٪' },
+  { value: 'luxury', label: 'لوکس', desc: 'مرسدس بنز - اختصاصی و لوکس', price: 'پایه + ۴۰٪' },
   { value: 'electric', label: 'سوپر لوکس', desc: 'خودرو لوکس پریمیوم - بهترین تجربه', price: 'پایه + ۱۵٪' },
+  { value: 'van', label: 'خانوادگی', desc: 'خودرو جادار - مناسب خانواده و گروه', price: 'پایه + ۳۰٪' },
 ];
 
 const paymentMethods = [
@@ -105,6 +105,7 @@ export function BookingModal() {
   const [open, setOpen] = useState(false);
   const [distanceLoading, setDistanceLoading] = useState(false);
   const [distanceError, setDistanceError] = useState('');
+  const [showCustomTime, setShowCustomTime] = useState(false);
 
   const shouldOpen = booking.currentStep >= 0 && booking.currentStep <= 3;
   const dialogOpen = open || shouldOpen;
@@ -437,17 +438,76 @@ export function BookingModal() {
                     label="تاریخ سفر"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Label className="text-[#fafafa]">
                     <Clock className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37]" />
                     ساعت حرکت
                   </Label>
-                  <Input
-                    type="time"
-                    value={booking.formData.time}
-                    onChange={(e) => updateBookingForm({ time: e.target.value })}
-                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa]"
-                  />
+                  <div className="text-sm">
+                    {booking.formData.time ? (
+                      <span className="text-[#D4AF37] font-bold">ساعت انتخابی: {toPersianDigits(booking.formData.time)}</span>
+                    ) : (
+                      <span className="text-[#a1a1aa]">هنوز انتخاب نشده</span>
+                    )}
+                  </div>
+                  <div
+                    className="max-h-64 overflow-y-auto space-y-4 pr-1"
+                    style={{
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: '#D4AF37/30 transparent',
+                    }}
+                  >
+                    {[
+                      { period: 'صبح', slots: ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00'] },
+                      { period: 'ظهر', slots: ['12:00', '13:00', '14:00', '15:00'] },
+                      { period: 'عصر', slots: ['16:00', '17:00', '18:00', '19:00'] },
+                      { period: 'شب', slots: ['20:00', '21:00', '22:00', '23:00'] },
+                    ].map((group) => (
+                      <div key={group.period}>
+                        <div className="text-xs text-[#a1a1aa] font-medium mb-2 border-r-2 border-[#D4AF37]/40 pr-2">
+                          {group.period}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {group.slots.map((slot) => {
+                            const isSelected = booking.formData.time === slot && !showCustomTime;
+                            return (
+                              <button
+                                key={slot}
+                                type="button"
+                                onClick={() => {
+                                  updateBookingForm({ time: slot });
+                                  setShowCustomTime(false);
+                                }}
+                                className={`px-3 py-2 rounded-lg border text-sm transition-all min-w-[64px] text-center ${
+                                  isSelected
+                                    ? 'bg-[#D4AF37] text-[#0a0a0a] border-[#D4AF37] font-bold'
+                                    : 'bg-[#0a0a0a] text-[#a1a1aa] border-[#333] hover:border-[#D4AF37]/50 hover:text-[#fafafa]'
+                                }`}
+                              >
+                                {toPersianDigits(slot)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomTime(!showCustomTime)}
+                    className="text-xs text-[#a1a1aa] hover:text-[#D4AF37] transition-colors underline underline-offset-2"
+                  >
+                    {showCustomTime ? 'بستن ساعت دلخواه' : 'ساعت دلخواه'}
+                  </button>
+                  {showCustomTime && (
+                    <Input
+                      type="time"
+                      value={booking.formData.time}
+                      onChange={(e) => updateBookingForm({ time: e.target.value })}
+                      className="bg-[#0a0a0a] border-[#333] text-[#fafafa] w-full"
+                      autoFocus
+                    />
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[#fafafa]">

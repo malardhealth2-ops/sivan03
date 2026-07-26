@@ -51,7 +51,10 @@ export function getTodayJalaali(): { jy: number; jm: number; jd: number } {
  * For timezone-independent Tehran-based conversion, use getTodayJalaali() or getTehranJalaaliDate().
  */
 export function toJalaaliDate(date: Date | string): { jy: number; jm: number; jd: number } {
-  const d = typeof date === 'string' ? new Date(date + 'T00:00:00') : date;
+  const d = typeof date === 'string' ? new Date(date) : date;
+  // Guard against invalid/null/undefined dates (e.g. bad DB values) so the whole
+  // React tree never crashes on a date conversion.
+  if (!d || isNaN(d.getTime())) return getTodayJalaali();
   return toJalaali(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
 
@@ -68,6 +71,7 @@ export function toGregorianDate(jy: number, jm: number, jd: number): Date {
  * Uses Tehran timezone for current dates, local timezone for ISO string inputs.
  */
 export function formatJalaaliDate(date: Date | string): string {
+  if (!date) return '';
   const { jy, jm, jd } = toJalaaliDate(date);
   return `${toPersianDigits(jd)} ${persianMonths[jm - 1]} ${toPersianDigits(jy)}`;
 }

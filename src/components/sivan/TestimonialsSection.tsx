@@ -1,19 +1,56 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Star, ChevronLeft, ChevronRight, Quote } from 'lucide-react';
+import { Star, Quote } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselPrevious,
+  CarouselNext,
+  type CarouselApi,
+} from '@/components/ui/carousel';
+import { cn } from '@/lib/utils';
 
-const testimonials = [
+type StaticTestimonial = {
+  id: number;
+  name: string;
+  role: string;
+  rating: number;
+  comment: string;
+  trip: string;
+};
+
+type DbTestimonial = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  rating: number;
+  comment: string;
+  tripRoute: string | null;
+  isApproved: boolean;
+  createdAt: string;
+};
+
+type Testimonial = {
+  id: string | number;
+  name: string;
+  role: string;
+  rating: number;
+  comment: string;
+  trip: string;
+};
+
+const staticTestimonials: StaticTestimonial[] = [
   {
     id: 1,
     name: 'علی محمدی',
     role: 'مسافر دائمی',
     rating: 5,
-    comment: 'سفر فوق‌العاده‌ای بود. راننده بسیار مؤدب و حرفه‌ای بود. خودرو تمیز و با امکانات کامل. قطعاً دوباره از سیوان استفاده می‌کنم.',
+    comment:
+      'سفر فوق‌العاده‌ای بود. راننده بسیار مؤدب و حرفه‌ای بود. خودرو تمیز و با امکانات کامل. قطعاً دوباره از سیوان استفاده می‌کنم.',
     trip: 'تهران → اصفهان',
   },
   {
@@ -21,7 +58,8 @@ const testimonials = [
     name: 'سارا احمدی',
     role: 'کارمند شرکتی',
     rating: 5,
-    comment: 'بهترین تجربه سفر بین شهری. خودرو تمیز و راحت. قیمت هم بسیار مناسب بود نسبت به کیفیت ارائه شده. پیشنهاد می‌کنم.',
+    comment:
+      'بهترین تجربه سفر بین شهری. خودرو تمیز و راحت. قیمت هم بسیار مناسب بود نسبت به کیفیت ارائه شده. پیشنهاد می‌کنم.',
     trip: 'تهران → شیراز',
   },
   {
@@ -29,7 +67,8 @@ const testimonials = [
     name: 'رضا کریمی',
     role: 'دانشجو',
     rating: 5,
-    comment: 'قیمت مناسب و کیفیت عالی. از رزرو آنلاین تا پایان سفر همه چیز عالی بود. پشتیبانی هم خیلی سریع جواب داد.',
+    comment:
+      'قیمت مناسب و کیفیت عالی. از رزرو آنلاین تا پایان سفر همه چیز عالی بود. پشتیبانی هم خیلی سریع جواب داد.',
     trip: 'تهران → مشهد',
   },
   {
@@ -37,7 +76,8 @@ const testimonials = [
     name: 'مریم حسینی',
     role: 'مدیر فروش',
     rating: 4,
-    comment: 'برای سفرهای کاری از تاکسی VIP سیوان استفاده می‌کنم. همیشه وقت‌شناس هستند و کیفیت خدمات یکدست و عالی است.',
+    comment:
+      'برای سفرهای کاری از تاکسی VIP سیوان استفاده می‌کنم. همیشه وقت‌شناس هستند و کیفیت خدمات یکدست و عالی است.',
     trip: 'تهران → تبریز',
   },
   {
@@ -45,7 +85,8 @@ const testimonials = [
     name: 'حسین رضایی',
     role: 'مهندس',
     rating: 5,
-    comment: 'با خانواده سفر کردیم و فوق‌العاده بود. ون بزرگ و راحت بود. راننده صبور و محترمانه رانندگی کرد. ممنون سیوان.',
+    comment:
+      'با خانواده سفر کردیم و فوق‌العاده بود. ون بزرگ و راحت بود. راننده صبور و محترمانه رانندگی کرد. ممنون سیوان.',
     trip: 'تهران → رشت',
   },
   {
@@ -53,10 +94,76 @@ const testimonials = [
     name: 'فاطمه عباسی',
     role: 'پزشک',
     rating: 5,
-    comment: 'بعد از یک روز کاری طولانی، سفر با سیوان واقعاً آرامش‌بخش بود. خودرو تمیز، بوی خوش و فضای دلنشین. عالی بود.',
+    comment:
+      'بعد از یک روز کاری طولانی، سفر با سیوان واقعاً آرامش‌بخش بود. خودرو تمیز، بوی خوش و فضای دلنشین. عالی بود.',
     trip: 'تهران → کرمانشاه',
   },
+  {
+    id: 7,
+    name: 'مهدی نجفی',
+    role: 'کارآفرین',
+    rating: 5,
+    comment:
+      'برای سفرهای تجاری‌ام همیشه سیوان را انتخاب می‌کنم. راننده‌ها حرفه‌ای و مسلط به مسیر بودند و من بدون استرس به مقصد رسیدم.',
+    trip: 'تهران → اهواز',
+  },
+  {
+    id: 8,
+    name: 'زهرا موسوی',
+    role: 'معلم',
+    rating: 4,
+    comment:
+      'سفر امن و راحت برای مسیر طولانی بود. استراحت‌گاه‌ها به‌موقع انتخاب شدند و راننده با لبخند و احترام کامل رفتار کرد. ممنون.',
+    trip: 'تهران → کرمان',
+  },
+  {
+    id: 9,
+    name: 'نیما صادقی',
+    role: 'طراح گرافیک',
+    rating: 5,
+    comment:
+      'از لحظه رزرو آنلاین تا پایان سفر همه‌چیز بی‌نقص بود. ماشین لاکچری و تمیز، راننده خوش‌اخلاق و قیمت منصفانه. تجربه‌ای فراموش‌نشدنی.',
+    trip: 'تهران → قم',
+  },
+  {
+    id: 10,
+    name: 'الهام رحیمی',
+    role: 'پرستار',
+    rating: 5,
+    comment:
+      'شیفت شب تمام شده بود و خسته بودم، ولی سفر با سیوان کلافه‌ای‌ام را برطرف کرد. صندلی راحت، موسیقی ملایم و راننده‌ای ساکت و محترم.',
+    trip: 'تهران → اردبیل',
+  },
+  {
+    id: 11,
+    name: 'کاوه تهرانی',
+    role: 'وکیل',
+    rating: 4,
+    comment:
+      'وقت‌شناسی عالی و خودروی تمیز. باید زود به دادگاه می‌رسیدم و راننده بهترین مسیر را انتخاب کرد. قطعاً مسافر ثابت می‌شوم.',
+    trip: 'تهران → قزوین',
+  },
+  {
+    id: 12,
+    name: 'سمیرا کاظمی',
+    role: 'مدیر بازاریابی',
+    rating: 5,
+    comment:
+      'سفر کاری فوری داشتم و ظرف کمتر از ۲۰ دقیقه ماشین جلوی در بود. خودروی VIP با اینترنت رایگان و نوشیدنی. عالی بود.',
+    trip: 'تهران → ساری',
+  },
 ];
+
+function normalizeDbItem(item: DbTestimonial): Testimonial {
+  return {
+    id: item.id,
+    name: item.name,
+    role: 'مسافر سیوان',
+    rating: item.rating,
+    comment: item.comment,
+    trip: item.tripRoute || 'سفر با سیوان',
+  };
+}
 
 function RatingStars({ rating }: { rating: number }) {
   return (
@@ -72,6 +179,76 @@ function RatingStars({ rating }: { rating: number }) {
 }
 
 export function TestimonialsSection() {
+  const [api, setApiState] = useState<CarouselApi>();
+  const [current, setCurrent] = useState(0);
+  const [count, setCount] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(
+    staticTestimonials
+  );
+  const pauseRef = useRef(false);
+
+  useEffect(() => {
+    pauseRef.current = paused;
+  }, [paused]);
+
+  // Capture embla API + initialize tracking state (done in callback to avoid
+  // synchronous setState inside effect bodies)
+  const handleSetApi = useCallback((nextApi: CarouselApi) => {
+    setApiState(nextApi);
+    setCount(nextApi.scrollSnapList().length);
+    setCurrent(nextApi.selectedScrollSnap());
+  }, []);
+
+  // Fetch DB-backed approved testimonials and merge (DB first, then static)
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/testimonials')
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load testimonials');
+        return res.json();
+      })
+      .then((data: DbTestimonial[]) => {
+        if (cancelled || !Array.isArray(data) || data.length === 0) return;
+        const normalized = data.map(normalizeDbItem);
+        setTestimonials([...normalized, ...staticTestimonials]);
+      })
+      .catch(() => {
+        // Fall back to static list silently
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Track current slide + total snaps via event listeners (no setState in body)
+  useEffect(() => {
+    if (!api) return;
+    const onSelect = () => {
+      setCurrent(api.selectedScrollSnap());
+    };
+    const onReInit = () => {
+      setCount(api.scrollSnapList().length);
+      setCurrent(api.selectedScrollSnap());
+    };
+    api.on('select', onSelect);
+    api.on('reInit', onReInit);
+    return () => {
+      api.off('select', onSelect);
+      api.off('reInit', onReInit);
+    };
+  }, [api]);
+
+  // Autoplay every 5s (pauses on hover via pauseRef)
+  useEffect(() => {
+    if (!api) return;
+    const interval = setInterval(() => {
+      if (pauseRef.current) return;
+      api.scrollNext();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [api]);
+
   return (
     <section className="py-20 sm:py-24 bg-[#0a0a0a] relative">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-gradient-to-l from-transparent via-[#D4AF37] to-transparent rounded-full" />
@@ -98,50 +275,88 @@ export function TestimonialsSection() {
           viewport={{ once: true, margin: '-50px' }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
-          <Carousel
-            opts={{
-              align: 'start',
-              loop: true,
-              slidesToScroll: 1,
-            }}
-            className="w-full"
+          <div
+            className="relative px-2 sm:px-8"
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
           >
-            <CarouselContent className="-ml-4">
-              {testimonials.map((testimonial) => (
-                <CarouselItem key={testimonial.id} className="pl-4 sm:basis-1/2 lg:basis-1/3">
-                  <Card className="bg-[#1a1a1a] border-[#333] hover:border-[#D4AF37]/20 card-gold-glow h-full">
-                    <CardContent className="p-5 sm:p-6 flex flex-col h-full">
-                      {/* Quote icon */}
-                      <Quote className="h-8 w-8 text-[#D4AF37]/20 mb-3 self-start" />
+            <Carousel
+              opts={{
+                align: 'start',
+                loop: true,
+              }}
+              setApi={handleSetApi}
+              className="w-full"
+            >
+              <CarouselContent className="-ml-4">
+                {testimonials.map((testimonial) => (
+                  <CarouselItem
+                    key={testimonial.id}
+                    className="pl-4 sm:basis-1/2 lg:basis-1/3"
+                  >
+                    <Card className="bg-[#1a1a1a] border-[#333] hover:border-[#D4AF37]/20 card-gold-glow h-full">
+                      <CardContent className="p-5 sm:p-6 flex flex-col h-full">
+                        {/* Quote icon */}
+                        <Quote className="h-8 w-8 text-[#D4AF37]/20 mb-3 self-start" />
 
-                      {/* Comment */}
-                      <p className="text-[#a1a1aa] text-sm leading-relaxed flex-1 mb-4">
-                        &ldquo;{testimonial.comment}&rdquo;
-                      </p>
+                        {/* Comment */}
+                        <p className="text-[#a1a1aa] text-sm leading-relaxed flex-1 mb-4">
+                          &ldquo;{testimonial.comment}&rdquo;
+                        </p>
 
-                      {/* Rating */}
-                      <RatingStars rating={testimonial.rating} />
+                        {/* Rating */}
+                        <RatingStars rating={testimonial.rating} />
 
-                      {/* Author */}
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-[#333]">
-                        <div>
-                          <div className="font-bold text-[#fafafa] text-sm">
-                            {testimonial.name}
+                        {/* Author */}
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-[#333]">
+                          <div>
+                            <div className="font-bold text-[#fafafa] text-sm">
+                              {testimonial.name}
+                            </div>
+                            <div className="text-[#a1a1aa] text-xs">
+                              {testimonial.role}
+                            </div>
                           </div>
-                          <div className="text-[#a1a1aa] text-xs">
-                            {testimonial.role}
-                          </div>
+                          <span className="text-xs text-[#D4AF37] bg-[#D4AF37]/10 px-2 py-1 rounded-full">
+                            {testimonial.trip}
+                          </span>
                         </div>
-                        <span className="text-xs text-[#D4AF37] bg-[#D4AF37]/10 px-2 py-1 rounded-full">
-                          {testimonial.trip}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-          </Carousel>
+                      </CardContent>
+                    </Card>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+
+              <CarouselPrevious
+                variant="ghost"
+                className="text-[#D4AF37] hover:bg-[#D4AF37]/10 disabled:opacity-30"
+              />
+              <CarouselNext
+                variant="ghost"
+                className="text-[#D4AF37] hover:bg-[#D4AF37]/10 disabled:opacity-30"
+              />
+            </Carousel>
+
+            {/* Dots indicator */}
+            {count > 0 && (
+              <div className="flex justify-center items-center gap-2 mt-8">
+                {Array.from({ length: count }).map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-label={`رفتن به اسلاید ${i + 1}`}
+                    onClick={() => api?.scrollTo(i)}
+                    className={cn(
+                      'h-2 rounded-full transition-all duration-300',
+                      i === current
+                        ? 'bg-[#D4AF37] w-6'
+                        : 'bg-[#333] w-2 hover:bg-[#D4AF37]/50'
+                    )}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </motion.div>
 
         {/* Stats */}

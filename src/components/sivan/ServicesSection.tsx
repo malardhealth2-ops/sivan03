@@ -1,39 +1,72 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, Shield, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/lib/store';
 
-const services = [
+type TripType = 'economy' | 'vip' | 'luxury' | 'van' | 'electric';
+
+const services: {
+  id: number;
+  title: string;
+  description: string;
+  image: string;
+  features: string[];
+  badge: string;
+  tripType: TripType;
+}[] = [
   {
     id: 1,
-    title: 'تاکسی VIP لوکس',
-    description: 'سفر با خودروهای لوکس و مجهز به امکانات رفاهی کامل. صندلی‌های چرم، سیستم تهویه پیشرفته و فضای اختصاصی.',
-    image: '/images/vip-car.png',
-    features: ['خودروهای لوکس', 'صندلی چرم', 'WiFi رایگان', 'آب معدنی'],
-    badge: 'پرفروش',
-    tripType: 'vip' as const,
-  },
-  {
-    id: 2,
-    title: 'تاکسی اقتصادی',
-    description: 'سفر با قیمت مناسب و کیفیت مطلوب. خودروهای تمیز و مرتب با رانندگان مجرب و رفتار حرفه‌ای.',
+    title: 'اقتصادی',
+    description:
+      'سفر با قیمت مناسب و کیفیت مطلوب. خودروهای تمیز و مرتب با رانندگان مجرب و رفتار حرفه‌ای.',
     image: '/images/economy-car.png',
     features: ['قیمت مناسب', 'خودرو تمیز', 'راننده مجرب', 'پرداخت آسان'],
     badge: 'اقتصادی',
-    tripType: 'economy' as const,
+    tripType: 'economy',
+  },
+  {
+    id: 2,
+    title: 'ویژه',
+    description:
+      'سفر با خودروهای لوکس و مجهز به امکانات رفاهی کامل. صندلی‌های چرم، سیستم تهویه پیشرفته و فضای اختصاصی.',
+    image: '/images/vip-car.png',
+    features: ['خودروهای لوکس', 'صندلی چرم', 'WiFi رایگان', 'آب معدنی'],
+    badge: 'پرفروش',
+    tripType: 'vip',
   },
   {
     id: 3,
-    title: 'تاکسی دربستی',
-    description: 'خودرو اختصاصی فقط برای شما و همراهانتان. بدون توقف اضافی و مسیر مستقیم به مقصد.',
+    title: 'لوکس',
+    description:
+      'خودرو اختصاصی فقط برای شما و همراهانتان. بدون توقف اضافی و مسیر مستقیم به مقصد با بالاترین کیفیت.',
     image: '/images/luxury-car.png',
     features: ['خودرو اختصاصی', 'بدون توقف', 'مسیر مستقیم', 'حریم خصوصی'],
-    badge: 'ویژه',
-    tripType: 'luxury' as const,
+    badge: 'لوکس',
+    tripType: 'luxury',
+  },
+  {
+    id: 4,
+    title: 'سوپر لوکس',
+    description:
+      'بالاترین تجربه سفر با خودروهای پریمیوم و امکانات ویژه. مناسب برای مهمانداری و سفرهای خاص.',
+    image: '/images/electric-car.png',
+    features: ['خودرو پریمیوم', 'امکانات ویژه', 'بارجیو', 'خدمات VIP'],
+    badge: 'سوپر لوکس',
+    tripType: 'electric',
+  },
+  {
+    id: 5,
+    title: 'خانوادگی',
+    description:
+      'خودرویی جادار و راحت برای سفرهای خانوادگی و گروهی. فضای کافی برای بار و راحتی کودکان.',
+    image: '/images/van-car.png',
+    features: ['فضای جادار', 'مناسب خانواده', 'باربرداری', 'صندلی راحت'],
+    badge: 'خانوادگی',
+    tripType: 'van',
   },
 ];
 
@@ -50,7 +83,7 @@ const itemVariants = {
 export function ServicesSection() {
   const { updateBookingForm, setBookingStep } = useAppStore();
 
-  const handleServiceClick = (tripType: 'economy' | 'vip' | 'luxury') => {
+  const handleServiceClick = (tripType: TripType) => {
     updateBookingForm({ tripType });
     setBookingStep(1);
     const el = document.querySelector('#hero');
@@ -86,7 +119,7 @@ export function ServicesSection() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: '-100px' }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6"
         >
           {services.map((service) => (
             <motion.div key={service.id} variants={itemVariants}>
@@ -115,8 +148,11 @@ export function ServicesSection() {
                   {/* Features */}
                   <div className="grid grid-cols-2 gap-2 mb-5">
                     {service.features.map((feature) => (
-                      <div key={feature} className="flex items-center gap-1.5 text-sm text-[#a1a1aa]">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]" />
+                      <div
+                        key={feature}
+                        className="flex items-center gap-1.5 text-sm text-[#a1a1aa]"
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] shrink-0" />
                         {feature}
                       </div>
                     ))}

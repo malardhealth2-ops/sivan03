@@ -366,11 +366,13 @@ model PopularRoute {
   id          String @id @default(cuid())
   origin      String
   destination String
-  price       Int
-  duration    String
+  price       Int      @default(0) // stored base price (fallback if not computed)
+  distanceKm  Float    @default(0) // used to compute live price from admin PricingConfig rates
+  duration    String   @default("")
+  tripType    String   @default("vip") // which per-km rate to use when computing the live price
   image       String?
-  isPopular   Boolean @default(true)
-  sortOrder   Int    @default(0)
+  isPopular   Boolean  @default(true)
+  sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
 }
 
