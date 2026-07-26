@@ -367,7 +367,10 @@ function BlogTab() {
     fetch(`/api/admin/blog${q}`).then(r => r.json()).then(data => { setPosts(Array.isArray(data) ? data : []); setLoading(false); }).catch(() => setLoading(false));
   }, [statusFilter]);
 
-  useEffect(() => { loadPosts(); // eslint-disable-line react-hooks/set-state-in-effect }, [loadPosts]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
 
   const handleNew = () => {
     setEditingPost({ title: '', slug: '', excerpt: '', content: '', featuredImageUrl: '', status: 'draft', tags: [] });
