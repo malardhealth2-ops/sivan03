@@ -1043,3 +1043,62 @@ Stage Summary:
 - Header nav menu and logo link now work on ALL pages (homepage, /blog listing, /blog/[slug] articles).
 - On non-homepage pages, nav links navigate to the homepage with the section hash (auto-scrolls to the section); the "بلاگ" link goes directly to /blog.
 - On the homepage, the original smooth-scroll behavior is fully preserved.
+
+---
+Task ID: register-username-userpanel-reviews-pwa
+Agent: main
+Task: (1) Registration form should use username+password. (2) After registration, user enters a user dashboard. (3) Real reviews — logged-in users can write their own. (4) PWA install icon should be the new logo.
+
+Work Log:
+
+PWA ICONS (request 4):
+- Regenerated ALL PWA icons from the new logo.png using sharp:
+  - icon-192.png, icon-512.png (any purpose, white contain background)
+  - icon-maskable-192.png, icon-maskable-512.png (dark #0a0a0a background with logo centered in safe zone for platform masks)
+  - apple-touch-icon.png (180x180), favicon-32.png (32x32)
+- VLM-verified: maskable icon shows SIVAN VIP TAXI logo clearly on dark background.
+- manifest.json unchanged (already references these files); all icons HTTP 200.
+
+SCHEMA (foundation):
+- prisma/schema.prisma: User.phone changed from `String @unique` (required) to `String? @unique` (optional) so username-based registration works without a phone.
+- Testimonial model: added `userId String?` to link reviews to the logged-in user.
+- Ran `bun run db:push` — schema synced.
+
+AUTH (requests 1 & 2):
+- src/app/api/auth/register/route.ts: rewired to username-based. Schema: username (3-30 chars, alphanumeric + _ . -), fullName, password (min 4), phone/email optional. Checks username uniqueness, creates User + Passenger profile with referral code.
+- src/app/api/auth/login/route.ts: now looks up by `username` first, falls back to `phone` for legacy users. Updates lastLoginAt on success.
+- src/lib/store.ts: AuthUser now includes `username`. Added `authLogout()` (clears session), `userPanelOpen` + `setUserPanelOpen()` state. Fixed `closeAuth()` to preserve `auth.user` (the session) while clearing form fields — this was the bug that prevented the user panel from opening after registration.
+- src/components/sivan/AuthModal.tsx: registration form now has fullName + username + password (no phone field). After successful login OR registration, shows success state then opens the UserPanel.
+
+USER PANEL (request 2):
+- New component src/components/sivan/UserPanel.tsx: full-screen overlay (like AdminPanel) showing:
+  - Welcome banner with user's name + @username + inline edit-name feature
+  - 4 stat cards: total trips, rating, wallet balance, member-since date
+  - Account info section (username, full name, phone, email, referral code)
+  - Trip history (fetches from /api/user/trips, shows origin→dest, status, type, distance, date, fare, payment)
+  - Logout button
+- New APIs: src/app/api/user/profile/route.ts (GET+PATCH), src/app/api/user/trips/route.ts (GET)
+- Added UserPanel to src/app/page.tsx.
+- src/components/sivan/Navbar.tsx: when auth.user is set, the ثبت‌نام/ورود buttons are replaced with a single "پنل کاربری" button (desktop + mobile) that opens the UserPanel.
+
+REVIEWS (request 3):
+- src/app/api/testimonials/route.ts: added POST endpoint. Accepts userId, fullName, rating (1-5), comment (min 10 chars), tripRoute (optional). Verifies user exists, creates Testimonial with isApproved=true (auto-approved, admin can moderate later), linked userId.
+- src/components/sivan/TestimonialsSection.tsx: added "ثبت نظر" button in the section header. Behavior:
+  - Logged-in user: opens ReviewFormModal (Dialog) with star rating selector, trip route input, comment textarea. Submits to POST /api/testimonials, refreshes the carousel on success.
+  - Not logged in: shows toast "برای ثبت نظر، ابتدا وارد حساب کاربری خود شوید" and opens the login modal.
+  - User-submitted reviews appear at the top of the carousel (DB reviews sorted newest-first, merged with static fallback).
+
+Verification (Agent Browser + VLM):
+- PWA: all 6 icons HTTP 200; maskable icon VLM-confirmed showing SIVAN VIP TAXI logo on dark bg.
+- Registration: filled fullName + username "sivan_test1" + password -> success toast -> navbar changed from ثبت‌نام/ورود to "پنل کاربری" button.
+- User panel: clicking "پنل کاربری" opens full-screen overlay. VLM confirmed: "پنل کاربری" title, @sivan_test1 username, full name, 4 stat cards, account info section. Profile API + trips API both return 200.
+- Review submission: logged-in user sees "ثبت نظر شما" button; clicking opens review form with 5-star selector + trip route + comment. Submitted 5-star review "سفر بسیار راحت و تمیزی بود..." -> POST /api/testimonials 200 -> DB confirmed (name=کاربر تست سوان, rating=5, userId linked, isApproved=true) -> review appeared in carousel after reload.
+- Login-gating: non-logged-in user sees "برای ثبت نظر وارد شوید" button which prompts login.
+- Lint: clean. Dev log: all API calls 200, no errors.
+- Cleaned up test user + review after verification.
+
+Stage Summary:
+- Registration is now username+password based (no phone required).
+- After register/login, a full UserPanel dashboard opens showing profile, stats, account info, and trip history.
+- Real review system: logged-in passengers submit reviews (star rating + comment + optional route) that appear in the testimonials carousel; guests are prompted to login.
+- All PWA install icons (192/512, maskable, apple-touch, favicon) now use the new SIVAN VIP TAXI logo.

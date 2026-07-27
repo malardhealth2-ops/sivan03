@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Phone, Menu, X, ChevronDown } from 'lucide-react';
+import { Phone, Menu, X, ChevronDown, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { useAppStore } from '@/lib/store';
@@ -23,7 +23,7 @@ const navLinks: NavLink[] = [
 ];
 
 export function Navbar() {
-  const { openAuth, mobileMenuOpen, setMobileMenuOpen, setAdminOpen } = useAppStore();
+  const { openAuth, mobileMenuOpen, setMobileMenuOpen, setAdminOpen, auth, setUserPanelOpen } = useAppStore();
   const pathname = usePathname();
   const isHome = pathname === '/';
   const [scrolled, setScrolled] = useState(false);
@@ -132,19 +132,32 @@ export function Navbar() {
                 <Phone className="h-4 w-4" />
                 <span className="hidden md:inline" dir="ltr">0910-941-9743</span>
               </a>
-              <Button
-                variant="ghost"
-                onClick={() => openAuth('register')}
-                className="text-[#a1a1aa] hover:text-[#D4AF37] hover:bg-[#D4AF37]/5 font-medium rounded-lg px-3 h-9 text-sm"
-              >
-                ثبت‌نام
-              </Button>
-              <Button
-                onClick={() => openAuth('login')}
-                className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-medium rounded-lg px-4 h-9 text-sm"
-              >
-                ورود
-              </Button>
+              {auth.user ? (
+                <Button
+                  onClick={() => setUserPanelOpen(true)}
+                  className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-medium rounded-lg px-4 h-9 text-sm flex items-center gap-1.5"
+                >
+                  <UserCircle className="h-4 w-4" />
+                  <span className="hidden md:inline">پنل کاربری</span>
+                  <span className="md:hidden">حساب</span>
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    onClick={() => openAuth('register')}
+                    className="text-[#a1a1aa] hover:text-[#D4AF37] hover:bg-[#D4AF37]/5 font-medium rounded-lg px-3 h-9 text-sm"
+                  >
+                    ثبت‌نام
+                  </Button>
+                  <Button
+                    onClick={() => openAuth('login')}
+                    className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-medium rounded-lg px-4 h-9 text-sm"
+                  >
+                    ورود
+                  </Button>
+                </>
+              )}
             </div>
 
             {/* Mobile Menu Button */}
@@ -200,23 +213,37 @@ export function Navbar() {
               <Phone className="h-4 w-4" />
               0936-881-6807
             </a>
-            <SheetClose asChild>
-              <Button
-                onClick={() => { setMobileMenuOpen(false); openAuth('register'); }}
-                variant="outline"
-                className="border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] font-medium mx-4 mt-2"
-              >
-                ثبت‌نام
-              </Button>
-            </SheetClose>
-            <SheetClose asChild>
-              <Button
-                onClick={() => { setMobileMenuOpen(false); openAuth('login'); }}
-                className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-medium mx-4 mt-2"
-              >
-                ورود
-              </Button>
-            </SheetClose>
+            {auth.user ? (
+              <SheetClose asChild>
+                <Button
+                  onClick={() => { setMobileMenuOpen(false); setUserPanelOpen(true); }}
+                  className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-medium mx-4 mt-2 flex items-center gap-1.5"
+                >
+                  <UserCircle className="h-4 w-4" />
+                  پنل کاربری
+                </Button>
+              </SheetClose>
+            ) : (
+              <>
+                <SheetClose asChild>
+                  <Button
+                    onClick={() => { setMobileMenuOpen(false); openAuth('register'); }}
+                    variant="outline"
+                    className="border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] font-medium mx-4 mt-2"
+                  >
+                    ثبت‌نام
+                  </Button>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Button
+                    onClick={() => { setMobileMenuOpen(false); openAuth('login'); }}
+                    className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-medium mx-4 mt-2"
+                  >
+                    ورود
+                  </Button>
+                </SheetClose>
+              </>
+            )}
           </div>
         </SheetContent>
       </Sheet>

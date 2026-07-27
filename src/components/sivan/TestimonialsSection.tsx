@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { Star, Quote } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Star, Quote, PenLine, X, Loader2, LogIn } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Carousel,
@@ -12,7 +12,20 @@ import {
   CarouselNext,
   type CarouselApi,
 } from '@/components/ui/carousel';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/lib/store';
+import { toast } from 'sonner';
 
 type StaticTestimonial = {
   id: number;
@@ -179,6 +192,7 @@ function RatingStars({ rating }: { rating: number }) {
 }
 
 export function TestimonialsSection() {
+  const { auth, openAuth } = useAppStore();
   const [api, setApiState] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   const [count, setCount] = useState(0);
@@ -187,6 +201,7 @@ export function TestimonialsSection() {
     staticTestimonials
   );
   const pauseRef = useRef(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {
     pauseRef.current = paused;
@@ -249,6 +264,17 @@ export function TestimonialsSection() {
     return () => clearInterval(interval);
   }, [api]);
 
+  const refreshTestimonials = useCallback(() => {
+    fetch('/api/testimonials')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: DbTestimonial[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setTestimonials([...data.map(normalizeDbItem), ...staticTestimonials]);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <section className="py-20 sm:py-24 bg-[#0a0a0a] relative">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-gradient-to-l from-transparent via-[#D4AF37] to-transparent rounded-full" />
@@ -267,6 +293,20 @@ export function TestimonialsSection() {
           <p className="text-[#a1a1aa] max-w-2xl mx-auto">
             ببینید مسافران ما درباره سفر با سیوان چه می‌گویند
           </p>
+          <Button
+            onClick={() => {
+              if (auth.user) {
+                setReviewOpen(true);
+              } else {
+                toast.info('برای ثبت نظر، ابتدا وارد حساب کاربری خود شوید');
+                openAuth('login');
+              }
+            }}
+            className="mt-5 bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-medium rounded-lg px-5 h-10 text-sm inline-flex items-center gap-2"
+          >
+            <PenLine className="h-4 w-4" />
+            {auth.user ? 'ثبت نظر شما' : 'برای ثبت نظر وارد شوید'}
+          </Button>
         </motion.div>
 
         <motion.div
@@ -387,6 +427,165 @@ export function TestimonialsSection() {
           ))}
         </motion.div>
       </div>
+
+      {/* Review submission modal — only logged-in passengers can submit */}
+      <ReviewFormModal
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        user={auth.user}
+        onSubmitted={refreshTestimonials}
+      />
     </section>
+  );
+}
+
+function ReviewFormModal({
+  open,
+  onOpenChange,
+  user,
+  onSubmitted,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  user: { id: string; fullName: string; username: string } | null;
+  onSubmitted: () => void;
+}) {
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [tripRoute, setTripRoute] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const reset = () => {
+    setRating(5);
+    setComment('');
+    setTripRoute('');
+    setError('');
+  };
+
+  const handleSubmit = async () => {
+    if (!user) return;
+    if (comment.trim().length < 10) {
+      setError('حداقل ۱۰ کاراکتر بنویسید');
+      return;
+    }
+    setError('');
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/testimonials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          fullName: user.fullName,
+          rating,
+          comment: comment.trim(),
+          tripRoute: tripRoute.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'خطا در ثبت نظر');
+        setSubmitting(false);
+        return;
+      }
+      toast.success('نظر شما با موفقیت ثبت شد. ممنون از همراهی شما!');
+      reset();
+      onOpenChange(false);
+      onSubmitted();
+    } catch {
+      setError('خطا در ارتباط با سرور');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
+      <DialogContent className="bg-[#1a1a1a] border-[#333] max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-right text-[#fafafa]">ثبت نظر شما</DialogTitle>
+          <DialogDescription className="text-right text-[#a1a1aa]">
+            تجربه سفر خود را با سایر مسافران به اشتراک بگذارید
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 mt-2">
+          {/* Rating */}
+          <div className="space-y-2">
+            <Label className="text-[#fafafa] text-sm">امتیاز شما</Label>
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setRating(i + 1)}
+                  className="p-1 hover:scale-110 transition-transform"
+                  aria-label={`امتیاز ${i + 1} ستاره`}
+                >
+                  <Star
+                    className={cn(
+                      'h-7 w-7 transition-colors',
+                      i < rating ? 'text-[#D4AF37] fill-[#D4AF37]' : 'text-[#333]'
+                    )}
+                  />
+                </button>
+              ))}
+              <span className="text-[#D4AF37] text-sm font-bold mr-2">
+                {rating} از ۵
+              </span>
+            </div>
+          </div>
+
+          {/* Trip route (optional) */}
+          <div className="space-y-2">
+            <Label className="text-[#fafafa] text-sm">
+              مسیر سفر <span className="text-[#888] text-xs">(اختیاری)</span>
+            </Label>
+            <Input
+              placeholder="مثال: تهران → اصفهان"
+              value={tripRoute}
+              onChange={(e) => setTripRoute(e.target.value)}
+              className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11"
+              maxLength={100}
+            />
+          </div>
+
+          {/* Comment */}
+          <div className="space-y-2">
+            <Label className="text-[#fafafa] text-sm">متن نظر</Label>
+            <Textarea
+              placeholder="تجربه سفر خود را بنویسید (حداقل ۱۰ کاراکتر)..."
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] min-h-[100px] resize-none"
+              maxLength={500}
+            />
+            <div className="text-left text-[10px] text-[#666]">{comment.length} / ۵۰۰</div>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-xs text-[#a1a1aa] pt-1">
+            <span>ثبت شده به نام: {user?.fullName}</span>
+          </div>
+
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || comment.trim().length < 10}
+            className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-11 font-medium"
+          >
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              'ثبت نظر'
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

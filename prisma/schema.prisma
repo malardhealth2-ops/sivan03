@@ -10,7 +10,7 @@ datasource db {
 model User {
   id        String   @id @default(cuid())
   username  String   @unique @default("")
-  phone     String   @unique
+  phone     String?  @unique
   email     String?  @unique
   password  String?
   fullName  String   @default("")
@@ -384,6 +384,7 @@ model Testimonial {
   comment   String
   tripRoute String?
   isApproved Boolean @default(true)
+  userId    String?  // linked user when submitted by a logged-in passenger
   createdAt DateTime @default(now())
 }
 

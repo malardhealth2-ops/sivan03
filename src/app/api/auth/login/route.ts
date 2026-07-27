@@ -17,15 +17,28 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check database for user
-    const user = await db.user.findUnique({
-      where: { phone: username },
-    });
+    // Look up by username first (primary registration method), fall back to
+    // phone for any legacy users who registered with phone-only.
+    let user = await db.user.findUnique({ where: { username } });
+    if (!user) {
+      user = await db.user.findUnique({ where: { phone: username } });
+    }
 
     if (user && user.password && user.password === password) {
+      // Update lastLoginAt
+      try {
+        await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+      } catch {
+        /* best-effort */
+      }
       return NextResponse.json({
         success: true,
-        user: { id: user.id, fullName: user.fullName, username: user.phone, role: user.role },
+        user: {
+          id: user.id,
+          fullName: user.fullName,
+          username: user.username || user.phone,
+          role: user.role,
+        },
       });
     }
 

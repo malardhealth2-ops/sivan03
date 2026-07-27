@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Lock, Shield, Loader2, Check, Eye, EyeOff, AlertTriangle, Phone, UserPlus, LogIn } from 'lucide-react';
+import { User, Lock, Loader2, Check, Eye, EyeOff, AlertTriangle, UserPlus, LogIn, Shield } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -23,12 +23,12 @@ export function AuthModal() {
     setAuthUsername,
     setAuthPassword,
     setAuthFullName,
-    setAuthPhone,
     setAuthVerified,
     setAuthUser,
     adminLogin,
     setAdminOpen,
     openAuth,
+    setUserPanelOpen,
   } = useAppStore();
 
   const [showPass, setShowPass] = useState(false);
@@ -60,10 +60,9 @@ export function AuthModal() {
         return;
       }
 
-      // Store user info in auth state
       setAuthUser(data.user || null);
 
-      // If the logged-in user is an admin, open the admin panel instead of the welcome screen
+      // Admin -> open admin panel
       if (data.user?.role === 'admin') {
         adminLogin(auth.username, auth.password);
         setAdminOpen(true);
@@ -72,9 +71,15 @@ export function AuthModal() {
         return;
       }
 
+      // Passenger -> verified + open the user panel dashboard
       setAuthVerified(true);
       setLoading(false);
       toast.success(`خوش آمدید، ${data.user?.fullName || 'کاربر'} عزیز`);
+      // Small delay so the success state is visible before opening the panel
+      setTimeout(() => {
+        closeAuth();
+        setUserPanelOpen(true);
+      }, 900);
     } catch {
       setLocalError('خطا در ارتباط با سرور');
       setLoading(false);
@@ -82,10 +87,13 @@ export function AuthModal() {
   };
 
   const handleRegister = async () => {
-    // Validate phone (Iranian mobile: 09XXXXXXXXX)
-    const phone = auth.phone.trim();
-    if (!/^09[0-9]{9}$/.test(phone)) {
-      setLocalError('شماره موبایل معتبر وارد کنید (۰۹XXXXXXXXX)');
+    const username = auth.username.trim();
+    if (username.length < 3) {
+      setLocalError('نام کاربری باید حداقل ۳ کاراکتر باشد');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_.-]+$/.test(username)) {
+      setLocalError('نام کاربری فقط می‌تواند شامل حروف انگلیسی، اعداد و _ . - باشد');
       return;
     }
     if (!auth.fullName.trim() || auth.fullName.trim().length < 2) {
@@ -104,10 +112,9 @@ export function AuthModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone,
+          username,
           fullName: auth.fullName.trim(),
           password: auth.password,
-          role: 'passenger',
         }),
       });
 
@@ -119,15 +126,21 @@ export function AuthModal() {
         return;
       }
 
-      // Auto-login the newly registered passenger so they don't have to log in again.
+      // Auto-login the newly registered passenger
       setAuthUser({
         id: data.user.id,
+        username: data.user.username,
         fullName: data.user.fullName,
         role: data.user.role,
       });
       setAuthVerified(true);
       setLoading(false);
       toast.success(`ثبت‌نام موفق بود! خوش آمدید، ${data.user.fullName} عزیز`);
+      // Open the user panel dashboard after a brief success state
+      setTimeout(() => {
+        closeAuth();
+        setUserPanelOpen(true);
+      }, 900);
     } catch {
       setLocalError('خطا در ارتباط با سرور');
       setLoading(false);
@@ -153,7 +166,7 @@ export function AuthModal() {
   };
 
   const canSubmit = isRegister
-    ? auth.phone.trim().length > 0 && auth.fullName.trim().length >= 2 && auth.password.length >= 4
+    ? auth.username.trim().length >= 3 && auth.fullName.trim().length >= 2 && auth.password.length >= 4
     : auth.username.length > 0 && auth.password.length > 0;
 
   return (
@@ -191,12 +204,7 @@ export function AuthModal() {
                 <p className="text-[#fafafa] font-medium">
                   {auth.user?.fullName ? `${auth.user.fullName} عزیز، خوش آمدید!` : 'خوش آمدید!'}
                 </p>
-                <Button
-                  onClick={resetAndClose}
-                  className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B]"
-                >
-                  شروع سفر
-                </Button>
+                <p className="text-[#a1a1aa] text-xs">در حال ورود به پنل کاربری...</p>
               </motion.div>
             ) : (
               <motion.div
@@ -233,42 +241,21 @@ export function AuthModal() {
                   </div>
                 )}
 
-                {isRegister && (
-                  <div className="space-y-2">
-                    <Label className="text-[#fafafa] text-sm">
-                      <Phone className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />
-                      شماره موبایل
-                    </Label>
-                    <Input
-                      placeholder="09123456789"
-                      value={auth.phone}
-                      onChange={(e) => setAuthPhone(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                      className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
-                      dir="ltr"
-                      inputMode="tel"
-                      maxLength={11}
-                    />
-                  </div>
-                )}
-
-                {!isRegister && (
-                  <div className="space-y-2">
-                    <Label className="text-[#fafafa] text-sm">
-                      <User className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />
-                      نام کاربری (شماره موبایل)
-                    </Label>
-                    <Input
-                      placeholder="نام کاربری یا شماره موبایل"
-                      value={auth.username}
-                      onChange={(e) => setAuthUsername(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                      className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
-                      dir="ltr"
-                      autoFocus
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label className="text-[#fafafa] text-sm">
+                    <User className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />
+                    نام کاربری
+                  </Label>
+                  <Input
+                    placeholder={isRegister ? 'مثال: ali_rezaei' : 'نام کاربری خود را وارد کنید'}
+                    value={auth.username}
+                    onChange={(e) => setAuthUsername(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
+                    dir="ltr"
+                    autoFocus={!isRegister}
+                  />
+                </div>
 
                 <div className="space-y-2">
                   <Label className="text-[#fafafa] text-sm">

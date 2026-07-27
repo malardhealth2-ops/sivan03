@@ -41,6 +41,7 @@ interface BookingState {
 
 interface AuthUser {
   id: string;
+  username: string;
   fullName: string;
   role: string;
 }
@@ -92,6 +93,11 @@ interface AppState {
   setAuthError: (error: string) => void;
   setAuthUser: (user: AuthUser | null) => void;
   setAuthVerified: (val: boolean) => void;
+  authLogout: () => void;
+
+  // User panel (passenger dashboard overlay)
+  userPanelOpen: boolean;
+  setUserPanelOpen: (open: boolean) => void;
 
   // Admin panel
   admin: AdminState;
@@ -153,7 +159,7 @@ export const useAppStore = create<AppState>((set) => ({
   // Auth
   auth: { isOpen: false, mode: 'login', username: '', password: '', fullName: '', phone: '', error: '', user: null, isVerified: false },
   openAuth: (mode) => set((s) => ({ auth: { ...s.auth, isOpen: true, mode, error: '' } })),
-  closeAuth: () => set((s) => ({ auth: { ...s.auth, isOpen: false, username: '', password: '', fullName: '', phone: '', error: '', user: null, isVerified: false } })),
+  closeAuth: () => set((s) => ({ auth: { ...s.auth, isOpen: false, username: '', password: '', fullName: '', phone: '', error: '', isVerified: false } })),
   setAuthUsername: (username) => set((s) => ({ auth: { ...s.auth, username } })),
   setAuthPassword: (password) => set((s) => ({ auth: { ...s.auth, password } })),
   setAuthFullName: (fullName) => set((s) => ({ auth: { ...s.auth, fullName } })),
@@ -161,6 +167,11 @@ export const useAppStore = create<AppState>((set) => ({
   setAuthError: (error) => set((s) => ({ auth: { ...s.auth, error } })),
   setAuthUser: (user) => set((s) => ({ auth: { ...s.auth, user } })),
   setAuthVerified: (val) => set((s) => ({ auth: { ...s.auth, isVerified: val } })),
+  authLogout: () => set((s) => ({ auth: { ...s.auth, isOpen: false, username: '', password: '', fullName: '', phone: '', error: '', user: null, isVerified: false }, userPanelOpen: false })),
+
+  // User panel
+  userPanelOpen: false,
+  setUserPanelOpen: (open) => set({ userPanelOpen: open }),
 
   // Admin
   admin: {
