@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Calendar, ArrowLeft, Clock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { formatJalaaliDate, toPersianDigits } from '@/lib/jalaali';
 import { BlogPostModal } from './BlogPostModal';
 
@@ -197,11 +197,15 @@ export function BlogPreview() {
             viewport={{ once: true, margin: '-100px' }}
             className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8"
           >
-            {posts.map((post) => (
-              <motion.div key={post.isStatic ? `static-${post.id}` : post.id} variants={itemVariants}>
+            {posts.map((post) => {
+              // API posts have a real dedicated SEO page at /blog/{slug}.
+              // Render them as a real <a href> so Google can crawl & index.
+              // Static fallback posts (no slug) still open the modal.
+              const hasDedicatedPage = !post.isStatic && !!post.slug;
+              const cardContent = (
                 <Card
-                  className="bg-[#1a1a1a] border-[#333] hover:border-[#D4AF37]/30 card-gold-glow group overflow-hidden h-full cursor-pointer"
-                  onClick={() => handlePostClick(post)}
+                  className={`bg-[#1a1a1a] border-[#333] hover:border-[#D4AF37]/30 card-gold-glow group overflow-hidden h-full ${hasDedicatedPage ? '' : 'cursor-pointer'}`}
+                  onClick={hasDedicatedPage ? undefined : () => handlePostClick(post)}
                 >
                   {/* Image */}
                   <div className="relative h-48 overflow-hidden bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d]">
@@ -209,6 +213,7 @@ export function BlogPreview() {
                       src={getPostImage(post)}
                       alt={post.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      loading="lazy"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] to-transparent" />
                     {getPostCategory(post) && (
@@ -237,28 +242,47 @@ export function BlogPreview() {
                           {getPostReadTime(post)}
                         </span>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-[#D4AF37] hover:bg-[#D4AF37]/10 p-0 h-auto"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePostClick(post);
-                        }}
+                      <span
+                        className="inline-flex items-center text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-md px-2 py-1 text-sm transition-colors"
                       >
                         ادامه مطلب
                         <ArrowLeft className="h-3.5 w-3.5 mr-1" />
-                      </Button>
+                      </span>
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
-            ))}
+              );
+
+              return (
+                <motion.div key={post.isStatic ? `static-${post.id}` : post.id} variants={itemVariants}>
+                  {hasDedicatedPage ? (
+                    <Link href={`/blog/${post.slug}`} className="block h-full" aria-label={post.title} title={post.title}>
+                      {cardContent}
+                    </Link>
+                  ) : (
+                    cardContent
+                  )}
+                </motion.div>
+              );
+            })}
           </motion.div>
+        )}
+
+        {/* "View all articles" link — gives Google another crawl path to /blog */}
+        {!loading && posts.some((p) => !p.isStatic && p.slug) && (
+          <div className="flex justify-center mt-10 sm:mt-14">
+            <Link
+              href="/blog"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#0a0a0a] transition-colors text-sm font-medium"
+            >
+              مشاهده همه مقالات
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </div>
         )}
       </div>
 
-      {/* Blog Post Modal */}
+      {/* Blog Post Modal (only used for static fallback posts without a dedicated page) */}
       <BlogPostModal
         open={modalOpen}
         onClose={() => {

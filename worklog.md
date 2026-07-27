@@ -774,3 +774,123 @@ Stage Summary:
 - LLM system prompt updated to embrace the diverse scope and write in the right tone per category.
 - Verified 2 new posts generated correctly (tourism + luxury-cars) with proper SEO structure, AI cover images, and justified text in the modal.
 - Files changed: mini-services/blog-generator/index.ts (TOPICS expansion, CATEGORY_ORDER rotation, COVER_SCENES per-category, generateCoverImage signature, system prompt).
+
+---
+Task ID: 18
+Agent: full-stack-developer
+Task: SEO infrastructure — make blog articles indexable by Google (SSR blog pages, sitemap, robots, JSON-LD, Open Graph)
+
+Work Log:
+- Read worklog.md and reviewed prior work (Tasks 1–17). Studied existing infrastructure: BlogPost Prisma model, db.ts singleton, jalaali.ts helpers, layout.tsx, Navbar/Footer components, /api/blog routes, BlogPreview modal component.
+- Inspected DB: 7 published BlogPosts (Persian slugs, some with ZWNJ). SiteSettings.siteUrl = "https://sivantaxi.com".
+- Created src/lib/site-url.ts:
+  * `getSiteUrl()` async helper reading siteUrl from SiteSettings DB row (id='main'), with module-level cache + in-flight promise dedup. Falls back to DEFAULT_SITE_URL ('https://sivantaxi.com') on any error.
+  * `absoluteUrl(path)` builds absolute URL from a relative path using getSiteUrl() as base.
+- Created src/app/blog/page.tsx (SSR Server Component):
+  * Exports `metadata` (title "بلاگ سیوان | مقالات سفر و گردشگری", description, keywords, canonical /blog, OG, robots index,follow).
+  * Fetches 24 latest published posts via db.blogPost.findMany with category + author includes.
+  * Hero header with "بازگشت به خانه" link, gold-accent badge "مجله سفر سیوان", h1 "بلاگ سیوان".
+  * Responsive grid: 1 col mobile / 2 cols sm / 3 cols lg. Each card is a real `<a href="/blog/{slug}">` (via Next.js Link, prefetch=false) so Googlebot can crawl.
+  * Card shows: cover image with `alt=title`, h2 title (line-clamp-2), excerpt (line-clamp-3), Jalali date in `<time dateTime=ISO>`, read-time estimate, category badge.
+  * Empty state when no posts. Back-to-home CTA at bottom.
+  * Dark theme: bg-[#0a0a0a], cards bg-[#1a1a1a] border-[#333] hover:border-[#D4AF37]/30.
+- Created src/app/blog/[slug]/page.tsx (SSR Server Component):
+  * `generateStaticParams()` returns all published post slugs (for build-time pre-rendering).
+  * `generateMetadata({ params })` returns full Metadata per post: title, description (excerpt or stripped content first 155 chars), keywords (parsed tags + base keywords), canonical `/blog/{slug}`, openGraph (article type, absolute URL, image 1200x630 with alt, publishedTime, authors, siteName, fa_IR locale), twitter (summary_large_image card with image), robots index,follow.
+  * Page component:
+    - Awaits `params` (Next.js 16 async params).
+    - `getPost(slug)` does a read-only findUnique (no viewCount increment). Critical fix: normalises the slug via `decodeURIComponent` when it still contains `%` — Next.js 16 / Turbopack passes non-ASCII dynamic-route params percent-encoded in dev, which would otherwise fail the DB lookup and 404 every Persian-slug page.
+    - `notFound()` if post missing or not published.
+    - Reads `user-agent` from `headers()` (Next.js 16 async). If matches bot pattern (googlebot|bingbot|slurp|duckduckbot|facebot|facebookexternalhit|twitterbot|linkedinbot|semrushbot|ahrefsbot|crawler|spider|bot), SKIPS the viewCount increment so crawlers don't inflate counts. Real visitors still increment views.
+    - Renders `<article>` with: breadcrumb `<nav>` (Home > Blog > Title), category badge, h1 title, excerpt sub-headline, meta row (author avatar circle, Jalali published date in `<time>`, read time, view count with Eye icon).
+    - Cover image (responsive, alt=title) if featuredImageUrl present.
+    - Content via `dangerouslySetInnerHTML` in a prose-styled div with text-justify + Tailwind arbitrary variants: `text-justify [&_p]:text-justify [&_p]:my-3 [&_p]:leading-8 [&_h2]:text-[#fafafa] [&_h2]:mt-8 [&_h3]:text-[#D4AF37] [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-r-4 [&_blockquote]:border-[#D4AF37]/60 [&_a]:text-[#D4AF37] [&_img]:rounded-lg [&_strong]:text-[#fafafa]`.
+    - Tags section (parsed from JSON) as gold badges.
+    - CTA box: "برای رزرو سفر لوکس با سیوان تماس بگیرید" with two phone `<a href="tel:...">` links (gold solid + gold outline).
+    - "مقالات مرتبط" section: fetches 3 other recent published posts (excluding current) and shows small linked cards with cover image, title, Jalali date.
+    - Two JSON-LD `<script type="application/ld+json">` blocks: Article schema (headline, description, image absolute URL, datePublished, dateModified, author=Organization, publisher=Organization with logo ImageObject, mainEntityOfPage, keywords, articleSection) + BreadcrumbList schema (3 items: Home / Blog / Title).
+  - Wrapped in site Navbar + Footer.
+- Created src/app/sitemap.ts (MetadataRoute.Sitemap):
+  * Fetches siteUrl via getSiteUrl() (async).
+  * Returns entries: home (priority 1.0, daily), /blog (0.9, hourly), /#services /#fleet /#routes /#contact (0.5–0.6), and one entry per published post using updatedAt as lastModified (0.8, weekly).
+  * DB-failure resilient — still returns the static entries if the query errors.
+- Created src/app/robots.ts (MetadataRoute.Robots):
+  * Allows all user-agents on /, disallows /api/ and /admin/.
+  * Explicit Googlebot + Bingbot rules.
+  * `host: siteUrl`, `sitemap: ${siteUrl}/sitemap.xml`.
+- Removed public/robots.txt (via `rm -f`) — Next.js serves the dynamic one from app/robots.ts, but a static public/robots.txt would take precedence.
+- Bug found and fixed during verification:
+  * Initial curl tests on /blog/{persian-slug} returned 404 despite the slug existing in DB. Debug logging showed Next.js 16 was passing the percent-encoded form (e.g. "%D8%B3%D9%81%D8%B1-...") to the page component's params.slug, not the decoded UTF-8 string. The DB lookup then failed because the stored slug is the decoded form.
+  * Fixed by normalising the slug inside getPost(): `if (slug.includes('%')) slug = decodeURIComponent(slug)` before the findUnique. Same path is used by generateMetadata so OG/canonical URLs are correct.
+  * Verified both with simple ASCII-free slugs and slugs containing ZWNJ (U+200C, %E2%80%8C) — all return 200.
+- Verification (curl):
+  * `GET /blog` → 200, 183 KB, contains `<title>بلاگ سیوان | مقالات سفر و گردشگری</title>`, h1 "بلاگ سیوان", and 7 real `<a href="/blog/{slug}">` links to all published posts.
+  * `GET /sitemap.xml` → 200, valid XML, contains home + /blog + 4 anchor entries + 7 post URLs with correct priorities and lastModified dates.
+  * `GET /robots.txt` → 200, dynamic output with Allow:/, Disallow:/api/ and /admin/, Host and Sitemap pointers.
+  * `GET /blog/سفر-امن-و-آسوده-مقایسه-ایمنی-خودروی-شخصی-و-تاکسی-VIP-1llkr1` → 200, 154 KB, contains `<title>سفر امن و آسوده: مقایسه ایمنی خودروی شخصی و تاکسی VIP</title>`, `<h1>` with the post title, 2 JSON-LD scripts (Article + BreadcrumbList), full OG article meta (og:type=article, og:image absolute URL 1200x630, og:locale=fa_IR), twitter:card=summary_large_image, canonical link, tel: links, "مقالات مرتبط" section with 3 related post links, content rendered via dangerouslySetInnerHTML (NOT a loading spinner — pure SSR).
+  * `GET /blog/this-slug-does-not-exist-xyz123` → 404 (notFound() triggered properly).
+  * `GET /blog/{slug}` with `User-Agent: Googlebot/2.1` → 200, viewCount NOT incremented (verified by querying DB before/after).
+- Lint: `bun run lint` passes with 0 errors and 0 warnings (auto-fixed 3 unused eslint-disable directives via --fix).
+- Dev server log: no compile errors. All routes return expected status codes.
+
+Stage Summary:
+- Blog articles are now fully indexable by Google and other search engines via dedicated SSR pages at /blog (listing) and /blog/{slug} (article). No more modal-only access.
+- Complete SEO infrastructure delivered: SSR HTML with article content (no JS required to read), per-post Metadata (title, description, keywords, canonical, OG article, Twitter card), JSON-LD Article + BreadcrumbList structured data for rich results, dynamic sitemap.xml covering all published posts, dynamic robots.txt pointing to sitemap.
+- Internal link graph created: blog listing → posts → related posts → back to blog (3+ hops of internal linking Google loves).
+- Bot-aware view counting: Googlebot/Bingbot/etc. fetches don't inflate viewCount.
+- Files created: src/lib/site-url.ts, src/app/blog/page.tsx, src/app/blog/[slug]/page.tsx, src/app/sitemap.ts, src/app/robots.ts.
+- File removed: public/robots.txt (replaced by dynamic app/robots.ts).
+- Sample post tested: slug "سفر-امن-و-آسوده-مقایسه-ایمنی-خودروی-شخصی-و-تاکسی-VIP-1llkr1" — title "سفر امن و آسوده: مقایسه ایمنی خودروی شخصی و تاکسی VIP".
+
+---
+Task ID: 19
+Agent: main
+Task: Make AI blog articles indexable by Google and other search engines (SSR pages, sitemap, robots, JSON-LD, crawlable links)
+
+Work Log:
+- Audited existing SEO infrastructure: blog posts only opened in a modal (Google can't index modals), no sitemap.xml, static robots.txt without sitemap pointer, no per-post meta tags, no JSON-LD structured data.
+- Delegated heavy SEO infrastructure build to full-stack-developer subagent (Task 18), which created:
+  - `src/lib/site-url.ts` — getSiteUrl()/absoluteUrl() helpers reading SiteSettings.siteUrl from DB (fallback https://sivantaxi.com)
+  - `src/app/blog/page.tsx` — SSR blog listing (Server Component): fetches 24 published posts, renders responsive grid of real <a href> cards, exports metadata
+  - `src/app/blog/[slug]/page.tsx` — SSR individual post page:
+    * generateStaticParams() for all published slugs
+    * generateMetadata() per post: title, description, keywords, canonical, OG article (image 1200x630, fa_IR locale), Twitter summary_large_image, robots index/follow
+    * Reads user-agent via headers() and SKIPS viewCount increment for bots (Googlebot/Bingbot/etc.) — real visitors still count
+    * Renders <article> with breadcrumb nav, h1, meta row, cover image, justified prose content, tags, related-posts section, CTA box
+    * Injects 2 JSON-LD <script> blocks: Article schema (headline/description/image/datePublished/dateModified/author/publisher/mainEntityOfPage/keywords) + BreadcrumbList schema
+  - `src/app/sitemap.ts` — dynamic MetadataRoute.Sitemap: home + /blog + section anchors + 1 entry per published post (priority 0.8, weekly, updatedAt)
+  - `src/app/robots.ts` — dynamic MetadataRoute.Robots: allow all, disallow /api/ and /admin/, explicit Googlebot/Bingbot rules, points to sitemap
+  - Removed `public/robots.txt` (static file would override dynamic app/robots.ts)
+  - Fixed Turbopack percent-encoding issue: dynamic route params.slug arrives percent-encoded for non-ASCII slugs, so added decodeURIComponent() normalization in getPost()
+- Updated `src/components/sivan/BlogPreview.tsx` (main agent):
+  - Added `import Link from 'next/link'`
+  - Rewrote card rendering: API posts (with slug) now render inside a real `<Link href="/blog/{slug}">` (crawlable <a> tag) instead of a div that only opens a modal. Static fallback posts (no slug) still use the modal.
+  - Replaced the inner Button with a styled span (since the whole card is now a link)
+  - Added `loading="lazy"` to card images for performance
+  - Added `aria-label` and `title` on the Link for accessibility
+  - Added "مشاهده همه مقالات" link button at the bottom of the blog section → links to /blog (another crawl path for Google)
+  - Removed unused Button import
+- Verified end-to-end via curl (server-rendered HTML that Googlebot sees):
+  * GET /blog/{slug} → 200, HTML contains: <title>, <meta description>, <link canonical>, <meta og:title>, <meta og:type=article>, <meta twitter:card=summary_large_image>, 2 JSON-LD scripts (Article + BreadcrumbList schemas), <h1> with post title, <article> element with full content
+  * GET /sitemap.xml → 200, valid XML with home + /blog + all posts + section anchors
+  * GET /robots.txt → 200, dynamic, points to sitemap, disallows /api/ and /admin/
+  * GET /blog/nonexistent → 404 (proper notFound())
+- Verified end-to-end via Agent Browser:
+  * Homepage blog section: 6 crawlable <a href="/blog/..."> links (3 post cards + view-all + 2 more)
+  * Clicked "مشاهده همه مقالات" → navigated to /blog, page title "بلاگ سیوان | مقالات سفر و گردشگری", h1 "بلاگ سیوان", 7 card links, 7 images all with alt
+  * Clicked a post card → navigated to /blog/{slug}, page title = post title
+  * Verified all SEO elements on post page: h1, article, cover img with alt, 9 paragraphs (textAlign=justify), 8 h2, 7 h3 (color=rgb(212,175,55)=gold), 2 breadcrumb links, 3 related-post internal links, 2 JSON-LD blocks, meta description, canonical, og:type=article, og:image, twitter:card=summary_large_image
+- Lint passes clean (0 errors). Dev server running cleanly on port 3000.
+
+Stage Summary:
+- Blog articles are now fully indexable by Google and other search engines:
+  1. Each post has a dedicated SSR page at /blog/{slug} (Google reads server-rendered HTML, not a modal)
+  2. generateMetadata() provides unique title/description/keywords/canonical/OG/Twitter per post
+  3. JSON-LD Article + BreadcrumbList schemas enable Google rich results
+  4. Homepage blog cards are real <a href> links (crawlable) + "view all" link to /blog
+  5. /blog listing page provides a full post index (another crawl hub)
+  6. Related-posts section on each post creates internal link graph
+  7. Dynamic /sitemap.xml lists all posts with priorities and lastmod
+  8. Dynamic /robots.txt points Googlebot to the sitemap
+  9. Bots don't inflate viewCount (user-agent detection)
+- Files changed: src/lib/site-url.ts (new), src/app/blog/page.tsx (new), src/app/blog/[slug]/page.tsx (new), src/app/sitemap.ts (new), src/app/robots.ts (new), public/robots.txt (deleted), src/components/sivan/BlogPreview.tsx (updated to use Link).
