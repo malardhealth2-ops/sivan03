@@ -940,3 +940,35 @@ Stage Summary:
 - Admin can now type any custom topic in the Blog panel and get an AI-generated SEO article on that exact topic (with cover image + derived SEO keyword + category-matched cover scene).
 - Custom generations are 100% independent of the 6-hour auto-rotation: they don't call pickTopic(), don't advance cycleIndex/categoryTopicIndex, and don't reset the setInterval timer. The next scheduled generation picks the correct next topic as if no custom generation happened.
 - Files changed: mini-services/blog-generator/index.ts (deriveKeyword, classifyTopic, generateArticle(customTopic?), POST /generate-custom endpoint), src/app/api/blog-generator/generate-custom/route.ts (new proxy), src/components/sivan/AdminPanel.tsx (Textarea import, PenLine icon, customTopic state, handleCustomGenerate, custom-topic UI section).
+
+---
+Task ID: blog-topic-specific-images
+Agent: main
+Task: Make AI-generated blog cover images specifically related to each article's actual topic (not just its broad category). User request: "باید عکس مقاله مرتبط با موضوع مقاله باشه"
+
+Work Log:
+- Reviewed existing blog-generator (mini-services/blog-generator/index.ts): cover images were picked from a FIXED category-based scene pool (COVER_SCENES), so a Hormuz-Island article would get a generic "Iranian tourism" scene, not a Hormuz-specific one.
+- Added new function `generateImagePrompt(title, topic)` that asks the LLM to produce ONE specific, English-language image prompt that visually depicts the article's ACTUAL subject (exact place, exact car model, exact concept). Includes:
+  - Category-specific style hint (automotive vs travel vs premium photography)
+  - Instruction to translate Persian place/car names to English equivalents (e.g. "Hormuz Island", "Mercedes-Benz E-Class")
+  - Hard rules: no text/watermark, no faces, photorealistic, 20-80 words
+  - Cleanup of model output (strip quotes, markdown fences, "Prompt:" prefixes)
+  - Length validation (15-600 chars) and guaranteed no-text suffix
+- Modified `generateCoverImage()` to try the LLM-generated topic-specific prompt FIRST, falling back to the category-based COVER_SCENES pool only if the LLM call fails or returns invalid output.
+- Added console logging of the chosen prompt for observability.
+- Applied to ALL articles (custom AND auto-scheduled), so every cover is now topically relevant.
+- Restarted via `bun --hot` (auto-reloaded). Service healthy on port 3005.
+
+Verification:
+- Triggered custom generation with topic "جاذبه‌های گردشگری جزیره هرمز و خاک سرخ آن".
+- Log confirmed topic-specific prompt: "A rugged 4x4 vehicle drives across the vibrant red soil of Hormuz Island, with the turquoise Persian Gulf and dramatic r…"
+- Article published: "سفر به رویایی سرخ؛ جاذبه‌های گردشگری جزیره هرمز خاک" with image /images/blog/...-2xhyxi.png (203KB).
+- VLM (glm-5v-turbo) analysis of the new image: "tan/beige Jeep Wrangler driving on a reddish-brown sandy beach... Yes, this appears to be related to Hormuz Island's red soil and the Persian Gulf... No visible text or watermark." ✓
+- BEFORE/AFTER comparison: older Qazvin "دولتخانه قزوین" article (pre-change) got a VLM verdict of "generic scenic road/highway, does not depict the Chehel Sotoun palace" — confirming the old approach was generic.
+- Agent Browser: blog listing page (/blog) renders 10 posts including the new Hormuz article at top; individual article page loads (200) with cover image 1344×768 and correct alt text; related-posts images also render.
+
+Stage Summary:
+- Blog cover images are now generated from a topic-specific LLM prompt (not a fixed category scene pool), so each cover visually matches its article's actual subject.
+- Applies to both custom-topic and auto-scheduled (6h) generations.
+- Robust fallback to category-based scene pool if LLM prompt generation fails.
+- Verified end-to-end via logs, VLM image analysis, and Agent Browser.

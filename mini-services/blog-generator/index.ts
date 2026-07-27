@@ -294,17 +294,91 @@ const COVER_SCENES: Record<TopicCategory, string[]> = {
   ],
 };
 
+// Ask the LLM to produce ONE specific, English-language image prompt that
+// visually represents the article's ACTUAL subject (not just its category).
+// This makes every cover image topically relevant — e.g. an article about
+// Hormuz Island gets a Hormuz-specific cover (red soil, rainbow mountains),
+// an article about a Mercedes E-Class gets a Mercedes-specific cover, etc.
+// Falls back to null on any failure so the caller uses the category scene pool.
+async function generateImagePrompt(title: string, topic: Topic): Promise<string | null> {
+  if (!zai) return null;
+  // A category-specific style hint so the model keeps the right "look".
+  const styleHint =
+    topic.category === 'luxury-cars' || topic.category === 'luxury-vs-economy'
+      ? 'professional automotive photography, moody cinematic lighting'
+      : topic.category === 'tourism'
+        ? 'professional travel photography, golden-hour cinematic lighting'
+        : topic.category === 'sivan-brand'
+          ? 'professional automotive photography, premium elegant cinematic lighting'
+          : 'professional travel photography, cinematic lighting';
+  try {
+    const completion = await zai.chat.completions.create({
+      messages: [
+        {
+          role: 'user',
+          content: `You are a professional art director for a luxury Persian travel & taxi blog. I will give you the title of a Persian article. Produce ONE single English sentence describing a striking, topic-specific cover photo that visually matches the article's ACTUAL subject.
+
+Rules (very important):
+- The image MUST visually depict the specific subject of the article (the exact place, exact car model, or exact concept) — NOT a generic scene.
+- Translate any Persian place/car name into its English equivalent so the image model understands it (e.g. "Hormuz Island", "Mercedes-Benz E-Class", "Tehran to Mashhad highway").
+- Photorealistic scene description only. No abstract art, no illustrations.
+- Absolutely NO text, words, letters, logos or watermark in the image.
+- Do NOT show clearly visible human faces.
+- Do NOT wrap the answer in quotes or markdown. Do NOT add any explanation or label. Output ONLY the one sentence.
+- Keep the sentence between 20 and 80 words.
+
+Article title (Persian): ${title}
+Article focus keyword (Persian): ${topic.keyword}
+
+End your sentence with exactly: ", ${styleHint}, high quality, no text, no watermark".
+
+Write the one-sentence English image prompt now:`,
+        },
+      ],
+      thinking: { type: 'disabled' },
+    });
+    const raw = (completion?.choices?.[0]?.message?.content || '').trim();
+    if (!raw) return null;
+    // Clean up any wrapping the model might add despite instructions.
+    const cleaned = raw
+      .replace(/^```[a-z]*\n?/i, '')
+      .replace(/\n?```$/i, '')
+      .replace(/^["'«]|["'»]$/g, '')
+      .replace(/^(prompt|image prompt|description|cover photo)\s*:\s*/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (cleaned.length < 15 || cleaned.length > 600) return null;
+    // Guarantee the quality/no-text suffix is present.
+    if (!/no text/i.test(cleaned)) {
+      return `${cleaned}, ${styleHint}, high quality, no text, no watermark`;
+    }
+    return cleaned;
+  } catch (err) {
+    console.error('[blog-generator] image-prompt LLM call failed:', err);
+    return null;
+  }
+}
+
 async function generateCoverImage(
   title: string,
   slug: string,
   topic: Topic
 ): Promise<string | null> {
   if (!zai) return null;
-  const scenes = COVER_SCENES[topic.category] || COVER_SCENES['travel-guide'];
-  const scene = scenes[Math.floor(Math.random() * scenes.length)];
+  // First, ask the LLM for a topic-specific image prompt so the cover actually
+  // matches the article's subject (not just its broad category).
+  let prompt = await generateImagePrompt(title, topic);
+  if (prompt) {
+    console.log(`[blog-generator] topic-specific image prompt: "${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}"`);
+  } else {
+    // Fallback: pick a generic scene from the category-aware pool.
+    const scenes = COVER_SCENES[topic.category] || COVER_SCENES['travel-guide'];
+    prompt = scenes[Math.floor(Math.random() * scenes.length)];
+    console.log(`[blog-generator] LLM prompt failed; using fallback ${topic.category} scene`);
+  }
   try {
     const response = await zai.images.generations.create({
-      prompt: scene,
+      prompt,
       size: '1344x768',
     });
     const base64 = response?.data?.[0]?.base64;
