@@ -689,3 +689,49 @@ Stage Summary:
 - Client-side exception fixed at its root: SW no longer runs in dev, so Turbopack chunk hashes can change freely without stale-cache crashes.
 - Added two layers of self-healing: (1) PWARegister dev cleanup unregisters stale SWs + clears caches on load, (2) global-error.tsx catches any residual crash and auto-cleans+reloads.
 - Dev server running cleanly on port 3000. Preview should now render reliably in the gateway iframe.
+
+---
+Task ID: 16
+Agent: main
+Task: AI auto-blog generation every 6 hours (DeepSeek/ChatGPT via z-ai-web-dev-sdk) with image, SEO content, and justified Persian text
+
+Work Log:
+- Discovered an existing blog-generator mini-service at mini-services/blog-generator/index.ts (built in a previous session). It was functional but had a weak prompt, limited topics (15), no SEO structure, and image generation failed when prompts contained Persian text (content filter).
+- Rewrote mini-services/blog-generator/index.ts (v2):
+  - Expanded to 24 SEO-oriented topics, each with a focus keyword (e.g. "ایمنی سفر بین شهری", "سفر تهران به شیراز").
+  - New SEO-focused LLM system prompt: instructs the model to act as a travel content + SEO specialist for "تاکسی ویژه سیوان", weave the focus keyword naturally into title/first paragraph/body/tags, produce a 150-160 char meta description, use h2/h3 heading hierarchy, include <ul>/<li> lists and a <blockquote>, and write 700-1000 words of justified-friendly long paragraphs.
+  - parseArticle() now also extracts a metaDescription field.
+  - generateCoverImage() rewritten: prompt is now pure English (no Persian) with 5 rotating cinematic luxury-car scenes to avoid the image API's content filter. Falls back to /images/luxury-car.png if generation fails.
+  - Added runtime status tracking (isGenerating, lastGeneratedAt, lastError) exposed via GET /status and GET /health endpoints, with CORS headers so the Next.js proxy can call cross-origin.
+- Created Next.js proxy routes so the admin panel works in both local dev and the gateway preview:
+  - src/app/api/blog-generator/status/route.ts — GET proxies to http://localhost:3005/status
+  - src/app/api/blog-generator/generate/route.ts — POST proxies to http://localhost:3005/generate
+- Added AIBlogGenerator component to src/components/sivan/AdminPanel.tsx (inserted at the top of the BlogTab). It shows:
+  - A gold-accented card with Sparkles icon, "تولید خودکار مقاله با هوش مصنوعی" heading, "هر ۶ ساعت" badge, and an explanation paragraph.
+  - A "تولید فوری مقاله" (Generate Now) button that POSTs to /api/blog-generator/generate.
+  - A live status grid (polled every 5s): وضعیت (running/ready), آخرین تولید (relative time), کل مقالات (count), زمان‌بندی (every 6h).
+  - Auto-refreshes the post list when a generation completes (transitions running true→false).
+- Imported Sparkles and Wand2 icons from lucide-react.
+- Restarted the blog-generator service with `bun --hot` (auto-reloads on file changes). Confirmed health: {"ok":true,"running":false,"totalPosts":3}.
+- End-to-end tested via Agent Browser:
+  1. Logged into admin panel (admin/sivan2024), navigated to Blog tab.
+  2. The AIBlogGenerator panel rendered correctly with status "آماده" and 3 total posts.
+  3. Clicked "تولید فوری مقاله" — status changed to "در حال تولید", toast appeared.
+  4. Polled /api/blog-generator/status: generation completed in ~45 seconds, totalPosts went 3→4→5 (ran twice).
+  5. Verified the new post "راهنمای جامع ایمنی سفر بین شهری: تجربه‌ای امن با تاکسی VIP":
+     - Has AI-generated cover image (161KB PNG at /images/blog/...png)
+     - Content has <h2>, <h3>, <ul>, <blockquote>, 7 <p> tags (3491 chars)
+     - 5 SEO tags including the focus keyword
+     - Text alignment confirmed "justify" via computed style
+  6. Opened the post from the homepage blog section → modal rendered the full article with image, justified paragraphs, gold h3 headings, and proper hierarchy.
+- Lint passes clean. Dev server (port 3000) and blog-generator (port 3005) both running healthy.
+
+Stage Summary:
+- AI blog auto-generation is fully functional and integrated:
+  - Every 6 hours the blog-generator service automatically creates a new SEO-optimized Persian article with an AI cover image and justified HTML text.
+  - Admin can trigger immediate generation from the Blog tab with live status polling.
+  - Articles are SEO-structured (focus keyword, meta description, h2/h3 hierarchy, lists, blockquotes, tags).
+  - Cover images are generated from safe English prompts (5 rotating luxury-car scenes) with a fallback.
+  - Works in both local dev (via Next.js proxy routes) and the cloud-sandbox preview (via gateway XTransformPort).
+- BlogPostModal already had text-justify styling (text-justify + [&_p]:text-justify), so no CSS changes were needed.
+- The 24-topic rotation ensures content variety and SEO relevance to the site's VIP taxi travel niche.

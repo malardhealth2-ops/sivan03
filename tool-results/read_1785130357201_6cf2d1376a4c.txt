@@ -1,0 +1,1897 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Shield, LogOut, LayoutDashboard, Car, Users, UserCheck, Settings, X,
+     7→  TrendingUp, MapPin, Phone, Star, ChevronDown, Eye, EyeOff, Loader2,
+     8→  Calendar, Clock, CreditCard, Check, AlertTriangle, Ban, CheckCircle2,
+     9→  FileText, Pencil, Plus, Trash2, Image, Send, Save, Calculator, Mail, KeyRound,
+    10→  Inbox, RefreshCw, Bell, BellOff, Smartphone, Volume2,
+    11→} from 'lucide-react';
+    12→import { Button } from '@/components/ui/button';
+    13→import { Input } from '@/components/ui/input';
+    14→import { Label } from '@/components/ui/label';
+    15→import { Badge } from '@/components/ui/badge';
+    16→import { Card } from '@/components/ui/card';
+    17→import { Separator } from '@/components/ui/separator';
+    18→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    19→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    20→import { useAppStore } from '@/lib/store';
+    21→import { formatJalaaliDate, getTehranTimeString, getTehranTime, toPersianDigits } from '@/lib/jalaali';
+    22→import { toast } from 'sonner';
+    23→
+    24→type TabId = 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'emails' | 'notifications' | 'settings';
+    25→type BlogPostForm = {
+    26→  id?: string;
+    27→  title: string;
+    28→  slug: string;
+    29→  excerpt: string;
+    30→  content: string;
+    31→  featuredImageUrl: string;
+    32→  status: string;
+    33→  tags: string[];
+    34→};
+    35→
+    36→// ─── Admin Login ───
+    37→function AdminLoginScreen() {
+    38→  const { adminLogin, admin, setAdminOpen, setLoginError } = useAppStore();
+    39→  const [username, setUsername] = useState('');
+    40→  const [password, setPassword] = useState('');
+    41→  const [showPass, setShowPass] = useState(false);
+    42→  const [loading, setLoading] = useState(false);
+    43→
+    44→  const handleLogin = async () => {
+    45→    if (!username || !password) return;
+    46→    setLoading(true);
+    47→    try {
+    48→      const res = await fetch('/api/auth/login', {
+    49→        method: 'POST',
+    50→        headers: { 'Content-Type': 'application/json' },
+    51→        body: JSON.stringify({ username, password }),
+    52→      });
+    53→      const data = await res.json();
+    54→      if (!res.ok) {
+    55→        setLoginError(data.error || 'نام کاربری یا رمز عبور اشتباه است');
+    56→        setLoading(false);
+    57→        return;
+    58→      }
+    59→      if (data.user?.role !== 'admin') {
+    60→        setLoginError('این حساب کاربری دسترسی مدیریت ندارد');
+    61→        setLoading(false);
+    62→        return;
+    63→      }
+    64→      adminLogin(username, password);
+    65→    } catch {
+    66→      setLoginError('خطا در ارتباط با سرور');
+    67→      setLoading(false);
+    68→      return;
+    69→    }
+    70→    setLoading(false);
+    71→  };
+    72→
+    73→  return (
+    74→    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[100] bg-[#0a0a0a] flex items-center justify-center">
+    75→      <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a0a] via-[#111] to-[#0a0a0a]" />
+    76→      <button onClick={() => setAdminOpen(false)} className="absolute top-6 left-6 p-2 rounded-lg hover:bg-[#2d2d2d] text-[#a1a1aa] hover:text-[#fafafa] transition-colors z-10">
+    77→        <X className="h-6 w-6" />
+    78→      </button>
+    79→      <motion.div initial={{ opacity: 0, y: 30, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.5 }} className="relative z-10 w-full max-w-md mx-4">
+    80→        <div className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-8 shadow-2xl">
+    81→          <div className="text-center mb-8">
+    82→            <img src="/logo.png" alt="سیوان" className="h-16 w-16 rounded-2xl mx-auto mb-4 ring-2 ring-[#D4AF37]/40" />
+    83→            <h1 className="text-2xl font-bold text-[#fafafa] mb-2">پنل مدیریت سیوان</h1>
+    84→            <p className="text-[#a1a1aa] text-sm">نام کاربری و رمز عبور خود را وارد کنید</p>
+    85→          </div>
+    86→          <div className="space-y-5">
+    87→            <div className="space-y-2">
+    88→              <Label className="text-[#a1a1aa] text-sm">نام کاربری</Label>
+    89→              <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="نام کاربری" className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12" dir="ltr" autoFocus onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
+    90→            </div>
+    91→            <div className="space-y-2">
+    92→              <Label className="text-[#a1a1aa] text-sm">رمز عبور</Label>
+    93→              <div className="relative">
+    94→                <Input type={showPass ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رمز عبور" className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12" dir="ltr" onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
+    95→                <button type="button" onClick={() => setShowPass(!showPass)} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1aa] hover:text-[#fafafa]">{showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+    96→              </div>
+    97→            </div>
+    98→            {admin.loginError && (
+    99→              <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"><AlertTriangle className="h-4 w-4 shrink-0" />{admin.loginError}</motion.div>
+   100→            )}
+   101→            <Button onClick={handleLogin} disabled={loading || !username || !password} className="w-full h-12 bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold text-base rounded-xl">
+   102→              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'ورود به پنل مدیریت'}
+   103→            </Button>
+   104→          </div>
+   105→        </div>
+   106→      </motion.div>
+   107→    </motion.div>
+   108→  );
+   109→}
+   110→
+   111→// ─── Admin Dashboard ───
+   112→function AdminDashboard() {
+   113→  const { admin, adminLogout, setAdminOpen, setAdminActiveTab } = useAppStore();
+   114→  const [jalaliClock, setJalaliClock] = useState('');
+   115→
+   116→  useEffect(() => {
+   117→    const update = () => {
+   118→      setJalaliClock(getTehranTimeString() + ' - ' + formatJalaaliDate(getTehranTime()));
+   119→    };
+   120→    update();
+   121→    const i = setInterval(update, 1000);
+   122→    return () => clearInterval(i);
+   123→  }, []);
+   124→
+   125→  // ── Live email polling: foreground toast + background SW notification ──
+   126→  // Polls /api/admin/emails every 25s; when a NEW email arrives (unseen id),
+   127→  // shows a toast (foreground) + a service-worker notification (background)
+   128→  // + a short notification sound. This complements the web-push system
+   129→  // (which works even when the tab is fully closed).
+   130→  useEffect(() => {
+   131→    let seenIds = new Set<string>();
+   132→    let firstLoad = true;
+   133→
+   134→    const checkNewEmails = async () => {
+   135→      try {
+   136→        const res = await fetch('/api/admin/emails?limit=5');
+   137→        if (!res.ok) return;
+   138→        const data = await res.json();
+   139→        const items: { id: string; subject: string; toEmail: string; source: string; refId?: string }[] = data.items || [];
+   140→        if (items.length === 0) return;
+   141→
+   142→        if (firstLoad) {
+   143→          items.forEach((it) => seenIds.add(it.id));
+   144→          firstLoad = false;
+   145→          return;
+   146→        }
+   147→
+   148→        const fresh = items.filter((it) => !seenIds.has(it.id));
+   149→        if (fresh.length === 0) return;
+   150→
+   151→        fresh.forEach((it) => seenIds.add(it.id));
+   152→
+   153→        const isBooking = it.source === 'booking';
+   154→        const title = isBooking ? `🚕 رزرو جدید: ${it.refId || ''}` : `📧 ایمیل جدید: ${it.subject}`;
+   155→        const body = isBooking ? `کد رهگیری ${it.refId || ''} — برای مشاهده کلیک کنید` : `${it.subject} — برای ${it.toEmail}`;
+   156→
+   157→        // Foreground: toast + sound
+   158→        toast(title, { description: body, duration: 8000 });
+   159→        playNotifSound();
+   160→
+   161→        // Background: service worker notification (shows even if tab is not focused)
+   162→        if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
+   163→          try {
+   164→            const reg = await navigator.serviceWorker.ready;
+   165→            reg.showNotification(title, {
+   166→              body,
+   167→              icon: '/icon-192.png',
+   168→              badge: '/icon-192.png',
+   169→              tag: `email-${it.id}`,
+   170→              renotify: true,
+   171→              dir: 'rtl',
+   172→              lang: 'fa',
+   173→              data: { url: '/' },
+   174→              actions: [{ action: 'open', title: 'مشاهده' }, { action: 'close', title: 'بستن' }],
+   175→              vibrate: [120, 60, 120],
+   176→            });
+   177→          } catch { /* ignore */ }
+   178→        }
+   179→      } catch { /* ignore */ }
+   180→    };
+   181→
+   182→    checkNewEmails();
+   183→    const iv = setInterval(checkNewEmails, 25000);
+   184→    return () => clearInterval(iv);
+   185→  }, []);
+   186→
+   187→  const tabs: { id: TabId; label: string; icon: typeof LayoutDashboard }[] = [
+   188→    { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },
+   189→    { id: 'trips', label: 'سفرها', icon: Car },
+   190→    { id: 'passengers', label: 'مسافران', icon: Users },
+   191→    { id: 'drivers', label: 'رانندگان', icon: UserCheck },
+   192→    { id: 'content', label: 'مدیریت محتوا', icon: Pencil },
+   193→    { id: 'blog', label: 'بلاگ', icon: FileText },
+   194→    { id: 'pricing', label: 'قیمت‌گذاری', icon: Calculator },
+   195→    { id: 'emails', label: 'ایمیل‌ها', icon: Mail },
+   196→    { id: 'notifications', label: 'اعلان‌ها', icon: Bell },
+   197→    { id: 'settings', label: 'تنظیمات', icon: Settings },
+   198→  ];
+   199→
+   200→  return (
+   201→    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[100] bg-[#0a0a0a] flex">
+   202→      <aside className="hidden md:flex w-64 bg-[#111111] border-l border-[#333] flex-col">
+   203→        <div className="p-5 border-b border-[#333]">
+   204→          <div className="flex items-center gap-3">
+   205→            <img src="/logo.png" alt="سیوان" className="h-10 w-10 rounded-xl ring-1 ring-[#D4AF37]/30" />
+   206→            <div><h3 className="text-[#fafafa] font-bold text-sm">پنل مدیریت</h3><p className="text-[#a1a1aa] text-xs">سیوان VIP</p></div>
+   207→          </div>
+   208→        </div>
+   209→        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+   210→          {tabs.map((tab) => (
+   211→            <button key={tab.id} onClick={() => setAdminActiveTab(tab.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all ${admin.activeTab === tab.id ? 'bg-[#D4AF37] text-[#0a0a0a] font-bold shadow-lg shadow-[#D4AF37]/20' : 'text-[#a1a1aa] hover:text-[#fafafa] hover:bg-[#2d2d2d]'}`}>
+   212→              <tab.icon className="h-4 w-4" />{tab.label}
+   213→            </button>
+   214→          ))}
+   215→        </nav>
+   216→        <div className="p-4 border-t border-[#333]">
+   217→          <div className="flex items-center gap-3 mb-3 px-2">
+   218→            <div className="w-8 h-8 rounded-full bg-[#D4AF37]/10 flex items-center justify-center"><span className="text-[#D4AF37] text-xs font-bold">A</span></div>
+   219→            <div><p className="text-[#fafafa] text-sm">{admin.adminUsername}</p><p className="text-[#a1a1aa] text-[10px]">مدیر سیستم</p></div>
+   220→          </div>
+   221→          <Button onClick={adminLogout} variant="ghost" className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10 justify-start gap-2"><LogOut className="h-4 w-4" />خروج</Button>
+   222→        </div>
+   223→      </aside>
+   224→
+   225→      <div className="flex-1 flex flex-col overflow-hidden">
+   226→        <header className="h-16 bg-[#111111] border-b border-[#333] flex items-center justify-between px-6">
+   227→          <div className="flex items-center gap-3">
+   228→            <span className="text-[#fafafa] font-bold">مدیریت سیوان</span>
+   229→            <Separator orientation="vertical" className="h-6 bg-[#333]" />
+   230→            <span className="text-[#a1a1aa] text-xs">{jalaliClock}</span>
+   231→          </div>
+   232→          <div className="flex items-center gap-3">
+   233→            <div className="md:hidden">
+   234→              <Select value={admin.activeTab} onValueChange={(v) => setAdminActiveTab(v as TabId)}>
+   235→                <SelectTrigger className="w-36 bg-[#1a1a1a] border-[#333] text-[#fafafa] h-9 text-xs"><SelectValue /></SelectTrigger>
+   236→                <SelectContent className="bg-[#1a1a1a] border-[#333]">
+   237→                  {tabs.map((t) => (<SelectItem key={t.id} value={t.id} className="text-[#fafafa]">{t.label}</SelectItem>))}
+   238→                </SelectContent>
+   239→              </Select>
+   240→            </div>
+   241→            <button onClick={adminLogout} className="md:hidden p-2 rounded-lg hover:bg-[#2d2d2d] text-[#a1a1aa] hover:text-red-400 transition-colors"><LogOut className="h-5 w-5" /></button>
+   242→            <button onClick={() => setAdminOpen(false)} className="p-2 rounded-lg hover:bg-[#2d2d2d] text-[#a1a1aa] hover:text-[#fafafa] transition-colors"><X className="h-5 w-5" /></button>
+   243→          </div>
+   244→        </header>
+   245→        <main className="flex-1 overflow-y-auto p-6">
+   246→          <AnimatePresence mode="wait">
+   247→            {admin.activeTab === 'dashboard' && <DashboardTab key="dash" />}
+   248→            {admin.activeTab === 'trips' && <TripsTab key="trips" />}
+   249→            {admin.activeTab === 'passengers' && <PassengersTab key="pass" />}
+   250→            {admin.activeTab === 'drivers' && <DriversTab key="drivers" />}
+   251→            {admin.activeTab === 'content' && <ContentTab key="content" />}
+   252→            {admin.activeTab === 'blog' && <BlogTab key="blog" />}
+   253→            {admin.activeTab === 'pricing' && <PricingTab key="pricing" />}
+   254→            {admin.activeTab === 'emails' && <EmailsTab key="emails" />}
+   255→            {admin.activeTab === 'notifications' && <NotificationsTab key="notif" />}
+   256→            {admin.activeTab === 'settings' && <SettingsTab key="settings" />}
+   257→          </AnimatePresence>
+   258→        </main>
+   259→      </div>
+   260→    </motion.div>
+   261→  );
+   262→}
+   263→
+   264→// ─── Dashboard Tab ───
+   265→function DashboardTab() {
+   266→  const stats = [
+   267→    { label: 'کل مسافران', value: '۱,۲۵۰', icon: Users, color: '#D4AF37', change: '+۱۲٪' },
+   268→    { label: 'رانندگان فعال', value: '۸۵', icon: UserCheck, color: '#10B981', change: '+۵٪' },
+   269→    { label: 'سفرهای امروز', value: '۴۲', icon: Car, color: '#3B82F6', change: '+۸٪' },
+   270→    { label: 'درآمد امروز', value: '۸۵,۰۰۰,۰۰۰', icon: CreditCard, color: '#F59E0B', suffix: 'تومان', change: '+۱۵٪' },
+   271→  ];
+   272→  return (
+   273→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+   274→      <h2 className="text-xl font-bold text-[#fafafa]">داشبورد</h2>
+   275→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   276→        {stats.map((stat) => (
+   277→          <Card key={stat.label} className="bg-[#1a1a1a] border border-[#333] p-5">
+   278→            <div className="flex items-start justify-between">
+   279→              <div><p className="text-[#a1a1aa] text-sm mb-2">{stat.label}</p><p className="text-2xl font-bold text-[#fafafa]">{stat.value}{stat.suffix && <span className="text-sm text-[#a1a1aa] mr-1">{stat.suffix}</span>}</p></div>
+   280→              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${stat.color}15` }}><stat.icon className="h-5 w-5" style={{ color: stat.color }} /></div>
+   281→            </div>
+   282→            <div className="flex items-center gap-1 mt-3"><TrendingUp className="h-3 w-3 text-green-400" /><span className="text-green-400 text-xs">{stat.change}</span><span className="text-[#888] text-xs mr-1">نسبت به ماه قبل</span></div>
+   283→          </Card>
+   284→        ))}
+   285→      </div>
+   286→    </motion.div>
+   287→  );
+   288→}
+   289→
+   290→// ─── Trips Tab ───
+   291→function TripsTab() {
+   292→  const [trips, setTrips] = useState<any[]>([]);
+   293→  const [loading, setLoading] = useState(true);
+   294→  const [statusFilter, setStatusFilter] = useState('all');
+   295→
+   296→  useEffect(() => {
+   297→    fetch('/api/booking').then(r => r.json()).then(data => { setTrips(Array.isArray(data) ? data : []); setLoading(false); }).catch(() => setLoading(false));
+   298→  }, []);
+   299→
+   300→  const filtered = statusFilter === 'all' ? trips : trips.filter((t: any) => t.status === statusFilter);
+   301→
+   302→  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" /></div>;
+   303→
+   304→  return (
+   305→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+   306→      <div className="flex items-center justify-between flex-wrap gap-4">
+   307→        <h2 className="text-xl font-bold text-[#fafafa]">مدیریت سفرها ({toPersianDigits(trips.length)})</h2>
+   308→        <Select value={statusFilter} onValueChange={setStatusFilter}>
+   309→          <SelectTrigger className="w-36 bg-[#1a1a1a] border-[#333] text-[#fafafa] h-9 text-sm"><SelectValue /></SelectTrigger>
+   310→          <SelectContent className="bg-[#1a1a1a] border-[#333]">
+   311→            <SelectItem value="all" className="text-[#fafafa]">همه</SelectItem>
+   312→            <SelectItem value="pending" className="text-[#fafafa]">در انتظار</SelectItem>
+   313→            <SelectItem value="completed" className="text-[#fafafa]">تکمیل شده</SelectItem>
+   314→            <SelectItem value="cancelled" className="text-[#fafafa]">لغو شده</SelectItem>
+   315→          </SelectContent>
+   316→        </Select>
+   317→      </div>
+   318→      <Card className="bg-[#1a1a1a] border border-[#333] overflow-hidden">
+   319→        <div className="overflow-x-auto max-h-96 overflow-y-auto">
+   320→          <Table><TableHeader><TableRow className="border-[#333]"><TableHead className="text-[#a1a1aa]">کد</TableHead><TableHead className="text-[#a1a1aa]">مسیر</TableHead><TableHead className="text-[#a1a1aa]">وضعیت</TableHead><TableHead className="text-[#a1a1aa]">مبلغ</TableHead><TableHead className="text-[#a1a1aa]">تاریخ</TableHead></TableRow></TableHeader>
+   321→            <TableBody>
+   322→              {filtered.length === 0 && <TableRow className="border-[#333]"><TableCell colSpan={5} className="text-center text-[#a1a1aa] py-8">سفری ثبت نشده است</TableCell></TableRow>}
+   323→              {filtered.map((trip: any) => (
+   324→                <TableRow key={trip.id} className="border-[#333] hover:bg-[#2d2d2d]/50">
+   325→                  <TableCell className="text-[#fafafa] font-mono text-xs" dir="ltr">{trip.bookingCode}</TableCell>
+   326→                  <TableCell className="text-[#fafafa] text-sm">{trip.originAddress} → {trip.destAddress}</TableCell>
+   327→                  <TableCell>{getStatusBadge(trip.status)}</TableCell>
+   328→                  <TableCell className="text-[#fafafa] text-sm" dir="ltr">{new Intl.NumberFormat('fa-IR').format(trip.totalFare || 0)} تومان</TableCell>
+   329→                  <TableCell className="text-[#a1a1aa] text-sm">{formatJalaaliDate(trip.createdAt || new Date())}</TableCell>
+   330→                </TableRow>
+   331→              ))}
+   332→            </TableBody>
+   333→          </Table>
+   334→        </div>
+   335→      </Card>
+   336→    </motion.div>
+   337→  );
+   338→}
+   339→
+   340→// ─── Passengers Tab ───
+   341→function PassengersTab() {
+   342→  return (
+   343→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+   344→      <h2 className="text-xl font-bold text-[#fafafa]">مدیریت مسافران</h2>
+   345→      <Card className="bg-[#1a1a1a] border border-[#333] p-8 text-center"><p className="text-[#a1a1aa]">لیست مسافران از دیتابیس بارگذاری می‌شود</p></Card>
+   346→    </motion.div>
+   347→  );
+   348→}
+   349→
+   350→// ─── Drivers Tab ───
+   351→function DriversTab() {
+   352→  return (
+   353→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+   354→      <h2 className="text-xl font-bold text-[#fafafa]">مدیریت رانندگان</h2>
+   355→      <Card className="bg-[#1a1a1a] border border-[#333] p-8 text-center"><p className="text-[#a1a1aa]">لیست رانندگان از دیتابیس بارگذاری می‌شود</p></Card>
+   356→    </motion.div>
+   357→  );
+   358→}
+   359→
+   360→// ─── Content Editor Tab ───
+   361→type FieldDef = {
+   362→  key: string;
+   363→  label: string;
+   364→  type: 'text' | 'textarea' | 'list';
+   365→  placeholder?: string;
+   366→  hint?: string;
+   367→};
+   368→
+   369→type SectionDef = {
+   370→  id: string;
+   371→  label: string;
+   372→  icon: string;
+   373→  description: string;
+   374→  fields: FieldDef[];
+   375→};
+   376→
+   377→const SECTION_DEFS: SectionDef[] = [
+   378→  {
+   379→    id: 'hero', label: 'هدر اصلی', icon: '🏠', description: 'بخش بالای صفحه - اولین چیزی که کاربر می‌بیند',
+   380→    fields: [
+   381→      { key: 'badge', label: 'متن نشان (Badge)', type: 'text', placeholder: 'تاکسی VIP بین شهری', hint: 'نشان طلایی بالای عنوان' },
+   382→      { key: 'title', label: 'عنوان اصلی', type: 'text', placeholder: 'سفری لوکس، راحت و ایمن با سیوان' },
+   383→      { key: 'subtitle', label: 'توضیحات', type: 'textarea', placeholder: 'با ناوگان لوکس و رانندگان حرفه‌ای...' },
+   384→      { key: 'bgImage', label: 'آدرس تصویر پس‌زمینه', type: 'text', placeholder: '/images/hero-bg.png', hint: 'مسیر تصویر پس‌زمینه هدر' },
+   385→    ],
+   386→  },
+   387→  {
+   388→    id: 'services', label: 'خدمات', icon: '🚗', description: 'بخش معرفی انواع خدمات سفر',
+   389→    fields: [
+   390→      { key: 'title', label: 'عنوان بخش', type: 'text', placeholder: 'انواع خدمات سفر' },
+   391→      { key: 'subtitle', label: 'زیرعنوان', type: 'text', placeholder: 'خدمات متنوع برای نیازهای شما' },
+   392→      { key: 'items', label: 'لیست خدمات', type: 'list', hint: 'هر خط: عنوان | توضیحات | آیکون (مثل: تاکسی VIP لوکس | هیوندای سوناتا | ✨)' },
+   393→    ],
+   394→  },
+   395→  {
+   396→    id: 'whyUs', label: 'چرا سیوان', icon: '✅', description: 'بخش مزایا و دلایل انتخاب سیوان',
+   397→    fields: [
+   398→      { key: 'title', label: 'عنوان بخش', type: 'text', placeholder: 'چرا سیوان؟' },
+   399→      { key: 'subtitle', label: 'زیرعنوان', type: 'text', placeholder: 'مزایای سفر با ما' },
+   400→      { key: 'items', label: 'لیست مزایا', type: 'list', hint: 'هر خط: عنوان | توضیحات | آیکون (مثل: امنیت بالا | رانندگان تأیید شده | 🛡️)' },
+   401→    ],
+   402→  },
+   403→  {
+   404→    id: 'fleet', label: 'ناوگان', icon: '🏎️', description: 'بخش نمایش ناوگان خودروها',
+   405→    fields: [
+   406→      { key: 'title', label: 'عنوان بخش', type: 'text', placeholder: 'ناوگان لوکس سیوان' },
+   407→      { key: 'subtitle', label: 'زیرعنوان', type: 'text', placeholder: 'بهترین خودروها برای سفر شما' },
+   408→      { key: 'description', label: 'توضیحات ناوگان', type: 'textarea', placeholder: 'توضیحات کامل درباره ناوگان خودروها...' },
+   409→    ],
+   410→  },
+   411→  {
+   412→    id: 'cta', label: 'دعوت به اقدام', icon: '📞', description: 'بخش تشویق به رزرو سفر',
+   413→    fields: [
+   414→      { key: 'title', label: 'عنوان', type: 'text', placeholder: 'آماده سفر هستید؟' },
+   415→      { key: 'subtitle', label: 'زیرعنوان', type: 'text', placeholder: 'همین حالا رزرو کنید' },
+   416→      { key: 'buttonText', label: 'متن دکمه', type: 'text', placeholder: 'رزرو تاکسی ویژه' },
+   417→      { key: 'phone', label: 'شماره تماس', type: 'text', placeholder: '09109419743', hint: 'شماره نمایش داده شده در دکمه تماس' },
+   418→    ],
+   419→  },
+   420→  {
+   421→    id: 'footer', label: 'فوتر', icon: '📋', description: 'بخش پایین صفحه',
+   422→    fields: [
+   423→      { key: 'brandName', label: 'نام برند', type: 'text', placeholder: 'تاکسی ویژه سیوان' },
+   424→      { key: 'description', label: 'توضیحات برند', type: 'textarea', placeholder: 'توضیحات کوتاه درباره سیوان...' },
+   425→      { key: 'copyright', label: 'متن کپی‌رایت', type: 'text', placeholder: '© ۱۴۰۴ سیوان - تمامی حقوق محفوظ است' },
+   426→      { key: 'address', label: 'آدرس', type: 'text', placeholder: 'تهران، ایران' },
+   427→    ],
+   428→  },
+   429→  {
+   430→    id: 'about', label: 'درباره ما', icon: 'ℹ️', description: 'بخش معرفی شرکت',
+   431→    fields: [
+   432→      { key: 'title', label: 'عنوان', type: 'text', placeholder: 'درباره سیوان' },
+   433→      { key: 'subtitle', label: 'زیرعنوان', type: 'text', placeholder: 'تاریخچه و ماموریت ما' },
+   434→      { key: 'body', label: 'متن کامل', type: 'textarea', placeholder: 'متن کامل درباره ما (می‌تواند HTML باشد)...' },
+   435→    ],
+   436→  },
+   437→];
+   438→
+   439→function parseSectionData(raw: { title?: string; subtitle?: string; body?: string } | undefined): Record<string, string> {
+   440→  const result: Record<string, string> = {};
+   441→  if (!raw) return result;
+   442→  result.title = raw.title || '';
+   443→  result.subtitle = raw.subtitle || '';
+   444→  if (raw.body) {
+   445→    try {
+   446→      const parsed = JSON.parse(raw.body);
+   447→      if (parsed && typeof parsed === 'object') {
+   448→        for (const [k, v] of Object.entries(parsed)) {
+   449→          if (typeof v === 'string') result[k] = v;
+   450→          else if (Array.isArray(v)) result[k] = (v as string[]).join('\n');
+   451→        }
+   452→      } else {
+   453→        result.body = raw.body;
+   454→      }
+   455→    } catch {
+   456→      result.body = raw.body;
+   457→    }
+   458→  }
+   459→  return result;
+   460→}
+   461→
+   462→function serializeSectionData(data: Record<string, string>): { title: string; subtitle: string; body: string } {
+   463→  const title = data.title || '';
+   464→  const subtitle = data.subtitle || '';
+   465→  const extra: Record<string, string | string[]> = {};
+   466→  for (const [k, v] of Object.entries(data)) {
+   467→    if (k === 'title' || k === 'subtitle') continue;
+   468→    if (k === 'items' || k === 'body') {
+   469→      extra[k] = v;
+   470→    } else {
+   471→      extra[k] = v;
+   472→    }
+   473→  }
+   474→  const hasExtra = Object.keys(extra).length > 0;
+   475→  return { title, subtitle, body: hasExtra ? JSON.stringify(extra) : '' };
+   476→}
+   477→
+   478→function ContentTab() {
+   479→  const [sections, setSections] = useState<Record<string, { title: string; subtitle: string; body: string }>>({});
+   480→  const [activeSection, setActiveSection] = useState('hero');
+   481→  const [loading, setLoading] = useState(true);
+   482→  const [saving, setSaving] = useState(false);
+   483→
+   484→  useEffect(() => {
+   485→    fetch('/api/admin/content').then(r => r.json()).then(data => { setSections(data || {}); setLoading(false); }).catch(() => setLoading(false));
+   486→  }, []);
+   487→
+   488→  const sectionDef = SECTION_DEFS.find(s => s.id === activeSection)!;
+   489→  const rawData = sections[activeSection];
+   490→  const fieldValues = parseSectionData(rawData);
+   491→
+   492→  const setField = (key: string, value: string) => {
+   493→    const updated = { ...fieldValues, [key]: value };
+   494→    const serialized = serializeSectionData(updated);
+   495→    setSections({ ...sections, [activeSection]: serialized });
+   496→  };
+   497→
+   498→  const handleSave = async () => {
+   499→    setSaving(true);
+   500→    try {
+   501→      const res = await fetch('/api/admin/content', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sections }) });
+   502→      if (!res.ok) throw new Error();
+   503→      toast.success('محتوا با موفقیت ذخیره شد', { duration: 3000 });
+   504→    } catch {
+   505→      toast.error('خطا در ذخیره محتوا');
+   506→    }
+   507→    setSaving(false);
+   508→  };
+   509→
+   510→  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" /></div>;
+   511→
+   512→  return (
+   513→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+   514→      <div className="flex items-center justify-between flex-wrap gap-4">
+   515→        <div>
+   516→          <h2 className="text-xl font-bold text-[#fafafa]">مدیریت محتوا</h2>
+   517→          <p className="text-[#a1a1aa] text-sm mt-1">ویرایش متون و تنظیمات هر بخش از سایت</p>
+   518→        </div>
+   519→        <Button onClick={handleSave} disabled={saving} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-10 px-6 rounded-xl">
+   520→          {saving ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
+   521→          ذخیره تغییرات
+   522→        </Button>
+   523→      </div>
+   524→
+   525→      <div className="flex flex-col md:flex-row gap-6">
+   526→        {/* Section selector */}
+   527→        <div className="w-full md:w-60 shrink-0">
+   528→          <Card className="bg-[#1a1a1a] border border-[#333] p-3">
+   529→            <p className="text-[#a1a1aa] text-xs mb-3 px-2">بخش مورد نظر را انتخاب کنید</p>
+   530→            <div className="space-y-1">
+   531→              {SECTION_DEFS.map((s) => (
+   532→                <button key={s.id} onClick={() => setActiveSection(s.id)} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all ${activeSection === s.id ? 'bg-[#D4AF37] text-[#0a0a0a] font-bold' : 'text-[#a1a1aa] hover:text-[#fafafa] hover:bg-[#2d2d2d]'}`}>
+   533→                  <span className="text-base">{s.icon}</span>{s.label}
+   534→                </button>
+   535→              ))}
+   536→            </div>
+   537→          </Card>
+   538→        </div>
+   539→
+   540→        {/* Editor */}
+   541→        <div className="flex-1 space-y-5">
+   542→          <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-5">
+   543→            <div className="pb-4 border-b border-[#333]">
+   544→              <div className="flex items-center gap-2 mb-1">
+   545→                <span className="text-xl">{sectionDef.icon}</span>
+   546→                <h3 className="text-[#D4AF37] font-bold text-lg">{sectionDef.label}</h3>
+   547→              </div>
+   548→              <p className="text-[#a1a1aa] text-xs">{sectionDef.description}</p>
+   549→            </div>
+   550→            <div className="space-y-4">
+   551→              {sectionDef.fields.map((field) => {
+   552→                const value = fieldValues[field.key] || '';
+   553→                if (field.type === 'textarea') {
+   554→                  return (
+   555→                    <div key={field.key} className="space-y-2">
+   556→                      <Label className="text-[#a1a1aa] text-sm">{field.label}</Label>
+   557→                      <textarea value={value} onChange={(e) => setField(field.key, e.target.value)} className="w-full min-h-[100px] bg-[#0a0a0a] border border-[#333] text-[#fafafa] placeholder:text-[#888] rounded-lg p-3 text-sm resize-y focus:outline-none focus:border-[#D4AF37]/50" placeholder={field.placeholder} dir="rtl" />
+   558→                      {field.hint && <p className="text-[10px] text-[#888]">{field.hint}</p>}
+   559→                    </div>
+   560→                  );
+   561→                }
+   562→                if (field.type === 'list') {
+   563→                  return (
+   564→                    <div key={field.key} className="space-y-2">
+   565→                      <Label className="text-[#a1a1aa] text-sm">{field.label}</Label>
+   566→                      <textarea value={value} onChange={(e) => setField(field.key, e.target.value)} className="w-full min-h-[140px] bg-[#0a0a0a] border border-[#333] text-[#fafafa] placeholder:text-[#888] rounded-lg p-3 text-sm resize-y focus:outline-none focus:border-[#D4AF37]/50 font-mono" placeholder={field.hint || 'هر خط یک مورد...'} dir="rtl" />
+   567→                      {field.hint && <p className="text-[10px] text-[#888]">{field.hint}</p>}
+   568→                    </div>
+   569→                  );
+   570→                }
+   571→                return (
+   572→                  <div key={field.key} className="space-y-2">
+   573→                    <Label className="text-[#a1a1aa] text-sm">{field.label}</Label>
+   574→                    <Input value={value} onChange={(e) => setField(field.key, e.target.value)} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" placeholder={field.placeholder} dir={field.key === 'phone' || field.key === 'bgImage' ? 'ltr' : 'rtl'} />
+   575→                    {field.hint && <p className="text-[10px] text-[#888]">{field.hint}</p>}
+   576→                  </div>
+   577→                );
+   578→              })}
+   579→            </div>
+   580→          </Card>
+   581→        </div>
+   582→      </div>
+   583→    </motion.div>
+   584→  );
+   585→}
+   586→
+   587→// ─── Blog Management Tab ───
+   588→function BlogTab() {
+   589→  const [posts, setPosts] = useState<any[]>([]);
+   590→  const [loading, setLoading] = useState(true);
+   591→  const [statusFilter, setStatusFilter] = useState('all');
+   592→  const [editingPost, setEditingPost] = useState<any>(null);
+   593→  const [showEditor, setShowEditor] = useState(false);
+   594→
+   595→  const loadPosts = useCallback(() => {
+   596→    setLoading(true);
+   597→    const q = statusFilter === 'all' ? '' : `?status=${statusFilter}`;
+   598→    fetch(`/api/admin/blog${q}`).then(r => r.json()).then(data => { setPosts(Array.isArray(data) ? data : []); setLoading(false); }).catch(() => setLoading(false));
+   599→  }, [statusFilter]);
+   600→
+   601→  // eslint-disable-next-line react-hooks/set-state-in-effect
+   602→  useEffect(() => {
+   603→    loadPosts();
+   604→  }, [loadPosts]);
+   605→
+   606→  const handleNew = () => {
+   607→    setEditingPost({ title: '', slug: '', excerpt: '', content: '', featuredImageUrl: '', status: 'draft', tags: [] });
+   608→    setShowEditor(true);
+   609→  };
+   610→
+   611→  const handleEdit = (post: any) => {
+   612→    setEditingPost({ ...post, tags: JSON.parse(post.tags || '[]') });
+   613→    setShowEditor(true);
+   614→  };
+   615→
+   616→  const handleDelete = async (id: string) => {
+   617→    if (!confirm('آیا مطمئنید؟')) return;
+   618→    await fetch(`/api/admin/blog/${id}`, { method: 'DELETE' });
+   619→    loadPosts();
+   620→    toast.success('مقاله حذف شد');
+   621→  };
+   622→
+   623→  const handleSavePost = async (data: any) => {
+   624→    try {
+   625→      if (data.id) {
+   626→        await fetch('/api/admin/blog', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+   627→        toast.success('مقاله ویرایش شد');
+   628→      } else {
+   629→        await fetch('/api/admin/blog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+   630→        toast.success('مقاله جدید ایجاد شد');
+   631→      }
+   632→      setShowEditor(false);
+   633→      loadPosts();
+   634→    } catch {
+   635→      toast.error('خطا در ذخیره مقاله');
+   636→    }
+   637→  };
+   638→
+   639→  const handleUpload = async (file: File): Promise<string> => {
+   640→    const fd = new FormData();
+   641→    fd.append('file', file);
+   642→    const res = await fetch('/api/admin/upload', { method: 'POST', body: fd });
+   643→    const data = await res.json();
+   644→    if (!res.ok) throw new Error(data.error);
+   645→    return data.url;
+   646→  };
+   647→
+   648→  if (showEditor) {
+   649→    return <BlogEditor post={editingPost} onSave={handleSavePost} onCancel={() => setShowEditor(false)} onUpload={handleUpload} />;
+   650→  }
+   651→
+   652→  return (
+   653→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+   654→      <div className="flex items-center justify-between flex-wrap gap-4">
+   655→        <h2 className="text-xl font-bold text-[#fafafa]">مدیریت بلاگ</h2>
+   656→        <div className="flex items-center gap-3">
+   657→          <Select value={statusFilter} onValueChange={setStatusFilter}>
+   658→            <SelectTrigger className="w-36 bg-[#1a1a1a] border-[#333] text-[#fafafa] h-9 text-sm"><SelectValue /></SelectTrigger>
+   659→            <SelectContent className="bg-[#1a1a1a] border-[#333]">
+   660→              <SelectItem value="all" className="text-[#fafafa]">همه</SelectItem>
+   661→              <SelectItem value="published" className="text-[#fafafa]">منتشر شده</SelectItem>
+   662→              <SelectItem value="draft" className="text-[#fafafa]">پیش‌نویس</SelectItem>
+   663→              <SelectItem value="archived" className="text-[#fafafa]">بایگانی</SelectItem>
+   664→            </SelectContent>
+   665→          </Select>
+   666→          <Button onClick={handleNew} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-9 px-4 rounded-lg text-sm font-bold">
+   667→            <Plus className="h-4 w-4 ml-1.5" />مقاله جدید
+   668→          </Button>
+   669→        </div>
+   670→      </div>
+   671→
+   672→      {loading ? (
+   673→        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" /></div>
+   674→      ) : (
+   675→        <Card className="bg-[#1a1a1a] border border-[#333] overflow-hidden">
+   676→          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+   677→            <Table><TableHeader><TableRow className="border-[#333]"><TableHead className="text-[#a1a1aa]">عنوان</TableHead><TableHead className="text-[#a1a1aa]">وضعیت</TableHead><TableHead className="text-[#a1a1aa]">تصویر</TableHead><TableHead className="text-[#a1a1aa]">تاریخ</TableHead><TableHead className="text-[#a1a1aa] text-left">عملیات</TableHead></TableRow></TableHeader>
+   678→              <TableBody>
+   679→                {posts.length === 0 && <TableRow className="border-[#333]"><TableCell colSpan={5} className="text-center text-[#a1a1aa] py-8">مقاله‌ای وجود ندارد</TableCell></TableRow>}
+   680→                {posts.map((post: any) => (
+   681→                  <TableRow key={post.id} className="border-[#333] hover:bg-[#2d2d2d]/50">
+   682→                    <TableCell className="text-[#fafafa] text-sm font-medium max-w-xs truncate">{post.title}</TableCell>
+   683→                    <TableCell>{getBlogStatusBadge(post.status)}</TableCell>
+   684→                    <TableCell>{post.featuredImageUrl ? <img src={post.featuredImageUrl} alt={post.title} className="h-8 w-12 object-cover rounded" /> : <span className="text-[#888] text-xs">بدون تصویر</span>}</TableCell>
+   685→                    <TableCell className="text-[#a1a1aa] text-sm">{formatJalaaliDate(post.createdAt)}</TableCell>
+   686→                    <TableCell className="text-left">
+   687→                      <div className="flex items-center gap-1">
+   688→                        <Button variant="ghost" size="sm" onClick={() => handleEdit(post)} className="text-[#D4AF37] hover:bg-[#D4AF37]/10 h-8 px-2"><Pencil className="h-3.5 w-3.5" /></Button>
+   689→                        <Button variant="ghost" size="sm" onClick={() => handleDelete(post.id)} className="text-red-400 hover:bg-red-500/10 h-8 px-2"><Trash2 className="h-3.5 w-3.5" /></Button>
+   690→                      </div>
+   691→                    </TableCell>
+   692→                  </TableRow>
+   693→                ))}
+   694→              </TableBody>
+   695→            </Table>
+   696→          </div>
+   697→        </Card>
+   698→      )}
+   699→    </motion.div>
+   700→  );
+   701→}
+   702→
+   703→// Blog Editor
+   704→function BlogEditor(props) {
+   705→  const { post, onSave, onCancel, onUpload } = props;
+   706→  const [form, setForm] = useState(post);
+   707→  const [saving, setSaving] = useState(false);
+   708→  const [tagInput, setTagInput] = useState('');
+   709→  const [uploading, setUploading] = useState(false);
+   710→  const fileRef = (typeof window !== 'undefined') ? React.createRef<HTMLInputElement>() : null;
+   711→
+   712→  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   713→    const file = e.target.files?.[0];
+   714→    if (!file) return;
+   715→    setUploading(true);
+   716→    try {
+   717→      const url = await onUpload(file);
+   718→      setForm({ ...form, featuredImageUrl: url });
+   719→    } catch (err: any) {
+   720→      toast.error(err.message || 'خطا در آپلود');
+   721→    }
+   722→    setUploading(false);
+   723→  };
+   724→
+   725→  const handleAddTag = () => {
+   726→    if (!tagInput.trim() || (form.tags || []).includes(tagInput.trim())) return;
+   727→    setForm({ ...form, tags: [...(form.tags || []), tagInput.trim()] });
+   728→    setTagInput('');
+   729→  };
+   730→
+   731→  const handleRemoveTag = (tag: string) => {
+   732→    setForm({ ...form, tags: (form.tags || []).filter((t: string) => t !== tag) });
+   733→  };
+   734→
+   735→  const handleSave = () => {
+   736→    if (!form.title || !form.slug) {
+   737→      toast.error('عنوان و slug الزامی است');
+   738→      return;
+   739→    }
+   740→    setSaving(true);
+   741→    onSave(form);
+   742→    setSaving(false);
+   743→  };
+   744→
+   745→  return (
+   746→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6 max-w-4xl">
+   747→      <div className="flex items-center justify-between">
+   748→        <h2 className="text-xl font-bold text-[#fafafa]">{form.id ? 'ویرایش مقاله' : 'مقاله جدید'}</h2>
+   749→        <Button variant="ghost" onClick={onCancel} className="text-[#a1a1aa] hover:text-[#fafafa]">انصراف</Button>
+   750→      </div>
+   751→
+   752→      <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-5">
+   753→        {/* Featured Image */}
+   754→        <div className="space-y-2">
+   755→          <Label className="text-[#a1a1aa] text-sm"><Image className="h-3.5 w-3.5 ml-1.5 inline" />تصویر شاخص</Label>
+   756→          <div className="flex items-center gap-4">
+   757→            {form.featuredImageUrl && <img src={form.featuredImageUrl} alt={form.title || 'تصویر شاخص'} className="h-24 w-40 object-cover rounded-lg border border-[#333]" />}
+   758→            <div className="space-y-2">
+   759→              <input type="file" ref={fileRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+   760→              <Button variant="outline" onClick={() => fileRef?.current?.click()} disabled={uploading} className="border-[#333] text-[#a1a1aa] hover:text-[#fafafa] hover:bg-[#2d2d2d]">
+   761→                {uploading ? <Loader2 className="h-4 w-4 animate-spin ml-1.5" /> : <Image className="h-4 w-4 ml-1.5" />}
+   762→                آپلود تصویر
+   763→              </Button>
+   764→              <Input value={form.featuredImageUrl || ''} onChange={(e) => setForm({ ...form, featuredImageUrl: e.target.value })} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-9 text-xs" placeholder="یا وارد کنید URL تصویر..." dir="ltr" />
+   765→            </div>
+   766→          </div>
+   767→        </div>
+   768→
+   769→        {/* Title & Slug */}
+   770→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   771→          <div className="space-y-2">
+   772→            <Label className="text-[#fafafa] text-sm">عنوان *</Label>
+   773→            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" placeholder="عنوان مقاله..." />
+   774→          </div>
+   775→          <div className="space-y-2">
+   776→            <Label className="text-[#fafafa] text-sm">Slug *</Label>
+   777→            <Input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-ا-ی]/g, '') })} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" placeholder="slug-maqaleh" dir="ltr" />
+   778→          </div>
+   779→        </div>
+   780→
+   781→        {/* Excerpt */}
+   782→        <div className="space-y-2">
+   783→          <Label className="text-[#fafafa] text-sm">خلاصه</Label>
+   784→          <textarea value={form.excerpt || ''} onChange={(e) => setForm({ ...form, excerpt: e.target.value })} className="w-full min-h-[60px] bg-[#0a0a0a] border border-[#333] text-[#fafafa] placeholder:text-[#888] rounded-lg p-3 text-sm resize-y focus:outline-none focus:border-[#D4AF37]/50" placeholder="خلاصه کوتاه مقاله..." dir="rtl" />
+   785→        </div>
+   786→
+   787→        {/* Content */}
+   788→        <div className="space-y-2">
+   789→          <Label className="text-[#fafafa] text-sm">محتوای اصلی</Label>
+   790→          <textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} className="w-full min-h-[300px] bg-[#0a0a0a] border border-[#333] text-[#fafafa] placeholder:text-[#888] rounded-lg p-3 text-sm resize-y focus:outline-none focus:border-[#D4AF37]/50" placeholder="محتوای مقاله (می‌تواند HTML باشد)..." dir="rtl" />
+   791→        </div>
+   792→
+   793→        {/* Tags */}
+   794→        <div className="space-y-2">
+   795→          <Label className="text-[#fafafa] text-sm">برچسب‌ها</Label>
+   796→          <div className="flex items-center gap-2 flex-wrap">
+   797→            {(form.tags || []).map((tag: string) => (
+   798→              <Badge key={tag} className="bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20 gap-1">
+   799→                {tag}
+   800→                <button onClick={() => handleRemoveTag(tag)} className="hover:text-red-400"><X className="h-3 w-3" /></button>
+   801→              </Badge>
+   802→            ))}
+   803→          </div>
+   804→          <div className="flex items-center gap-2">
+   805→            <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-9 text-sm flex-1" placeholder="برچسب جدید..." />
+   806→            <Button variant="outline" onClick={handleAddTag} className="border-[#333] text-[#a1a1aa] hover:text-[#fafafa] h-9 px-3">افزودن</Button>
+   807→          </div>
+   808→        </div>
+   809→
+   810→        {/* Status */}
+   811→        <div className="space-y-2">
+   812→          <Label className="text-[#fafafa] text-sm">وضعیت</Label>
+   813→          <Select value={form.status || 'draft'} onValueChange={(v) => setForm({ ...form, status: v })}>
+   814→            <SelectTrigger className="w-full bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11"><SelectValue /></SelectTrigger>
+   815→            <SelectContent className="bg-[#1a1a1a] border-[#333]">
+   816→              <SelectItem value="draft" className="text-[#fafafa]">پیش‌نویس</SelectItem>
+   817→              <SelectItem value="published" className="text-[#fafafa]">منتشر شده</SelectItem>
+   818→              <SelectItem value="archived" className="text-[#fafafa]">بایگانی</SelectItem>
+   819→            </SelectContent>
+   820→          </Select>
+   821→        </div>
+   822→
+   823→        {/* Actions */}
+   824→        <div className="flex items-center gap-3 pt-2">
+   825→          <Button onClick={handleSave} disabled={saving} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-11 px-8 rounded-xl">
+   826→            {saving ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
+   827→            ذخیره
+   828→          </Button>
+   829→          {form.status === 'draft' && (
+   830→            <Button onClick={() => { setForm({ ...form, status: 'published' }); }} variant="outline" className="border-[#333] text-[#10B981] hover:bg-[#10B981]/10 h-11 px-6 rounded-xl">
+   831→              <Send className="h-4 w-4 ml-2" />انتشار
+   832→            </Button>
+   833→          )}
+   834→          <Button variant="ghost" onClick={onCancel} className="text-[#a1a1aa] hover:text-[#fafafa] h-11 px-6 rounded-xl">انصراف</Button>
+   835→        </div>
+   836→      </Card>
+   837→    </motion.div>
+   838→  );
+   839→}
+   840→
+   841→// ─── Pricing Tab ───
+   842→function PricingTab() {
+   843→  const [form, setForm] = useState({
+   844→    baseFare: '50000',
+   845→    minFare: '100000',
+   846→    economyPerKm: '2000',
+   847→    vipPerKm: '3000',
+   848→    luxuryPerKm: '5000',
+   849→    vanPerKm: '2500',
+   850→    electricPerKm: '3500',
+   851→    roundTripDiscount: '0',
+   852→  });
+   853→  const [loading, setLoading] = useState(true);
+   854→  const [saving, setSaving] = useState(false);
+   855→  const [saved, setSaved] = useState(false);
+   856→  const [preview, setPreview] = useState<{ tripType: string; distanceKm: string }>({ tripType: 'vip', distanceKm: '100' });
+   857→
+   858→  useEffect(() => {
+   859→    fetch('/api/admin/pricing').then(r => r.json()).then(data => {
+   860→      if (data && typeof data.baseFare === 'number') {
+   861→        setForm({
+   862→          baseFare: String(data.baseFare),
+   863→          minFare: String(data.minFare),
+   864→          economyPerKm: String(data.economyPerKm),
+   865→          vipPerKm: String(data.vipPerKm),
+   866→          luxuryPerKm: String(data.luxuryPerKm),
+   867→          vanPerKm: String(data.vanPerKm),
+   868→          electricPerKm: String(data.electricPerKm),
+   869→          roundTripDiscount: String(data.roundTripDiscount),
+   870→        });
+   871→      }
+   872→      setLoading(false);
+   873→    }).catch(() => setLoading(false));
+   874→  }, []);
+   875→
+   876→  const handleSave = async () => {
+   877→    setSaving(true);
+   878→    try {
+   879→      const res = await fetch('/api/admin/pricing', {
+   880→        method: 'PUT',
+   881→        headers: { 'Content-Type': 'application/json' },
+   882→        body: JSON.stringify({
+   883→          baseFare: parseFloat(form.baseFare) || 0,
+   884→          minFare: parseFloat(form.minFare) || 0,
+   885→          economyPerKm: parseFloat(form.economyPerKm) || 0,
+   886→          vipPerKm: parseFloat(form.vipPerKm) || 0,
+   887→          luxuryPerKm: parseFloat(form.luxuryPerKm) || 0,
+   888→          vanPerKm: parseFloat(form.vanPerKm) || 0,
+   889→          electricPerKm: parseFloat(form.electricPerKm) || 0,
+   890→          roundTripDiscount: parseFloat(form.roundTripDiscount) || 0,
+   891→        }),
+   892→      });
+   893→      if (!res.ok) throw new Error();
+   894→      setSaved(true);
+   895→      setTimeout(() => setSaved(false), 3000);
+   896→      toast.success('قیمت‌گذاری با موفقیت ذخیره شد');
+   897→    } catch {
+   898→      toast.error('خطا در ذخیره قیمت‌گذاری');
+   899→    }
+   900→    setSaving(false);
+   901→  };
+   902→
+   903→  const rateForType = (t: string) => {
+   904→    switch (t) {
+   905→      case 'economy': return parseFloat(form.economyPerKm) || 0;
+   906→      case 'vip': return parseFloat(form.vipPerKm) || 0;
+   907→      case 'luxury': return parseFloat(form.luxuryPerKm) || 0;
+   908→      case 'van': return parseFloat(form.vanPerKm) || 0;
+   909→      case 'electric': return parseFloat(form.electricPerKm) || 0;
+   910→      default: return 0;
+   911→    }
+   912→  };
+   913→
+   914→  const previewPrice = (() => {
+   915→    const dist = parseFloat(preview.distanceKm) || 0;
+   916→    const base = parseFloat(form.baseFare) || 0;
+   917→    const min = parseFloat(form.minFare) || 0;
+   918→    let p = base + dist * rateForType(preview.tripType);
+   919→    if (p < min) p = min;
+   920→    return Math.round(p);
+   921→  })();
+   922→
+   923→  const vehicleCategories = [
+   924→    { id: 'economy', label: 'اقتصادی', desc: 'خودرو معمولی - قیمت مناسب', icon: '🚗', color: '#10B981' },
+   925→    { id: 'vip', label: 'لوکس', desc: 'هیوندای سوناتا - لوکس و راحت', icon: '✨', color: '#D4AF37' },
+   926→    { id: 'luxury', label: 'دربستی ویژه', desc: 'مرسدس بنز - اختصاصی و لوکس', icon: '👑', color: '#F59E0B' },
+   927→    { id: 'van', label: 'ون', desc: 'ون ۸ نفره - مناسب گروهی', icon: '🚐', color: '#3B82F6' },
+   928→    { id: 'electric', label: 'سوپر لوکس', desc: 'خودرو لوکس پریمیوم - بهترین تجربه', icon: '💎', color: '#22C55E' },
+   929→  ];
+   930→
+   931→  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" /></div>;
+   932→
+   933→  return (
+   934→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6 max-w-4xl">
+   935→      <div className="flex items-center justify-between flex-wrap gap-4">
+   936→        <div>
+   937→          <h2 className="text-xl font-bold text-[#fafafa]">مدیریت قیمت‌گذاری</h2>
+   938→          <p className="text-[#a1a1aa] text-sm mt-1">تعیین هزینه پایه و نرخ هر کیلومتر برای هر دسته‌بندی خودرو</p>
+   939→        </div>
+   940→        <Button onClick={handleSave} disabled={saving} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-10 px-6 rounded-xl">
+   941→          {saving ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
+   942→          ذخیره قیمت‌ها
+   943→        </Button>
+   944→      </div>
+   945→
+   946→      {saved && (
+   947→        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400">
+   948→          <Check className="h-4 w-4" />قیمت‌گذاری جدید اعمال شد و از این پس در محاسبه سفرها استفاده می‌شود.
+   949→        </motion.div>
+   950→      )}
+   951→
+   952→      {/* Base fares */}
+   953→      <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-5">
+   954→        <div className="flex items-center gap-2">
+   955→          <Calculator className="h-5 w-5 text-[#D4AF37]" />
+   956→          <h3 className="text-[#fafafa] font-bold">هزینه‌های پایه</h3>
+   957→        </div>
+   958→        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+   959→          <PF label="هزینه پایه (ورود به سفر)" value={form.baseFare} onChange={(v) => setForm({ ...form, baseFare: v })} hint="مبلغ ثابت شروع هر سفر" />
+   960→          <PF label="حداقل کرایه" value={form.minFare} onChange={(v) => setForm({ ...form, minFare: v })} hint="کمترین مبلغ قابل دریافت" />
+   961→          <PF label="تخفیف رفت و برگشت (٪)" value={form.roundTripDiscount} onChange={(v) => setForm({ ...form, roundTripDiscount: v })} hint="درصد تخفیف سفر دو طرفه" max="100" />
+   962→        </div>
+   963→      </Card>
+   964→
+   965→      {/* Per-vehicle-category rates */}
+   966→      <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-5">
+   967→        <div className="flex items-center justify-between">
+   968→          <div className="flex items-center gap-2">
+   969→            <Car className="h-5 w-5 text-[#D4AF37]" />
+   970→            <h3 className="text-[#fafafa] font-bold">نرخ هر کیلومتر بر اساس دسته‌بندی خودرو</h3>
+   971→          </div>
+   972→          <span className="text-[#a1a1aa] text-xs">تومان بر کیلومتر</span>
+   973→        </div>
+   974→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   975→          {vehicleCategories.map((cat) => (
+   976→            <div key={cat.id} className="rounded-xl border border-[#333] bg-[#0a0a0a] p-4 space-y-3">
+   977→              <div className="flex items-center gap-3">
+   978→                <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl" style={{ backgroundColor: `${cat.color}15` }}>
+   979→                  {cat.icon}
+   980→                </div>
+   981→                <div>
+   982→                  <p className="text-[#fafafa] font-bold text-sm">{cat.label}</p>
+   983→                  <p className="text-[#a1a1aa] text-xs">{cat.desc}</p>
+   984→                </div>
+   985→              </div>
+   986→              <div className="flex items-center gap-2">
+   987→                <Input
+   988→                  type="number"
+   989→                  value={form[`${cat.id}PerKm` as keyof typeof form]}
+   990→                  onChange={(e) => setForm({ ...form, [`${cat.id}PerKm`]: e.target.value })}
+   991→                  className="bg-[#1a1a1a] border-[#333] text-[#fafafa] h-10 text-sm"
+   992→                  dir="ltr"
+   993→                />
+   994→                <span className="text-[#a1a1aa] text-xs whitespace-nowrap">تومان / کیلومتر</span>
+   995→              </div>
+   996→              <div className="text-[10px] text-[#888]">
+   997→                مثال ۱۰۰ کیلومتر: <span className="text-[#D4AF37] font-bold" dir="ltr">{new Intl.NumberFormat('fa-IR').format(Math.round((parseFloat(form.baseFare) || 0) + 100 * (parseFloat(form[`${cat.id}PerKm` as keyof typeof form]) || 0)))}</span> تومان
+   998→              </div>
+   999→            </div>
+  1000→          ))}
+  1001→        </div>
+  1002→      </Card>
+  1003→
+  1004→      {/* Live preview */}
+  1005→      <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-4">
+  1006→        <h3 className="text-[#fafafa] font-bold flex items-center gap-2"><CreditCard className="h-5 w-5 text-[#D4AF37]" />پیش‌نمایش محاسبه قیمت</h3>
+  1007→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  1008→          <div className="space-y-2">
+  1009→            <Label className="text-[#a1a1aa] text-sm">دسته‌بندی خودرو</Label>
+  1010→            <Select value={preview.tripType} onValueChange={(v) => setPreview({ ...preview, tripType: v })}>
+  1011→              <SelectTrigger className="w-full bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11"><SelectValue /></SelectTrigger>
+  1012→              <SelectContent className="bg-[#1a1a1a] border-[#333]">
+  1013→                {vehicleCategories.map((c) => (<SelectItem key={c.id} value={c.id} className="text-[#fafafa]">{c.label}</SelectItem>))}
+  1014→              </SelectContent>
+  1015→            </Select>
+  1016→          </div>
+  1017→          <div className="space-y-2">
+  1018→            <Label className="text-[#a1a1aa] text-sm">مسافت (کیلومتر)</Label>
+  1019→            <Input type="number" value={preview.distanceKm} onChange={(e) => setPreview({ ...preview, distanceKm: e.target.value })} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11" dir="ltr" />
+  1020→          </div>
+  1021→        </div>
+  1022→        <div className="rounded-xl bg-gradient-to-l from-[#D4AF37]/15 to-transparent border border-[#D4AF37]/30 p-5 flex items-center justify-between">
+  1023→          <div>
+  1024→            <p className="text-[#a1a1aa] text-xs mb-1">قیمت محاسبه شده</p>
+  1025→            <p className="text-2xl font-bold text-[#D4AF37]" dir="ltr">{new Intl.NumberFormat('fa-IR').format(previewPrice)}</p>
+  1026→          </div>
+  1027→          <div className="text-left text-xs text-[#a1a1aa] space-y-0.5" dir="ltr">
+  1028→            <div>پایه: {new Intl.NumberFormat('fa-IR').format(Math.round(parseFloat(form.baseFare) || 0))}</div>
+  1029→            <div>مسافت: {new Intl.NumberFormat('fa-IR').format(Math.round((parseFloat(preview.distanceKm) || 0) * rateForType(preview.tripType)))}</div>
+  1030→            <div>نرخ: {new Intl.NumberFormat('fa-IR').format(rateForType(preview.tripType))} / کیلومتر</div>
+  1031→          </div>
+  1032→        </div>
+  1033→      </Card>
+  1034→    </motion.div>
+  1035→  );
+  1036→}
+  1037→
+  1038→function PF(props: { label: string; value: string; onChange: (v: string) => void; hint?: string; max?: string }) {
+  1039→  const { label, value, onChange, hint, max } = props;
+  1040→  return (
+  1041→    <div className="space-y-2">
+  1042→      <Label className="text-[#a1a1aa] text-sm">{label}</Label>
+  1043→      <Input type="number" value={value} onChange={(e) => onChange(e.target.value)} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11" dir="ltr" max={max} />
+  1044→      {hint && <p className="text-[10px] text-[#888]">{hint}</p>}
+  1045→    </div>
+  1046→  );
+  1047→}
+  1048→
+  1049→// ─── Emails Tab ───
+  1050→interface EmailItem {
+  1051→  id: string;
+  1052→  fromName: string;
+  1053→  fromEmail: string;
+  1054→  toEmail: string;
+  1055→  toName: string | null;
+  1056→  subject: string;
+  1057→  status: string;
+  1058→  mxHost: string | null;
+  1059→  attemptCount: number;
+  1060→  lastError: string | null;
+  1061→  source: string;
+  1062→  refId: string | null;
+  1063→  sentAt: string | null;
+  1064→  createdAt: string;
+  1065→}
+  1066→
+  1067→function EmailsTab() {
+  1068→  const [items, setItems] = useState<EmailItem[]>([]);
+  1069→  const [stats, setStats] = useState<Record<string, number>>({});
+  1070→  const [filter, setFilter] = useState<string>('all');
+  1071→  const [loading, setLoading] = useState(true);
+  1072→  const [showCompose, setShowCompose] = useState(false);
+  1073→  const [viewing, setViewing] = useState<EmailItem | null>(null);
+  1074→  const [viewHtml, setViewHtml] = useState<string>('');
+  1075→  const [retryingId, setRetryingId] = useState<string | null>(null);
+  1076→
+  1077→  const load = useCallback(async () => {
+  1078→    setLoading(true);
+  1079→    try {
+  1080→      const url = filter === 'all' ? '/api/admin/emails' : `/api/admin/emails?status=${filter}`;
+  1081→      const res = await fetch(url);
+  1082→      const data = await res.json();
+  1083→      if (data.items) {
+  1084→        setItems(data.items);
+  1085→        setStats(data.stats || {});
+  1086→      }
+  1087→    } catch {
+  1088→      toast.error('خطا در دریافت ایمیل‌ها');
+  1089→    } finally {
+  1090→      setLoading(false);
+  1091→    }
+  1092→  }, [filter]);
+  1093→
+  1094→  useEffect(() => { load(); }, [load]);
+  1095→
+  1096→  const handleSend = async (e: React.FormEvent<HTMLFormElement>) => {
+  1097→    e.preventDefault();
+  1098→    const fd = new FormData(e.currentTarget);
+  1099→    const to = String(fd.get('to') || '').trim();
+  1100→    const toName = String(fd.get('toName') || '').trim();
+  1101→    const subject = String(fd.get('subject') || '').trim();
+  1102→    const html = String(fd.get('html') || '').trim();
+  1103→    if (!to || !subject || !html) {
+  1104→      toast.error('گیرنده، موضوع و متن ایمیل الزامی است');
+  1105→      return;
+  1106→    }
+  1107→    try {
+  1108→      const res = await fetch('/api/admin/emails', {
+  1109→        method: 'POST',
+  1110→        headers: { 'Content-Type': 'application/json' },
+  1111→        body: JSON.stringify({ to, toName: toName || undefined, subject, html, source: 'manual' }),
+  1112→      });
+  1113→      const data = await res.json();
+  1114→      if (data.ok) {
+  1115→        toast.success(data.status === 'sent' ? 'ایمیل با موفقیت ارسال شد' : 'ایمیل ثبت شد اما ارسال ناموفق بود (پورت 25 ممکن است مسدود باشد)');
+  1116→        setShowCompose(false);
+  1117→        load();
+  1118→      } else {
+  1119→        toast.error(data.error || 'ارسال ایمیل ناموفق بود');
+  1120→      }
+  1121→    } catch {
+  1122→      toast.error('ارتباط با سرور برقرار نشد');
+  1123→    }
+  1124→  };
+  1125→
+  1126→  const handleRetry = async (id: string) => {
+  1127→    setRetryingId(id);
+  1128→    try {
+  1129→      const res = await fetch(`/api/admin/emails/${id}?action=retry`, { method: 'POST' });
+  1130→      const data = await res.json();
+  1131→      if (data.ok) {
+  1132→        toast.success(data.status === 'sent' ? 'ایمیل با موفقیت ارسال شد' : 'تلاش مجدد ناموفق بود');
+  1133→        load();
+  1134→      } else {
+  1135→        toast.error(data.error || 'تلاش مجدد ناموفق بود');
+  1136→      }
+  1137→    } catch {
+  1138→      toast.error('ارتباط با سرور برقرار نشد');
+  1139→    } finally {
+  1140→      setRetryingId(null);
+  1141→    }
+  1142→  };
+  1143→
+  1144→  const handleDelete = async (id: string) => {
+  1145→    if (!confirm('این ایمیل از آرشیو حذف شود؟')) return;
+  1146→    try {
+  1147→      await fetch(`/api/admin/emails/${id}`, { method: 'DELETE' });
+  1148→      toast.success('ایمیل حذف شد');
+  1149→      load();
+  1150→    } catch {
+  1151→      toast.error('حذف ناموفق بود');
+  1152→    }
+  1153→  };
+  1154→
+  1155→  const handleView = async (item: EmailItem) => {
+  1156→    setViewing(item);
+  1157→    setViewHtml('');
+  1158→    try {
+  1159→      const res = await fetch(`/api/admin/emails/${item.id}`);
+  1160→      const data = await res.json();
+  1161→      if (data.htmlBody) setViewHtml(data.htmlBody);
+  1162→    } catch {
+  1163→      // ignore
+  1164→    }
+  1165→  };
+  1166→
+  1167→  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+  1168→
+  1169→  return (
+  1170→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+  1171→      <div className="flex items-center justify-between flex-wrap gap-3">
+  1172→        <div>
+  1173→          <h2 className="text-xl font-bold text-[#fafafa]">سیستم ایمیل داخلی</h2>
+  1174→          <p className="text-xs text-[#888] mt-1">
+  1175→            ارسال ایمیل از هویت اختصاصی سایت (noreply@sivantaxi.com) — تحویل مستقیم به سرور مقصد
+  1176→          </p>
+  1177→        </div>
+  1178→        <Button onClick={() => setShowCompose(true)} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-11 px-5 rounded-xl">
+  1179→          <Plus className="h-4 w-4 ml-2" />
+  1180→          ایمیل جدید
+  1181→        </Button>
+  1182→      </div>
+  1183→
+  1184→      {/* Stats cards */}
+  1185→      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+  1186→        <StatCard label="کل" value={total} active={filter === 'all'} onClick={() => setFilter('all')} />
+  1187→        <StatCard label="ارسال شده" value={stats.sent || 0} active={filter === 'sent'} onClick={() => setFilter('sent')} color="green" />
+  1188→        <StatCard label="ناموفق" value={stats.failed || 0} active={filter === 'failed'} onClick={() => setFilter('failed')} color="red" />
+  1189→        <StatCard label="در حال ارسال" value={stats.sending || 0} active={filter === 'sending'} onClick={() => setFilter('sending')} color="yellow" />
+  1190→        <StatCard label="در صف" value={stats.queued || 0} active={filter === 'queued'} onClick={() => setFilter('queued')} color="blue" />
+  1191→      </div>
+  1192→
+  1193→      {/* List */}
+  1194→      <Card className="bg-[#1a1a1a] border border-[#333] overflow-hidden">
+  1195→        <div className="p-4 border-b border-[#333] flex items-center justify-between">
+  1196→          <h3 className="text-[#fafafa] font-bold flex items-center gap-2">
+  1197→            <Inbox className="h-4 w-4 text-[#D4AF37]" />
+  1198→            صندوق ارسالی‌ها
+  1199→          </h3>
+  1200→          <Button variant="ghost" size="sm" onClick={load} className="text-[#888] hover:text-[#fafafa] h-8">
+  1201→            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+  1202→          </Button>
+  1203→        </div>
+  1204→        <div className="max-h-[60vh] overflow-y-auto custom-scroll">
+  1205→          {loading ? (
+  1206→            <div className="p-8 text-center text-[#888]">
+  1207→              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+  1208→              در حال بارگذاری…
+  1209→            </div>
+  1210→          ) : items.length === 0 ? (
+  1211→            <div className="p-12 text-center text-[#888]">
+  1212→              <Mail className="h-12 w-12 mx-auto mb-3 opacity-30" />
+  1213→              <p>هیچ ایمیلی یافت نشد</p>
+  1214→              <p className="text-xs mt-1">برای ارسال اولین ایمیل، روی «ایمیل جدید» کلیک کنید</p>
+  1215→            </div>
+  1216→          ) : (
+  1217→            <div className="divide-y divide-[#222]">
+  1218→              {items.map(item => (
+  1219→                <div key={item.id} className="p-4 hover:bg-[#1f1f1f] transition-colors">
+  1220→                  <div className="flex items-start justify-between gap-3">
+  1221→                    <div className="flex-1 min-w-0">
+  1222→                      <div className="flex items-center gap-2 flex-wrap">
+  1223→                        <EmailStatusBadge status={item.status} />
+  1224→                        <span className="text-sm font-bold text-[#fafafa] truncate">{item.subject}</span>
+  1225→                        {item.source !== 'manual' && (
+  1226→                          <Badge variant="outline" className="text-[10px] border-[#555] text-[#888]">{item.source}</Badge>
+  1227→                        )}
+  1228→                      </div>
+  1229→                      <div className="text-xs text-[#888] mt-1.5 flex items-center gap-3 flex-wrap">
+  1230→                        <span>به: <span dir="ltr" className="text-[#bbb]">{item.toEmail}</span></span>
+  1231→                        <span>•</span>
+  1232→                        <span>{new Date(item.createdAt).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' })}</span>
+  1233→                        {item.mxHost && <><span>•</span><span dir="ltr" className="text-[#666]">{item.mxHost}</span></>}
+  1234→                        {item.attemptCount > 1 && <><span>•</span><span>تلاش: {toPersianDigits(item.attemptCount)}</span></>}
+  1235→                      </div>
+  1236→                      {item.lastError && item.status === 'failed' && (
+  1237→                        <p className="text-xs text-red-400/80 mt-1.5 line-clamp-1" dir="ltr">{item.lastError}</p>
+  1238→                      )}
+  1239→                    </div>
+  1240→                    <div className="flex items-center gap-1 shrink-0">
+  1241→                      <Button variant="ghost" size="sm" onClick={() => handleView(item)} className="h-8 w-8 p-0 text-[#888] hover:text-[#fafafa]">
+  1242→                        <Eye className="h-4 w-4" />
+  1243→                      </Button>
+  1244→                      {item.status === 'failed' && (
+  1245→                        <Button variant="ghost" size="sm" onClick={() => handleRetry(item.id)} disabled={retryingId === item.id} className="h-8 w-8 p-0 text-[#D4AF37] hover:text-[#E5C76B]">
+  1246→                          {retryingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+  1247→                        </Button>
+  1248→                      )}
+  1249→                      <Button variant="ghost" size="sm" onClick={() => handleDelete(item.id)} className="h-8 w-8 p-0 text-[#888] hover:text-red-400">
+  1250→                        <Trash2 className="h-4 w-4" />
+  1251→                      </Button>
+  1252→                    </div>
+  1253→                  </div>
+  1254→                </div>
+  1255→              ))}
+  1256→            </div>
+  1257→          )}
+  1258→        </div>
+  1259→      </Card>
+  1260→
+  1261→      {/* Compose modal */}
+  1262→      <AnimatePresence>
+  1263→        {showCompose && (
+  1264→          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4" onClick={() => setShowCompose(false)}>
+  1265→            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#1a1a1a] border border-[#333] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+  1266→              <div className="p-5 border-b border-[#333] flex items-center justify-between">
+  1267→                <h3 className="text-[#fafafa] font-bold flex items-center gap-2">
+  1268→                  <Send className="h-4 w-4 text-[#D4AF37]" />
+  1269→                  ارسال ایمیل جدید
+  1270→                </h3>
+  1271→                <Button variant="ghost" size="sm" onClick={() => setShowCompose(false)} className="h-8 w-8 p-0 text-[#888]">
+  1272→                  <X className="h-4 w-4" />
+  1273→                </Button>
+  1274→              </div>
+  1275→              <form onSubmit={handleSend} className="p-5 space-y-4 overflow-y-auto custom-scroll flex-1">
+  1276→                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+  1277→                  <div className="md:col-span-2">
+  1278→                    <Label className="text-[#a1a1aa] text-sm mb-1.5 block">گیرنده *</Label>
+  1279→                    <Input name="to" type="email" dir="ltr" required placeholder="example@gmail.com" className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11" />
+  1280→                  </div>
+  1281→                  <div>
+  1282→                    <Label className="text-[#a1a1aa] text-sm mb-1.5 block">نام گیرنده</Label>
+  1283→                    <Input name="toName" dir="ltr" placeholder="اختیاری" className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11" />
+  1284→                  </div>
+  1285→                </div>
+  1286→                <div>
+  1287→                  <Label className="text-[#a1a1aa] text-sm mb-1.5 block">موضوع *</Label>
+  1288→                  <Input name="subject" required placeholder="موضوع ایمیل" className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-11" />
+  1289→                </div>
+  1290→                <div>
+  1291→                  <Label className="text-[#a1a1aa] text-sm mb-1.5 block">متن (HTML) *</Label>
+  1292→                  <textarea name="html" required rows={10} placeholder="<p>متن ایمیل</p>" className="w-full bg-[#0a0a0a] border border-[#333] text-[#fafafa] rounded-md p-3 text-sm font-mono" dir="ltr" />
+  1293→                  <p className="text-[10px] text-[#888] mt-1">می‌توانید از تگ‌های HTML مانند &lt;p&gt;، &lt;strong&gt;، &lt;br&gt; استفاده کنید.</p>
+  1294→                </div>
+  1295→                <div className="bg-[#0a0a0a] border border-[#333] rounded-lg p-3">
+  1296→                  <p className="text-xs text-[#888]">
+  1297→                    <strong className="text-[#D4AF37]">فرستنده:</strong> «تاکسی ویژه سیوان» &lt;noreply@sivantaxi.com&gt;
+  1298→                    <br />
+  1299→                    ایمیل از طریق سرور اختصاصی سایت ارسال می‌شود. تحویل به گیرنده به تنظیمات DNS و باز بودن پورت 25 بستگی دارد.
+  1300→                  </p>
+  1301→                </div>
+  1302→                <div className="flex items-center justify-end gap-2 pt-2">
+  1303→                  <Button type="button" variant="ghost" onClick={() => setShowCompose(false)} className="text-[#888] hover:text-[#fafafa] h-11 px-5">انصراف</Button>
+  1304→                  <Button type="submit" className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-11 px-6">
+  1305→                    <Send className="h-4 w-4 ml-2" />
+  1306→                    ارسال
+  1307→                  </Button>
+  1308→                </div>
+  1309→              </form>
+  1310→            </motion.div>
+  1311→          </motion.div>
+  1312→        )}
+  1313→      </AnimatePresence>
+  1314→
+  1315→      {/* View modal */}
+  1316→      <AnimatePresence>
+  1317→        {viewing && (
+  1318→          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4" onClick={() => setViewing(null)}>
+  1319→            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#1a1a1a] border border-[#333] rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+  1320→              <div className="p-5 border-b border-[#333] flex items-center justify-between">
+  1321→                <div className="flex-1 min-w-0">
+  1322→                  <div className="flex items-center gap-2 mb-1">
+  1323→                    <EmailStatusBadge status={viewing.status} />
+  1324→                  </div>
+  1325→                  <h3 className="text-[#fafafa] font-bold truncate">{viewing.subject}</h3>
+  1326→                </div>
+  1327→                <Button variant="ghost" size="sm" onClick={() => setViewing(null)} className="h-8 w-8 p-0 text-[#888]">
+  1328→                  <X className="h-4 w-4" />
+  1329→                </Button>
+  1330→              </div>
+  1331→              <div className="p-5 overflow-y-auto custom-scroll flex-1 space-y-4">
+  1332→                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+  1333→                  <div><span className="text-[#888]">از:</span> <span dir="ltr" className="text-[#fafafa]">{viewing.fromName} &lt;{viewing.fromEmail}&gt;</span></div>
+  1334→                  <div><span className="text-[#888]">به:</span> <span dir="ltr" className="text-[#fafafa]">{viewing.toEmail}</span></div>
+  1335→                  <div><span className="text-[#888]">زمان:</span> <span className="text-[#fafafa]">{new Date(viewing.createdAt).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' })}</span></div>
+  1336→                  {viewing.mxHost && <div><span className="text-[#888]">سرور مقصد:</span> <span dir="ltr" className="text-[#fafafa]">{viewing.mxHost}</span></div>}
+  1337→                </div>
+  1338→                {viewing.lastError && (
+  1339→                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+  1340→                    <p className="text-xs text-red-400 font-bold mb-1">خطای آخرین ارسال:</p>
+  1341→                    <p className="text-xs text-red-300/80" dir="ltr">{viewing.lastError}</p>
+  1342→                  </div>
+  1343→                )}
+  1344→                <div className="border-t border-[#333] pt-4">
+  1345→                  <p className="text-xs text-[#888] mb-2">پیش‌نمایش:</p>
+  1346→                  <div className="bg-white rounded-lg p-4 max-h-[50vh] overflow-y-auto" dir="rtl">
+  1347→                    {viewHtml ? (
+  1348→                      <div dangerouslySetInnerHTML={{ __html: viewHtml }} />
+  1349→                    ) : (
+  1350→                      <p className="text-gray-400 text-sm">در حال بارگذاری…</p>
+  1351→                    )}
+  1352→                  </div>
+  1353→                </div>
+  1354→              </div>
+  1355→            </motion.div>
+  1356→          </motion.div>
+  1357→        )}
+  1358→      </AnimatePresence>
+  1359→    </motion.div>
+  1360→  );
+  1361→}
+  1362→
+  1363→function StatCard(props: { label: string; value: number; active: boolean; onClick: () => void; color?: 'green' | 'red' | 'yellow' | 'blue' }) {
+  1364→  const { label, value, active, onClick, color } = props;
+  1365→  const colorMap = {
+  1366→    green: 'text-green-400 bg-green-500/10',
+  1367→    red: 'text-red-400 bg-red-500/10',
+  1368→    yellow: 'text-yellow-400 bg-yellow-500/10',
+  1369→    blue: 'text-blue-400 bg-blue-500/10',
+  1370→  };
+  1371→  return (
+  1372→    <button onClick={onClick} className={`text-right p-3 rounded-xl border transition-all ${active ? 'bg-[#D4AF37]/10 border-[#D4AF37]/50' : 'bg-[#1a1a1a] border-[#333] hover:border-[#555]'}`}>
+  1373→      <div className="flex items-center justify-between">
+  1374→        <span className="text-xs text-[#888]">{label}</span>
+  1375→        {color && <span className={`text-[10px] px-1.5 py-0.5 rounded ${colorMap[color]}`}>●</span>}
+  1376→      </div>
+  1377→      <div className={`text-xl font-bold mt-1 ${active ? 'text-[#D4AF37]' : 'text-[#fafafa]'}`}>{toPersianDigits(value)}</div>
+  1378→    </button>
+  1379→  );
+  1380→}
+  1381→
+  1382→function EmailStatusBadge({ status }: { status: string }) {
+  1383→  const map: Record<string, { label: string; cls: string }> = {
+  1384→    sent: { label: 'ارسال شد', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+  1385→    failed: { label: 'ناموفق', cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  1386→    sending: { label: 'در حال ارسال', cls: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
+  1387→    queued: { label: 'در صف', cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+  1388→  };
+  1389→  const info = map[status] || map.queued;
+  1390→  return <Badge className={info.cls}>{info.label}</Badge>;
+  1391→}
+  1392→
+  1393→// ─── Settings Tab ───
+  1394→// ─── Notifications Tab (push notifications to admin devices) ───
+  1395→function NotificationsTab() {
+  1396→  const [permission, setPermission] = useState<NotificationPermission>('default');
+  1397→  const [subscribed, setSubscribed] = useState(false);
+  1398→  const [enabling, setEnabling] = useState(false);
+  1399→  const [testing, setTesting] = useState(false);
+  1400→  const [devices, setDevices] = useState<{ id: string; label: string; createdAt: string; userAgent: string | null }[]>([]);
+  1401→  const [loadingDevices, setLoadingDevices] = useState(true);
+  1402→  const [pushSupported, setPushSupported] = useState(true);
+  1403→
+  1404→  useEffect(() => {
+  1405→    if (typeof window === 'undefined') return;
+  1406→    setPushSupported('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+  1407→    if ('Notification' in window) setPermission(Notification.permission);
+  1408→    // Check existing subscription
+  1409→    if ('serviceWorker' in navigator && 'PushManager' in window) {
+  1410→      navigator.serviceWorker.ready.then(reg =>
+  1411→        reg.pushManager.getSubscription().then(s => setSubscribed(!!s))
+  1412→      ).catch(() => {});
+  1413→    }
+  1414→    loadDevices();
+  1415→  }, []);
+  1416→
+  1417→  const loadDevices = useCallback(async () => {
+  1418→    setLoadingDevices(true);
+  1419→    try {
+  1420→      const res = await fetch('/api/push/subscriptions');
+  1421→      const data = await res.json();
+  1422→      setDevices(data.subscriptions || []);
+  1423→    } catch { /* ignore */ } finally { setLoadingDevices(false); }
+  1424→  }, []);
+  1425→
+  1426→  const handleEnable = async () => {
+  1427→    setEnabling(true);
+  1428→    try {
+  1429→      // 1. Get VAPID public key
+  1430→      const vapidRes = await fetch('/api/push/vapid-public');
+  1431→      const vapidData = await vapidRes.json();
+  1432→      if (!vapidData.configured) {
+  1433→        toast.error('کلید VAPID روی سرور پیکربندی نشده است');
+  1434→        setEnabling(false);
+  1435→        return;
+  1436→      }
+  1437→
+  1438→      // 2. Request permission + subscribe via PushManager
+  1439→      const permission = await Notification.requestPermission();
+  1440→      setPermission(permission);
+  1441→      if (permission !== 'granted') {
+  1442→        toast.error('دسترسی نوتیفیکیشن رد شد. از تنظیمات مرورگر اجازه دهید.');
+  1443→        setEnabling(false);
+  1444→        return;
+  1445→      }
+  1446→
+  1447→      const reg = await navigator.serviceWorker.ready;
+  1448→      let sub = await reg.pushManager.getSubscription();
+  1449→      if (!sub) {
+  1450→        const convertedKey = urlBase64ToUint8Array(vapidData.publicKey);
+  1451→        sub = await reg.pushManager.subscribe({
+  1452→          userVisibleOnly: true,
+  1453→          applicationServerKey: convertedKey,
+  1454→        });
+  1455→      }
+  1456→
+  1457→      // 3. Save subscription on the server
+  1458→      const subJson = sub.toJSON();
+  1459→      const saveRes = await fetch('/api/push/subscribe', {
+  1460→        method: 'POST',
+  1461→        headers: { 'Content-Type': 'application/json' },
+  1462→        body: JSON.stringify({
+  1463→          endpoint: subJson.endpoint,
+  1464→          keys: subJson.keys,
+  1465→          label: getDeviceLabel(),
+  1466→          userAgent: navigator.userAgent,
+  1467→        }),
+  1468→      });
+  1469→      if (!saveRes.ok) throw new Error('save failed');
+  1470→
+  1471→      setSubscribed(true);
+  1472→      toast.success('نوتیفیکیشن روی این دستگاه فعال شد ✅');
+  1473→      loadDevices();
+  1474→    } catch (e) {
+  1475→      console.error(e);
+  1476→      toast.error('خطا در فعال‌سازی نوتیفیکیشن');
+  1477→    } finally {
+  1478→      setEnabling(false);
+  1479→    }
+  1480→  };
+  1481→
+  1482→  const handleDisable = async () => {
+  1483→    try {
+  1484→      const reg = await navigator.serviceWorker.ready;
+  1485→      const sub = await reg.pushManager.getSubscription();
+  1486→      if (sub) {
+  1487→        await fetch('/api/push/unsubscribe', {
+  1488→          method: 'POST',
+  1489→          headers: { 'Content-Type': 'application/json' },
+  1490→          body: JSON.stringify({ endpoint: sub.endpoint }),
+  1491→        });
+  1492→        await sub.unsubscribe();
+  1493→      }
+  1494→      setSubscribed(false);
+  1495→      toast.success('نوتیفیکیشن روی این دستگاه غیرفعال شد');
+  1496→      loadDevices();
+  1497→    } catch {
+  1498→      toast.error('خطا در غیرفعال‌سازی');
+  1499→    }
+  1500→  };
+  1501→
+  1502→  const handleTest = async () => {
+  1503→    setTesting(true);
+  1504→    try {
+  1505→      const res = await fetch('/api/push/test', { method: 'POST' });
+  1506→      const data = await res.json();
+  1507→      if (data.ok) {
+  1508→        toast.success(data.message || `به ${data.sent} دستگاه ارسال شد`);
+  1509→      } else {
+  1510→        toast.error(data.error || 'ارسال ناموفق');
+  1511→      }
+  1512→    } catch {
+  1513→      toast.error('خطا در ارسال تست');
+  1514→    } finally {
+  1515→      setTesting(false);
+  1516→    }
+  1517→  };
+  1518→
+  1519→  return (
+  1520→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6 max-w-3xl">
+  1521→      <div>
+  1522→        <h2 className="text-xl font-bold text-[#fafafa] flex items-center gap-2">
+  1523→          <Bell className="h-5 w-5 text-[#D4AF37]" />
+  1524→          سیستم نوتیفیکیشن
+  1525→        </h2>
+  1526→        <p className="text-[#a1a1aa] text-sm mt-1">
+  1527→          با فعال‌سازی نوتیفیکیشن، هنگام دریافت رزرو جدید یا ایمیل، روی گوشی و کامپیوترتان اعلان نمایش داده می‌شود — حتی اگر سایت بسته باشد.
+  1528→        </p>
+  1529→      </div>
+  1530→
+  1531→      {!pushSupported && (
+  1532→        <Card className="bg-red-500/10 border border-red-500/20 p-4">
+  1533→          <div className="flex items-center gap-2 text-red-400 text-sm">
+  1534→            <AlertTriangle className="h-4 w-4" />
+  1535→            مرورگر شما از نوتیفیکیشن push پشتیبانی نمی‌کند. از Chrome، Edge، Firefox یا Safari نسخه جدید استفاده کنید.
+  1536→          </div>
+  1537→        </Card>
+  1538→      )}
+  1539→
+  1540→      {/* Status card */}
+  1541→      <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-4">
+  1542→        <div className="flex items-center justify-between">
+  1543→          <div className="flex items-center gap-3">
+  1544→            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${subscribed ? 'bg-green-500/15' : 'bg-[#D4AF37]/15'}`}>
+  1545→              {subscribed ? <Bell className="h-6 w-6 text-green-400" /> : <BellOff className="h-6 w-6 text-[#D4AF37]" />}
+  1546→            </div>
+  1547→            <div>
+  1548→              <h3 className="text-[#fafafa] font-bold">وضعیت این دستگاه</h3>
+  1549→              <p className="text-[#a1a1aa] text-xs mt-0.5">
+  1550→                {subscribed ? 'فعال — نوتیفیکیشن‌ها دریافت می‌شود' : 'غیرفعال — روی دکمه زیر بزنید'}
+  1551→              </p>
+  1552→            </div>
+  1553→          </div>
+  1554→          <Badge className={
+  1555→            permission === 'granted' ? 'bg-green-500/15 text-green-400 border-green-500/30'
+  1556→            : permission === 'denied' ? 'bg-red-500/15 text-red-400 border-red-500/30'
+  1557→            : 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'
+  1558→          }>
+  1559→            {permission === 'granted' ? 'اجازه داده شده' : permission === 'denied' ? 'مسدود شده' : 'در انتظار'}
+  1560→          </Badge>
+  1561→        </div>
+  1562→
+  1563→        <div className="flex flex-wrap gap-3">
+  1564→          {!subscribed ? (
+  1565→            <Button onClick={handleEnable} disabled={enabling || !pushSupported} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-11 px-6 rounded-xl">
+  1566→              {enabling ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Bell className="h-4 w-4 ml-2" />}
+  1567→              فعال‌سازی نوتیفیکیشن
+  1568→            </Button>
+  1569→          ) : (
+  1570→            <Button onClick={handleDisable} variant="outline" className="bg-transparent border-red-500/30 text-red-400 hover:bg-red-500/10 h-11 px-6 rounded-xl">
+  1571→              <BellOff className="h-4 w-4 ml-2" />
+  1572→              غیرفعال‌سازی این دستگاه
+  1573→            </Button>
+  1574→          )}
+  1575→          <Button onClick={handleTest} disabled={testing} variant="outline" className="bg-transparent border-[#333] text-[#fafafa] hover:bg-[#2d2d2d] h-11 px-6 rounded-xl">
+  1576→            {testing ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Send className="h-4 w-4 ml-2" />}
+  1577→            ارسال نوتیفیکیشن تست
+  1578→          </Button>
+  1579→        </div>
+  1580→
+  1581→        {permission === 'denied' && (
+  1582→          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-xs text-red-300 leading-relaxed">
+  1583→            دسترسی نوتیفیکیشن مسدود شده است. برای رفع آن، روی آیکن قفل کنار آدرس سایت کلیک کرده و «Notifications» را روی «Allow» قرار دهید، سپس صفحه را رفرش کنید.
+  1584→          </div>
+  1585→        )}
+  1586→      </Card>
+  1587→
+  1588→      {/* How it works */}
+  1589→      <Card className="bg-[#0a0a0a] border border-[#D4AF37]/20 p-5">
+  1590→        <h4 className="text-[#D4AF37] font-bold text-sm mb-3">چطور کار می‌کند؟</h4>
+  1591→        <ol className="text-xs text-[#bbb] space-y-2 list-decimal pr-5 leading-relaxed">
+  1592→          <li>روی «فعال‌سازی نوتیفیکیشن» بزنید و اجازه مرورگر را تایید کنید.</li>
+  1593→          <li>این دستگاه در سرور ثبت می‌شود تا بتواند اعلان دریافت کند.</li>
+  1594→          <li>از این پس هر رزرو جدید یا ایمیل دریافتی، فوراً روی این دستگاه اعلان می‌شود — حتی اگر تب مرورگر بسته باشد (تا زمانی که مرورگر در پس‌زمینه اجرا باشد).</li>
+  1595→          <li>برای نصب دائمی روی دسکتاپ/گوشی، از منوی مرورگر «Install app» را بزنید.</li>
+  1596→          <li>می‌توانید روی چند دستگاه (گوشی + لپ‌تاپ) همزمان نوتیفیکیشن فعال کنید.</li>
+  1597→        </ol>
+  1598→      </Card>
+  1599→
+  1600→      {/* Devices list */}
+  1601→      <Card className="bg-[#1a1a1a] border border-[#333] p-6">
+  1602→        <div className="flex items-center justify-between mb-4">
+  1603→          <h3 className="text-[#fafafa] font-bold flex items-center gap-2">
+  1604→            <Smartphone className="h-4 w-4 text-[#D4AF37]" />
+  1605→            دستگاه‌های ثبت‌شده
+  1606→          </h3>
+  1607→          <Button onClick={loadDevices} variant="ghost" size="sm" className="text-[#a1a1aa] hover:text-[#fafafa] h-8">
+  1608→            <RefreshCw className="h-3.5 w-3.5 ml-1" />
+  1609→            بروزرسانی
+  1610→          </Button>
+  1611→        </div>
+  1612→        {loadingDevices ? (
+  1613→          <div className="flex items-center justify-center py-8">
+  1614→            <Loader2 className="h-5 w-5 animate-spin text-[#D4AF37]" />
+  1615→          </div>
+  1616→        ) : devices.length === 0 ? (
+  1617→          <div className="text-center py-8 text-[#888] text-sm">
+  1618→            هنوز دستگاهی ثبت نشده است. روی «فعال‌سازی نوتیفیکیشن» بزنید.
+  1619→          </div>
+  1620→        ) : (
+  1621→          <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+  1622→            {devices.map((d) => (
+  1623→              <div key={d.id} className="flex items-center gap-3 p-3 rounded-lg bg-[#0a0a0a] border border-[#333]">
+  1624→                <div className="w-9 h-9 rounded-lg bg-[#D4AF37]/10 flex items-center justify-center flex-shrink-0">
+  1625→                  <Smartphone className="h-4 w-4 text-[#D4AF37]" />
+  1626→                </div>
+  1627→                <div className="flex-1 min-w-0">
+  1628→                  <p className="text-[#fafafa] text-sm font-medium truncate">{d.label}</p>
+  1629→                  <p className="text-[#888] text-xs mt-0.5">{formatJalaaliDate(d.createdAt)}</p>
+  1630→                </div>
+  1631→                <CheckCircle2 className="h-4 w-4 text-green-400 flex-shrink-0" />
+  1632→              </div>
+  1633→            ))}
+  1634→          </div>
+  1635→        )}
+  1636→      </Card>
+  1637→    </motion.div>
+  1638→  );
+  1639→}
+  1640→
+  1641→function getDeviceLabel(): string {
+  1642→  if (typeof navigator === 'undefined') return 'دستگاه ناشناخته';
+  1643→  const ua = navigator.userAgent;
+  1644→  if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS دستگاه';
+  1645→  if (/Android/i.test(ua)) return 'اندروید';
+  1646→  if (/Windows/i.test(ua)) return 'ویندوز';
+  1647→  if (/Mac/i.test(ua)) return 'مک';
+  1648→  if (/Linux/i.test(ua)) return 'لینوکس';
+  1649→  return 'دستگاه';
+  1650→}
+  1651→
+  1652→function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  1653→  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  1654→  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  1655→  const rawData = atob(base64);
+  1656→  const output = new Uint8Array(rawData.length);
+  1657→  for (let i = 0; i < rawData.length; ++i) output[i] = rawData.charCodeAt(i);
+  1658→  return output;
+  1659→}
+  1660→
+  1661→/** Plays a short two-tone "ding" using the Web Audio API (no audio file needed). */
+  1662→function playNotifSound() {
+  1663→  try {
+  1664→    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  1665→    if (!AudioCtx) return;
+  1666→    const ctx = new AudioCtx();
+  1667→    const now = ctx.currentTime;
+  1668→
+  1669→    const playTone = (freq: number, start: number, duration: number) => {
+  1670→      const osc = ctx.createOscillator();
+  1671→      const gain = ctx.createGain();
+  1672→      osc.type = 'sine';
+  1673→      osc.frequency.setValueAtTime(freq, now + start);
+  1674→      gain.gain.setValueAtTime(0, now + start);
+  1675→      gain.gain.linearRampToValueAtTime(0.25, now + start + 0.02);
+  1676→      gain.gain.exponentialRampToValueAtTime(0.001, now + start + duration);
+  1677→      osc.connect(gain);
+  1678→      gain.connect(ctx.destination);
+  1679→      osc.start(now + start);
+  1680→      osc.stop(now + start + duration + 0.05);
+  1681→    };
+  1682→
+  1683→    // Pleasant two-tone ascending chime (gold/bell-like)
+  1684→    playTone(880, 0, 0.18);     // A5
+  1685→    playTone(1318.5, 0.12, 0.3); // E6
+  1686→
+  1687→    setTimeout(() => { try { ctx.close(); } catch { /* ignore */ } }, 600);
+  1688→  } catch { /* audio not available — silent */ }
+  1689→}
+  1690→
+  1691→// ─── Settings Tab ───
+  1692→function SettingsTab() {
+  1693→  const [saved, setSaved] = useState(false);
+  1694→  const [saving, setSaving] = useState(false);
+  1695→  const [showRelayPass, setShowRelayPass] = useState(false);
+  1696→  const [form, setForm] = useState({
+  1697→    siteName: '', phone1: '', phone2: '', email: '', address: '',
+  1698→    commission: '10', minWithdrawal: '500000', workingHours: '',
+  1699→    notifyEmail: '',
+  1700→    mailSenderName: '',
+  1701→    mailSenderEmail: '',
+  1702→    mailReplyTo: '',
+  1703→    relayHost: '',
+  1704→    relayPort: '587',
+  1705→    relayUser: '',
+  1706→    relayPass: '',
+  1707→  });
+  1708→
+  1709→  useEffect(() => {
+  1710→    fetch('/api/settings').then(r => r.json()).then(data => {
+  1711→      if (!data) return;
+  1712→      setForm(f => ({
+  1713→        ...f,
+  1714→        siteName: data.siteName ?? f.siteName,
+  1715→        phone1: data.phone1 ?? f.phone1,
+  1716→        phone2: data.phone2 ?? f.phone2,
+  1717→        email: data.email ?? f.email,
+  1718→        address: data.address ?? f.address,
+  1719→        commission: data.commission != null ? String(data.commission) : f.commission,
+  1720→        minWithdrawal: data.minWithdrawal != null ? String(data.minWithdrawal) : f.minWithdrawal,
+  1721→        workingHours: data.workingHours ?? f.workingHours,
+  1722→        notifyEmail: data.notifyEmail ?? f.notifyEmail,
+  1723→        mailSenderName: data.mailSenderName ?? '',
+  1724→        mailSenderEmail: data.mailSenderEmail ?? '',
+  1725→        mailReplyTo: data.mailReplyTo ?? '',
+  1726→        relayHost: data.relayHost ?? '',
+  1727→        relayPort: data.relayPort ?? '587',
+  1728→        relayUser: data.relayUser ?? '',
+  1729→        relayPass: data.relayPass ?? '',
+  1730→      }));
+  1731→    }).catch(() => {});
+  1732→  }, []);
+  1733→
+  1734→  const handleSave = async () => {
+  1735→    setSaving(true);
+  1736→    try {
+  1737→      const res = await fetch('/api/settings', {
+  1738→        method: 'PUT',
+  1739→        headers: { 'Content-Type': 'application/json' },
+  1740→        body: JSON.stringify(form),
+  1741→      });
+  1742→      if (!res.ok) throw new Error();
+  1743→      setSaved(true);
+  1744→      setTimeout(() => setSaved(false), 3000);
+  1745→    } catch {
+  1746→      toast.error('خطا در ذخیره تنظیمات');
+  1747→    } finally {
+  1748→      setSaving(false);
+  1749→    }
+  1750→  };
+  1751→
+  1752→  return (
+  1753→    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6 max-w-3xl">
+  1754→      <h2 className="text-xl font-bold text-[#fafafa]">تنظیمات سیستم</h2>
+  1755→      {saved && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400"><Check className="h-4 w-4" />تنظیمات ذخیره شد</motion.div>}
+  1756→
+  1757→      <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-5">
+  1758→        <h3 className="text-[#fafafa] font-bold">اطلاعات پایه</h3>
+  1759→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  1760→          <SF label="نام سایت" value={form.siteName} onChange={(v) => setForm({ ...form, siteName: v })} />
+  1761→          <SF label="ایمیل" value={form.email} onChange={(v) => setForm({ ...form, email: v })} dir="ltr" />
+  1762→          <SF label="تلفن ۱" value={form.phone1} onChange={(v) => setForm({ ...form, phone1: v })} dir="ltr" />
+  1763→          <SF label="تلفن ۲" value={form.phone2} onChange={(v) => setForm({ ...form, phone2: v })} dir="ltr" />
+  1764→          <SF label="آدرس" value={form.address} onChange={(v) => setForm({ ...form, address: v })} full />
+  1765→        </div>
+  1766→      </Card>
+  1767→
+  1768→      <Card className="bg-[#1a1a1a] border border-[#333] p-6 space-y-5">
+  1769→        <div className="flex items-center gap-2">
+  1770→          <Mail className="h-5 w-5 text-[#D4AF37]" />
+  1771→          <h3 className="text-[#fafafa] font-bold">سیستم ایمیل داخلی</h3>
+  1772→        </div>
+  1773→        <p className="text-xs text-[#888] leading-relaxed">
+  1774→          ایمیل‌ها از هویت اختصاصی سایت ارسال می‌شوند. حالت پیش‌فرض، تحویل مستقیم به سرور گیرنده (MX) است
+  1775→          — بدون نیاز به Gmail یا سرویس خارجی. برای محیط‌هایی که پورت 25 مسدود است، می‌توان یک
+  1776→          Relay SMTP دلخواه تنظیم کرد.
+  1777→        </p>
+  1778→
+  1779→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  1780→          <SF label="نام فرستنده" value={form.mailSenderName} onChange={(v) => setForm({ ...form, mailSenderName: v })} placeholder="تاکسی ویژه سیوان" />
+  1781→          <SF label="ایمیل فرستنده" value={form.mailSenderEmail} onChange={(v) => setForm({ ...form, mailSenderEmail: v })} dir="ltr" placeholder="noreply@sivantaxi.com" />
+  1782→          <SF label="آدرس Reply-To" value={form.mailReplyTo} onChange={(v) => setForm({ ...form, mailReplyTo: v })} dir="ltr" placeholder="info@sivantaxi.com" />
+  1783→          <SF label="ایمیل مقصد اعلان‌ها" value={form.notifyEmail} onChange={(v) => setForm({ ...form, notifyEmail: v })} dir="ltr" placeholder="admin@sivantaxi.com" />
+  1784→        </div>
+  1785→
+  1786→        <details className="bg-[#0a0a0a] border border-[#333] rounded-lg p-4 group">
+  1787→          <summary className="cursor-pointer text-sm text-[#D4AF37] font-bold flex items-center gap-2">
+  1788→            <KeyRound className="h-4 w-4" />
+  1789→            تنظیمات Relay SMTP (اختیاری)
+  1790→          </summary>
+  1791→          <p className="text-xs text-[#888] mt-3 mb-3 leading-relaxed">
+  1792→            اگر سرور شما پورت 25 خروجی باز ندارد (مانند اکثر سرویس‌های ابری)، می‌توانید یک سرور Relay
+  1793→            دلخواه تنظیم کنید. این فیلدها اگر خالی باشند، سیستم مستقیماً به MX گیرنده تحویل می‌دهد.
+  1794→          </p>
+  1795→          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  1796→            <SF label="Relay Host" value={form.relayHost} onChange={(v) => setForm({ ...form, relayHost: v })} dir="ltr" placeholder="mail.yourserver.com" />
+  1797→            <SF label="Relay Port" value={form.relayPort} onChange={(v) => setForm({ ...form, relayPort: v })} dir="ltr" placeholder="587" />
+  1798→            <SF label="Relay Username" value={form.relayUser} onChange={(v) => setForm({ ...form, relayUser: v })} dir="ltr" placeholder="noreply@sivantaxi.com" />
+  1799→            <div>
+  1800→              <Label className="text-[#a1a1aa] text-sm mb-2 block">Relay Password</Label>
+  1801→              <div className="relative">
+  1802→                <Input
+  1803→                  type={showRelayPass ? 'text' : 'password'}
+  1804→                  value={form.relayPass}
+  1805→                  onChange={(e) => setForm({ ...form, relayPass: e.target.value })}
+  1806→                  className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11 pl-10"
+  1807→                  dir="ltr"
+  1808→                  placeholder="••••••••"
+  1809→                />
+  1810→                <button
+  1811→                  type="button"
+  1812→                  onClick={() => setShowRelayPass(s => !s)}
+  1813→                  className="absolute left-2 top-1/2 -translate-y-1/2 text-[#888] hover:text-[#fafafa] p-1"
+  1814→                  aria-label={showRelayPass ? 'پنهان' : 'نمایش'}
+  1815→                >
+  1816→                  {showRelayPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+  1817→                </button>
+  1818→              </div>
+  1819→            </div>
+  1820→          </div>
+  1821→        </details>
+  1822→
+  1823→        <div className="bg-[#0a0a0a] border border-[#D4AF37]/30 rounded-lg p-4">
+  1824→          <p className="text-xs text-[#bbb] leading-relaxed">
+  1825→            <strong className="text-[#D4AF37]">راهنمای تحویل به Gmail:</strong>
+  1826→            <br />
+  1827→            برای اینکه ایمیل‌های ارسالی به Inbox گیرنده برسند (نه پوشه Spam)، باید این رکوردهای DNS را
+  1828→            روی دامنه <span dir="ltr" className="text-[#D4AF37]">sivantaxi.com</span> تنظیم کنید:
+  1829→          </p>
+  1830→          <ul className="text-xs text-[#999] mt-2 space-y-1 list-disc pr-5">
+  1831→            <li><b>SPF:</b> یک رکورد TXT با مقدار <code dir="ltr" className="text-[#D4AF37]">v=spf1 mx a -all</code></li>
+  1832→            <li><b>DKIM:</b> با راه‌اندازی کلید DKIM روی سرور ایمیل خود</li>
+  1833→            <li><b>DMARC:</b> یک رکورد TXT با مقدار <code dir="ltr" className="text-[#D4AF37]">v=DMARC1; p=quarantine;</code></li>
+  1834→            <li><b>rDNS (Reverse DNS):</b> آدرس IP سرور باید به <span dir="ltr" className="text-[#D4AF37]">mail.sivantaxi.com</span> pointing باشد</li>
+  1835→          </ul>
+  1836→          <p className="text-xs text-[#888] mt-2 leading-relaxed">
+  1837→            بدون این تنظیمات، ایمیل‌ها احتمالاً به پوشه Spam گیرنده می‌روند. برای مشاهده وضعیت تحویل،
+  1838→            به تب «ایمیل‌ها» مراجعه کنید.
+  1839→          </p>
+  1840→        </div>
+  1841→      </Card>
+  1842→
+  1843→      <Button onClick={handleSave} disabled={saving} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] font-bold h-12 px-8 rounded-xl">
+  1844→        {saving ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
+  1845→        ذخیره تنظیمات
+  1846→      </Button>
+  1847→    </motion.div>
+  1848→  );
+  1849→}
+  1850→
+  1851→function SF(props: {
+  1852→  label: string;
+  1853→  value: string;
+  1854→  onChange: (v: string) => void;
+  1855→  dir?: 'ltr' | 'rtl';
+  1856→  full?: boolean;
+  1857→  placeholder?: string;
+  1858→  type?: string;
+  1859→}) {
+  1860→  const { label, value, onChange, dir, full, placeholder, type } = props;
+  1861→  return (
+  1862→    <div className={full ? 'md:col-span-2' : ''}>
+  1863→      <Label className="text-[#a1a1aa] text-sm mb-2 block">{label}</Label>
+  1864→      <Input value={value} onChange={(e) => onChange(e.target.value)} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" dir={dir} placeholder={placeholder} type={type || 'text'} />
+  1865→    </div>
+  1866→  );
+  1867→}
+  1868→
+  1869→// ─── Helpers ───
+  1870→function getStatusBadge(status: string) {
+  1871→  const map: Record<string, { label: string; cls: string }> = {
+  1872→    pending: { label: 'در انتظار', cls: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
+  1873→    in_progress: { label: 'در حال انجام', cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+  1874→    completed: { label: 'تکمیل شده', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+  1875→    cancelled: { label: 'لغو شده', cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  1876→  };
+  1877→  const info = map[status] || map.pending;
+  1878→  return <Badge className={info.cls}>{info.label}</Badge>;
+  1879→}
+  1880→
+  1881→function getBlogStatusBadge(status: string) {
+  1882→  const map: Record<string, { label: string; cls: string }> = {
+  1883→    draft: { label: 'پیش‌نویس', cls: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
+  1884→    published: { label: 'منتشر شده', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+  1885→    archived: { label: 'بایگانی', cls: 'bg-[#888]/15 text-[#888] border-[#888]/30' },
+  1886→  };
+  1887→  const info = map[status] || map.draft;
+  1888→  return <Badge className={info.cls}>{info.label}</Badge>;
+  1889→}
+  1890→
+  1891→// ─── Main Export ───
+  1892→export function AdminPanel() {
+  1893→  const { admin } = useAppStore();
+  1894→  if (!admin.isAdminOpen) return null;
+  1895→  return <>{!admin.isLoggedIn ? <AdminLoginScreen /> : <AdminDashboard />}</>;
+  1896→}
+  1897→

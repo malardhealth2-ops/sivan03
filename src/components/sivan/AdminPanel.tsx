@@ -8,6 +8,7 @@ import {
   Calendar, Clock, CreditCard, Check, AlertTriangle, Ban, CheckCircle2,
   FileText, Pencil, Plus, Trash2, Image, Send, Save, Calculator, Mail, KeyRound,
   Inbox, RefreshCw, Bell, BellOff, Smartphone, Volume2,
+  Sparkles, Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -584,6 +585,160 @@ function ContentTab() {
   );
 }
 
+// ─── AI Blog Generator Panel ───
+// Controls the AI auto-blog mini-service (port 3005 via gateway):
+// - Shows current status (running / last generated / total posts)
+// - "Generate now" button triggers immediate generation
+// - Explains the 6-hour automatic schedule
+function AIBlogGenerator({ onComplete }: { onComplete: () => void }) {
+  const [status, setStatus] = useState<{
+    running: boolean;
+    lastGeneratedAt: string | null;
+    lastError: string | null;
+    totalPosts: number;
+  } | null>(null);
+  const [triggering, setTriggering] = useState(false);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/blog-generator/status', { cache: 'no-store' });
+      if (!res.ok) throw new Error('status fetch failed');
+      const data = await res.json();
+      setStatus({
+        running: !!data.running,
+        lastGeneratedAt: data.lastGeneratedAt || null,
+        lastError: data.lastError || null,
+        totalPosts: data.totalPosts ?? 0,
+      });
+      return data;
+    } catch {
+      setStatus(null);
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+    const t = setInterval(fetchStatus, 5000);
+    return () => clearInterval(t);
+  }, [fetchStatus]);
+
+  // When generation finishes (running transitions true->false), refresh posts.
+  const prevRunning = React.useRef(false);
+  useEffect(() => {
+    if (!status) return;
+    if (prevRunning.current && !status.running) {
+      onComplete();
+    }
+    prevRunning.current = status.running;
+  }, [status, onComplete]);
+
+  const handleGenerate = async () => {
+    setTriggering(true);
+    try {
+      const res = await fetch('/api/blog-generator/generate', { method: 'POST' });
+      const data = await res.json();
+      if (data.started) {
+        toast.success('تولید مقاله با هوش مصنوعی شروع شد — چند دقیقه طول می‌کشد');
+        // Immediately refresh status so the "generating" state shows.
+        setTimeout(fetchStatus, 500);
+      } else {
+        toast.info(data.message || 'تولید قبلی هنوز در حال انجام است');
+      }
+    } catch {
+      toast.error('خطا در ارتباط با سرویس تولید مقاله');
+    } finally {
+      setTriggering(false);
+    }
+  };
+
+  const lastGeneratedText = (() => {
+    if (!status?.lastGeneratedAt) return 'هنوز تولید نشده';
+    try {
+      const d = new Date(status.lastGeneratedAt);
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 1) return 'همین الان';
+      if (mins < 60) return `${toPersianDigits(mins)} دقیقه پیش`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${toPersianDigits(hrs)} ساعت پیش`;
+      return formatJalaaliDate(d);
+    } catch {
+      return 'نامشخص';
+    }
+  })();
+
+  return (
+    <Card className="bg-gradient-to-l from-[#1a1a1a] to-[#1f1a0f] border border-[#D4AF37]/25 overflow-hidden">
+      <div className="p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#D4AF37]/15 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="h-5 w-5 text-[#D4AF37]" />
+            </div>
+            <div>
+              <h3 className="text-[#fafafa] font-bold text-sm sm:text-base flex items-center gap-2">
+                تولید خودکار مقاله با هوش مصنوعی
+                <Badge className="bg-[#D4AF37]/15 text-[#D4AF37] border-[#D4AF37]/30 text-[10px] px-2 py-0.5">هر ۶ ساعت</Badge>
+              </h3>
+              <p className="text-[#a1a1aa] text-xs mt-1 leading-relaxed">
+                هوش مصنوعی هر ۶ ساعت یک مقاله سئو-بهینه جدید با عکس و متن جاستیفای منتشر می‌کند. موضوعات مرتبط با سفر VIP، تاکسی بین شهری و اهداف سایت سیوان هستند.
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={handleGenerate}
+            disabled={triggering || status?.running}
+            className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-9 px-4 rounded-lg text-sm font-bold flex-shrink-0"
+          >
+            {status?.running ? (
+              <><Loader2 className="h-4 w-4 ml-1.5 animate-spin" />در حال تولید...</>
+            ) : (
+              <><Wand2 className="h-4 w-4 ml-1.5" />تولید فوری مقاله</>
+            )}
+          </Button>
+        </div>
+
+        {/* Status row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-[#333]">
+          <div className="text-center">
+            <div className="text-[10px] text-[#888] mb-1">وضعیت</div>
+            <div className={`text-xs font-bold flex items-center justify-center gap-1 ${status?.running ? 'text-[#D4AF37]' : 'text-green-400'}`}>
+              {status === null ? (
+                <span className="text-[#888]">قطع</span>
+              ) : status.running ? (
+                <><Loader2 className="h-3 w-3 animate-spin" />در حال تولید</>
+              ) : (
+                <><CheckCircle2 className="h-3 w-3" />آماده</>
+              )}
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-[10px] text-[#888] mb-1">آخرین تولید</div>
+            <div className="text-xs text-[#fafafa]">{lastGeneratedText}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[10px] text-[#888] mb-1">کل مقالات</div>
+            <div className="text-xs text-[#fafafa]">{status ? toPersianDigits(status.totalPosts) : '—'}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[10px] text-[#888] mb-1">زمان‌بندی</div>
+            <div className="text-xs text-[#fafafa]">هر ۶ ساعت</div>
+          </div>
+        </div>
+
+        {status?.lastError && (
+          <div className="mt-3 p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+            <span>خطای آخرین تولید: {status.lastError}</span>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 // ─── Blog Management Tab ───
 function BlogTab() {
   const [posts, setPosts] = useState<any[]>([]);
@@ -597,6 +752,11 @@ function BlogTab() {
     const q = statusFilter === 'all' ? '' : `?status=${statusFilter}`;
     fetch(`/api/admin/blog${q}`).then(r => r.json()).then(data => { setPosts(Array.isArray(data) ? data : []); setLoading(false); }).catch(() => setLoading(false));
   }, [statusFilter]);
+
+  const handleGenerateComplete = useCallback(() => {
+    // Refresh the post list after AI generation completes.
+    loadPosts();
+  }, [loadPosts]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
@@ -668,6 +828,8 @@ function BlogTab() {
           </Button>
         </div>
       </div>
+
+      <AIBlogGenerator onComplete={handleGenerateComplete} />
 
       {loading ? (
         <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" /></div>
