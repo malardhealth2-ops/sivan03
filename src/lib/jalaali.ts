@@ -51,11 +51,21 @@ export function getTodayJalaali(): { jy: number; jm: number; jd: number } {
  * For timezone-independent Tehran-based conversion, use getTodayJalaali() or getTehranJalaaliDate().
  */
 export function toJalaaliDate(date: Date | string): { jy: number; jm: number; jd: number } {
+  // Guard against null/undefined/empty so the React tree never crashes.
+  if (!date) return getTodayJalaali();
   const d = typeof date === 'string' ? new Date(date) : date;
-  // Guard against invalid/null/undefined dates (e.g. bad DB values) so the whole
-  // React tree never crashes on a date conversion.
-  if (!d || isNaN(d.getTime())) return getTodayJalaali();
-  return toJalaali(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  // Guard against invalid Date objects (NaN) and non-Date/non-string inputs
+  // (e.g. a number timestamp slipping through) so the whole React tree never
+  // crashes on a date conversion.
+  if (!d || !(d instanceof Date) || isNaN(d.getTime())) return getTodayJalaali();
+  const gy = d.getFullYear();
+  const gm = d.getMonth() + 1;
+  const gd = d.getDate();
+  // jalaali-js only supports Gregorian years that map to Jalali years in
+  // [-61, 3177]. Reject any out-of-range / corrupted year (e.g. negative
+  // timestamps, bad DB values) and fall back to today instead of throwing.
+  if (!Number.isFinite(gy) || gy < 622 || gy > 3821) return getTodayJalaali();
+  return toJalaali(gy, gm, gd);
 }
 
 /**

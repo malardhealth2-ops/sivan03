@@ -637,3 +637,21 @@ Stage Summary:
 - Trip type labels standardized: اقتصادی، ویژه، لوکس، سوپر لوکس، خانوادگی.
 - AI blog auto-generator running on port 3005: generates + publishes a new Persian article with AI cover image every 6 hours. Justified text applied by BlogPostModal CSS (text-justify). First post already published.
 - Files changed: src/lib/pricing.ts, prisma/schema.prisma, src/components/sivan/BookingModal.tsx (carOptions), src/app/api/routes/popular/route.ts, src/app/api/admin/popular-routes/route.ts (new), src/app/api/admin/popular-routes/[id]/route.ts (new), scripts/seed-routes.mjs (new), mini-services/blog-generator/{package.json,index.ts} (new).
+
+---
+Task ID: 13
+Agent: main
+Task: Fix two critical runtime errors blocking homepage render (FleetSection hydration mismatch + jalaali year -100721 crash)
+
+Work Log:
+- Investigated FleetSection hydration error: server rendered "مرسدس بنز" but client expected "E". Confirmed current FleetSection.tsx code is correct (shortName: 'مرسدس بنز'). Root cause = stale Turbopack dev cache (browser running old compiled client bundle).
+- Investigated jalaali "Invalid Jalaali year -100721" crash in BlogPreview. Inspected DB directly: both BlogPost records have valid publishedAt dates (2026-07-26, 2026-07-27). Tested toJalaali(2026,7,27) in isolation = works fine (returns jy:1405). Confirmed API returns valid ISO strings. Root cause = stale compiled code in .next cache.
+- Hardened src/lib/jalaali.ts toJalaaliDate(): added instanceof Date check, Number.isFinite guard, and Gregorian year range validation (622–3821). Any out-of-range/corrupted date now falls back to getTodayJalaali() instead of throwing RangeError. This makes the date conversion bulletproof against any future bad DB values.
+- Killed dev server (pkill -f "next dev"), deleted .next cache directory, restarted dev server fresh (setsid --fork node node_modules/.bin/next dev -p 3000).
+- Verified via Agent Browser: page loads cleanly (GET / 200), no runtime errors, no hydration mismatches, no console errors. FleetSection tabs render correctly (سوناتا/مرسدس بنز/بیامو/آئودی/لندکروزر). BlogPreview section renders 2 posts with valid Jalali dates, no crash.
+
+Stage Summary:
+- Both blocking errors resolved. Homepage fully interactive again.
+- jalaali.ts now defensively validates date inputs — will never crash the React tree on bad dates.
+- Root cause of both errors was stale Turbopack dev cache; fixed by clearing .next and restarting dev server.
+- Dev server running cleanly on port 3000.
