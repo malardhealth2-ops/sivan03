@@ -655,3 +655,19 @@ Stage Summary:
 - jalaali.ts now defensively validates date inputs — will never crash the React tree on bad dates.
 - Root cause of both errors was stale Turbopack dev cache; fixed by clearing .next and restarting dev server.
 - Dev server running cleanly on port 3000.
+
+---
+Task ID: 14
+Agent: main
+Task: Fix blank live preview in cloud sandbox (cross-origin /_next/* asset blocking)
+
+Work Log:
+- User reported "live preview shows nothing" despite dev server returning GET / 200.
+- Investigated dev.log: found the root cause warning — Next.js 16 cross-origin dev origin warning: "Cross origin request detected from preview-chat-*.space-z.ai to /_next/* resource". In Next.js 16, /_next/* dev assets (HMR client, chunks, React refresh) are blocked by default for origins not whitelisted, so the iframe preview got HTML but no JS → blank screen.
+- Updated next.config.ts: added allowedDevOrigins = ["*.space-z.ai", "*.space-z.dev", "localhost", "127.0.0.1"] so the cloud-sandbox preview gateway can load /_next/* dev assets.
+- Killed dev server, cleared .next cache, restarted fresh.
+- Verified via Agent Browser: page loads, HMR connected ("[HMR] connected", "[Fast Refresh] done"), no errors in browser errors/console, full DOM renders (Navbar with Tehran clock 08:48, Jalali date 5 مرداد 1405, hero heading, popular routes, services, fleet tabs, blog posts, FAQ, footer). Cross-origin warning no longer appears in dev.log.
+
+Stage Summary:
+- Live preview blank-screen issue fixed by whitelisting the *.space-z.ai preview origin in next.config.ts allowedDevOrigins.
+- Dev server running cleanly on port 3000, page fully interactive, no hydration/jalaali errors, no cross-origin blocking.
