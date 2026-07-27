@@ -894,3 +894,49 @@ Stage Summary:
   8. Dynamic /robots.txt points Googlebot to the sitemap
   9. Bots don't inflate viewCount (user-agent detection)
 - Files changed: src/lib/site-url.ts (new), src/app/blog/page.tsx (new), src/app/blog/[slug]/page.tsx (new), src/app/sitemap.ts (new), src/app/robots.ts (new), public/robots.txt (deleted), src/components/sivan/BlogPreview.tsx (updated to use Link).
+
+---
+Task ID: 20
+Agent: main
+Task: Add custom-topic article generation box in admin Blog panel (AI generates article on admin's chosen topic, WITHOUT affecting the 6-hour auto-rotation schedule)
+
+Work Log:
+- User requested: in the admin Blog panel, next to the existing "تولید فوری مقاله" button, add a box where the admin can type a topic and the AI generates an article based on that topic. The generated article must NOT affect the automatic 6-hour schedule.
+- Analyzed the blog-generator service architecture:
+  * 6-hour timer is a fixed `setInterval` — already independent of on-demand generations (never reset).
+  * BUT `pickTopic()` advances `cycleIndex` + `categoryTopicIndex` — if custom generations called pickTopic(), they'd consume/advance the auto-rotation, so the next scheduled generation would skip a topic.
+  * Solution: custom generations must NOT call pickTopic() at all.
+- Refactored `mini-services/blog-generator/index.ts`:
+  - Added `deriveKeyword(topic)`: extracts a meaningful SEO keyword from a free-form Persian topic by stripping common stopwords, keeping up to 5 significant words.
+  - Added `classifyTopic(topic)`: heuristically classifies the custom topic into one of the 7 cover-image categories (tourism/luxury-cars/luxury-vs-economy/travel-guide/travel-tips/safety/sivan-brand) by keyword matching (handles both ی and ي, ک and ك Persian forms), so the generated cover image matches the article's theme. Falls back to 'travel-guide'.
+  - Changed `generateArticle()` signature to `generateArticle(customTopic?: string)`:
+    * When customTopic is provided (trimmed, non-empty): builds a Topic object from it (title=customTopic, keyword=deriveKeyword, category=classifyTopic) and does NOT call pickTopic(). cycleIndex/categoryTopicIndex stay unchanged.
+    * When no customTopic: calls pickTopic() as before (advances rotation).
+    * Returns `custom: boolean` flag in the result so callers can distinguish.
+  - Added new endpoint `POST /generate-custom`: reads `{ topic: string }` JSON body, validates (3-200 chars), logs "admin requested custom topic", calls `generateArticle(topic)` fire-and-forget. Returns `{ started: true, custom: true, topic }`. Has the same `isGenerating` guard so it can't conflict with an in-progress generation. Persian error messages.
+- Created proxy API route `src/app/api/blog-generator/generate-custom/route.ts`:
+  - POST handler, reads JSON body, validates topic (3-200 chars, Persian error messages), forwards to `http://localhost:3005/generate-custom`.
+  - Same gateway-friendly pattern as the existing /generate proxy.
+- Updated `src/components/sivan/AdminPanel.tsx` `AIBlogGenerator` component:
+  - Added `import { Textarea } from '@/components/ui/textarea'` and `PenLine` icon.
+  - Added state: `customTopic` (string), `customTriggering` (boolean).
+  - Added `handleCustomGenerate()`: validates the topic, POSTs to `/api/blog-generator/generate-custom` with `{ topic }`, shows success toast with the topic name, clears the input, triggers status refresh. Handles errors and the "already generating" case.
+  - Added UI section (below the status grid, separated by a border-top divider):
+    * Header row: PenLine icon + "تولید مقاله با موضوع دلخواه" label + a gold badge "بدون تأثیر روی زمان‌بندی ۶ ساعته" (clearly communicates the independence guarantee).
+    * Explanation paragraph: tells admin to enter a travel/tourism/luxury-car topic, AI writes an SEO article with image, and confirms the schedule is unaffected.
+    * Textarea (2 rows, maxLength 200, placeholder "مثال: جاذبه‌های گردشگری جزیره هرمز و دره ستارگان", disabled while generating). Supports Ctrl+Enter / Cmd+Enter to submit.
+    * "تولید با این موضوع" button (gold, disabled when topic < 3 chars or a generation is in progress).
+    * Character counter "{n} / ۲۰۰" in Persian digits + "Ctrl+Enter برای ارسال سریع" hint.
+- Verified end-to-end:
+  1. Service: tested /generate-custom validation (rejects short topics), fire-and-forget start.
+  2. Generated custom post "سفر به رویای زمینی: جاذبه‌های گردشگری جزیره هرمز و دره ستارگان" from the curl test topic — confirmed in DB with cover image + SEO tags.
+  3. Agent Browser: logged into admin panel, navigated to Blog tab, confirmed the "تولید مقاله با موضوع دلخواه" box + textarea + button are all visible.
+  4. Filled the textarea with "مزایای سفر با خودرو لوکس در جاده‌های کوهستانی ایران" → button enabled → clicked → toast "تولید مقاله با موضوع «...» شروع شد" appeared → status changed to "در حال تولید".
+  5. Generation completed (~100s): new post "تجربه‌ای بی‌نظیر: مزایای سفر با خودرو لوکس در جاده‌های کوهستانی ایران" published with cover image + SEO tags derived from the custom topic. Total posts: 6→7.
+  6. **Rotation independence proven**: after the 2 custom generations, triggered an AUTO /generate — it picked "جاذبه‌های گردشگری مشهد" (the correct next topic in rotation), NOT a skipped/duplicated one. The service log shows the 2 CUSTOM entries did not call pickTopic(), so cycleIndex was only advanced by auto-generations.
+- Lint passes clean (0 errors). Dev server (3000) + blog-generator (3005) both running healthy.
+
+Stage Summary:
+- Admin can now type any custom topic in the Blog panel and get an AI-generated SEO article on that exact topic (with cover image + derived SEO keyword + category-matched cover scene).
+- Custom generations are 100% independent of the 6-hour auto-rotation: they don't call pickTopic(), don't advance cycleIndex/categoryTopicIndex, and don't reset the setInterval timer. The next scheduled generation picks the correct next topic as if no custom generation happened.
+- Files changed: mini-services/blog-generator/index.ts (deriveKeyword, classifyTopic, generateArticle(customTopic?), POST /generate-custom endpoint), src/app/api/blog-generator/generate-custom/route.ts (new proxy), src/components/sivan/AdminPanel.tsx (Textarea import, PenLine icon, customTopic state, handleCustomGenerate, custom-topic UI section).

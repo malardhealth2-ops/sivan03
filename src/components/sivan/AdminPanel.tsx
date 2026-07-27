@@ -8,10 +8,11 @@ import {
   Calendar, Clock, CreditCard, Check, AlertTriangle, Ban, CheckCircle2,
   FileText, Pencil, Plus, Trash2, Image, Send, Save, Calculator, Mail, KeyRound,
   Inbox, RefreshCw, Bell, BellOff, Smartphone, Volume2,
-  Sparkles, Wand2,
+  Sparkles, Wand2, PenLine,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -598,6 +599,8 @@ function AIBlogGenerator({ onComplete }: { onComplete: () => void }) {
     totalPosts: number;
   } | null>(null);
   const [triggering, setTriggering] = useState(false);
+  const [customTopic, setCustomTopic] = useState('');
+  const [customTriggering, setCustomTriggering] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -649,6 +652,42 @@ function AIBlogGenerator({ onComplete }: { onComplete: () => void }) {
       toast.error('خطا در ارتباط با سرویس تولید مقاله');
     } finally {
       setTriggering(false);
+    }
+  };
+
+  const handleCustomGenerate = async () => {
+    const topic = customTopic.trim();
+    if (!topic) {
+      toast.error('لطفاً موضوع مقاله را وارد کنید');
+      return;
+    }
+    if (topic.length < 3) {
+      toast.error('موضوع مقاله باید حداقل ۳ کاراکتر باشد');
+      return;
+    }
+    if (topic.length > 200) {
+      toast.error('موضوع مقاله نباید بیشتر از ۲۰۰ کاراکتر باشد');
+      return;
+    }
+    setCustomTriggering(true);
+    try {
+      const res = await fetch('/api/blog-generator/generate-custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic }),
+      });
+      const data = await res.json();
+      if (data.started) {
+        toast.success(`تولید مقاله با موضوع «${topic.slice(0, 40)}${topic.length > 40 ? '…' : ''}» شروع شد`);
+        setCustomTopic('');
+        setTimeout(fetchStatus, 500);
+      } else {
+        toast.info(data.message || 'تولید قبلی هنوز در حال انجام است');
+      }
+    } catch {
+      toast.error('خطا در ارتباط با سرویس تولید مقاله');
+    } finally {
+      setCustomTriggering(false);
     }
   };
 
@@ -734,6 +773,54 @@ function AIBlogGenerator({ onComplete }: { onComplete: () => void }) {
             <span>خطای آخرین تولید: {status.lastError}</span>
           </div>
         )}
+
+        {/* Custom topic generation — independent of the 6h auto schedule */}
+        <div className="mt-4 pt-4 border-t border-[#333]">
+          <div className="flex items-center gap-2 mb-2">
+            <PenLine className="h-4 w-4 text-[#D4AF37]" />
+            <Label className="text-[#fafafa] text-xs sm:text-sm font-bold cursor-pointer">
+              تولید مقاله با موضوع دلخواه
+            </Label>
+            <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20 text-[9px] px-1.5 py-0.5 mr-auto">
+              بدون تأثیر روی زمان‌بندی ۶ ساعته
+            </Badge>
+          </div>
+          <p className="text-[#a1a1aa] text-[11px] mb-2.5 leading-relaxed">
+            موضوعی مرتبط با سفر، گردشگری یا خودروهای لوکس وارد کنید. هوش مصنوعی یک مقاله سئو-بهینه با عکس روی همان موضوع می‌نویسد. این تولید، زمان‌بندی خودکار را تغییر نمی‌دهد.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Textarea
+              value={customTopic}
+              onChange={(e) => setCustomTopic(e.target.value)}
+              placeholder="مثال: جاذبه‌های گردشگری جزیره هرمز و دره ستارگان"
+              className="bg-[#0a0a0a] border-[#333] focus:border-[#D4AF37]/50 text-[#fafafa] text-sm resize-none placeholder:text-[#555] min-h-[44px] flex-1"
+              rows={2}
+              maxLength={200}
+              disabled={customTriggering || status?.running}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  handleCustomGenerate();
+                }
+              }}
+            />
+            <Button
+              onClick={handleCustomGenerate}
+              disabled={customTriggering || status?.running || customTopic.trim().length < 3}
+              className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-9 px-4 rounded-lg text-sm font-bold flex-shrink-0 sm:self-end"
+            >
+              {customTriggering ? (
+                <><Loader2 className="h-4 w-4 ml-1.5 animate-spin" />در حال ارسال...</>
+              ) : (
+                <><Sparkles className="h-4 w-4 ml-1.5" />تولید با این موضوع</>
+              )}
+            </Button>
+          </div>
+          <div className="flex items-center justify-between mt-1.5 text-[10px] text-[#666]">
+            <span className="hidden sm:inline">Ctrl+Enter برای ارسال سریع</span>
+            <span className="mr-auto">{toPersianDigits(customTopic.length)} / ۲۰۰</span>
+          </div>
+        </div>
       </div>
     </Card>
   );

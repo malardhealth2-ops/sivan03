@@ -321,7 +321,52 @@ async function generateCoverImage(
   }
 }
 
-async function generateArticle(): Promise<{ ok: boolean; title?: string; slug?: string; error?: string }> {
+// Derive a keyword from a free-form custom topic: take the most meaningful
+// words (skip very common Persian stopwords), join with space. Falls back to
+// the whole topic if filtering removes everything.
+function deriveKeyword(topic: string): string {
+  const stopwords = new Set([
+    'در', 'از', 'به', 'با', 'و', 'یا', 'را', 'است', 'نیست', 'برای', 'تا', 'که',
+    'این', 'آن', 'هر', 'چه', 'چگونه', 'چرا', 'کی', 'کجا', 'کدام', 'هم', 'تاکنون',
+    'یک', 'دو', 'سه', 'نه', 'بله', 'خیر', 'اما', 'اگر', 'چون', 'بنابراین', 'پس',
+    'ترین', 'ها', 'های', 'ای', 'هایی', 'شود', 'شده', 'می', 'کرد', 'کند', 'باشد',
+    'هستند', 'بود', 'بودن', 'ما', 'شما', 'او', 'آنها', 'خود', 'همین', 'مانند',
+  ]);
+  const words = topic
+    .replace(/[«»"'!?.,:;()\[\]{}،؛؟]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !stopwords.has(w));
+  const kw = words.slice(0, 5).join(' ').trim();
+  return kw || topic.slice(0, 40);
+}
+
+// Heuristically classify a free-form custom topic into one of the cover-image
+// categories, so the generated cover matches the article's theme. Falls back to
+// 'travel-guide' which has generic scenic-highway scenes.
+function classifyTopic(topic: string): TopicCategory {
+  const t = topic.toLowerCase();
+  if (/(گردشگري|گردشگری|جاذبه|ديدني|دیدنی|طبيعت|طبیعت|تاريخي|تاریخی|معبد|مسجد|كليسا|کلیسا|موزه|بازار|روستا|جزيره|جزیره|ساحل|دريا|دریا|كوه|کوه|جنگل|كوير|کویر|شمال|جنوب|كیش|کیش|قشم|مشهد|شيراز|شیراز|اصفهان|تبريز|تبریز|يزد|رشت|نوشهر|چالوس|كرمان|کرمان|ماسوله)/.test(t)) {
+    return 'tourism';
+  }
+  if (/(مرسدس|بنز|بي ام و|بی ام و|bmw|آئودي|آئودی|audi|تويوتا|تویوتا|لندکروز|لند كروزر|هیونداي|هیوندای|سوناتا|خودروي لوكس|خودروی لوکس|خودرو لوكس|خودرو لوکس|ماشين لوكس|ماشین لوکس|صندلي|صندلی|چرمي|چرمی|تعليق|تعلیق|ايمني فعال|ایمنی فعال|ترمز|كيسه هوا|کیسه هوا|داخلي|داخلی|كابين|کابین|طراحی داخل|امكانات خودرو)/.test(t)) {
+    return 'luxury-cars';
+  }
+  if (/(اقتصادي|اقتصادی|لوكس در برابر|لوکس در برابر|مقايده|مقایسه|پرايد|پراید|تيبا|سايپا|سایپا|ايران خودرو|ایران خودرو|هزينه پنهان|هزینه پنهان|ارزشش|ارزش خودرو|خستگي راننده|خستگی راننده|برتري|برتری)/.test(t)) {
+    return 'luxury-vs-economy';
+  }
+  if (/(بسته بندي|بسته‌بندی|چمدان|خستگي|خستگی|استراحت در جاده|كودكان|کودکان|زمان سفر|ترافيك|ترافیک|نكات عملي|نکات عملی|راهنماي سفر|راهنمای سفر|آمادگي|آمادگی)/.test(t)) {
+    return 'travel-tips';
+  }
+  if (/(امني|ایمنی|بي خطر|بی‌خطر|خطر|تصادف|كاكسه|کاسه|كمربند|کمربند| ايمني سفر|ایمنی سفر|شب|چك ليست|چک‌لیست|چک ليست)/.test(t)) {
+    return 'safety';
+  }
+  if (/(سيوان|سرويس دربستي|سرویس دربستی|آژانس|هزينه تاكسيمون|هزینه تاکسی|قيمت|قیمت|رزرو|اپليكيشن|اپلیکیشن|برند سيوان|برند سوان)/.test(t)) {
+    return 'sivan-brand';
+  }
+  return 'travel-guide';
+}
+
+async function generateArticle(customTopic?: string): Promise<{ ok: boolean; title?: string; slug?: string; error?: string; custom?: boolean }> {
   if (!zai) {
     return { ok: false, error: 'ZAI SDK not initialized' };
   }
@@ -331,8 +376,19 @@ async function generateArticle(): Promise<{ ok: boolean; title?: string; slug?: 
   isGenerating = true;
   lastError = null;
 
-  const topic = pickTopic();
-  console.log(`[blog-generator] generating article for topic: ${topic.title} (keyword: ${topic.keyword}, category: ${topic.category})`);
+  // For custom-topic generations we build a Topic from the admin's input and
+  // do NOT call pickTopic() — this keeps the 6-hour auto-rotation untouched
+  // (cycleIndex / categoryTopicIndex are only advanced by scheduled/on-demand
+  // auto-pick generations, never by custom ones).
+  const isCustom = !!customTopic && customTopic.trim().length > 0;
+  const topic: Topic = isCustom
+    ? {
+        title: customTopic!.trim().slice(0, 200),
+        keyword: deriveKeyword(customTopic!),
+        category: classifyTopic(customTopic!),
+      }
+    : pickTopic();
+  console.log(`[blog-generator] generating article for topic: ${topic.title} (keyword: ${topic.keyword}, category: ${topic.category}${isCustom ? ', CUSTOM' : ''})`);
 
   const systemPrompt =
     'تو یک نویسنده حرفه‌ای محتوای سفر، گردشگری و خودرو هستی که برای وب‌سایت «تاکسی ویژه سیوان» (یک سرویس تاکسی VIP بین شهری در ایران با ناوگان خودروهای لوکس) مطلب می‌نویسی. موضوعات مقاله‌های تو متنوع است: گردشگری و معرفی مناطق زیبای ایران، معرفی خودروهای لوکس و امکانات آن‌ها، مقایسه خودرو لوکس با خودرو اقتصادی، راهنمای سفر بین شهرهای ایران، نکات عملی سفر و گاهی مسائل ایمنی. لحن تو حرفه‌ای، صمیمی و قابل اعتماد است و با مخاطب ایرانی صحبت می‌کنی. مقاله‌هایی که می‌نویسی باکیفیت، مفید، خوانا و سئو-بهینه هستند. تو قوانین سئو (کلمه کلیدی، ساختار هدینگ، متا دیسکریپشن) را به‌خوبی می‌دانی. در هر مقاله، در صورت مرتبط بودن، می‌توانی به‌طور طبیعی و غیرتبلیغاتی به سرویس «تاکسی ویژه سیوان» اشاره کنی.';
@@ -422,9 +478,9 @@ async function generateArticle(): Promise<{ ok: boolean; title?: string; slug?: 
       },
     });
     lastGeneratedAt = new Date().toISOString();
-    console.log(`[blog-generator] ✓ published: "${post.title}" (slug: ${post.slug}, image: ${featuredImageUrl || 'none'})`);
+    console.log(`[blog-generator] ✓ published${isCustom ? ' (CUSTOM)' : ''}: "${post.title}" (slug: ${post.slug}, image: ${featuredImageUrl || 'none'})`);
     isGenerating = false;
-    return { ok: true, title: post.title, slug: post.slug };
+    return { ok: true, title: post.title, slug: post.slug, custom: isCustom };
   } catch (err) {
     console.error('[blog-generator] DB save failed:', err);
     lastError = 'DB save failed';
@@ -517,6 +573,31 @@ const server = Bun.serve({
       }
       generateArticle().catch((e) => console.error('[blog-generator] on-demand error:', e));
       return Response.json({ started: true }, { headers: corsHeaders });
+    }
+    if (req.method === 'POST' && url.pathname === '/generate-custom') {
+      // Custom-topic generation. Reads { topic: string } from the JSON body.
+      // This does NOT advance the 6-hour auto-rotation — generateArticle()
+      // skips pickTopic() when a customTopic is supplied, so the scheduled
+      // setInterval cycle continues with its next topic as if nothing happened.
+      if (isGenerating) {
+        return Response.json({ started: false, message: 'تولید دیگری در حال انجام است؛ لطفاً صبر کنید' }, { headers: corsHeaders });
+      }
+      let body: any = null;
+      try {
+        body = await req.json();
+      } catch {
+        return Response.json({ started: false, message: 'بدنه درخواست نامعتبر است' }, { status: 400, headers: corsHeaders });
+      }
+      const topic = typeof body?.topic === 'string' ? body.topic.trim() : '';
+      if (!topic || topic.length < 3) {
+        return Response.json({ started: false, message: 'موضوع مقاله باید حداقل ۳ کاراکتر باشد' }, { status: 400, headers: corsHeaders });
+      }
+      if (topic.length > 200) {
+        return Response.json({ started: false, message: 'موضوع مقاله نباید بیشتر از ۲۰۰ کاراکتر باشد' }, { status: 400, headers: corsHeaders });
+      }
+      console.log(`[blog-generator] admin requested custom topic: "${topic}"`);
+      generateArticle(topic).catch((e) => console.error('[blog-generator] custom on-demand error:', e));
+      return Response.json({ started: true, custom: true, topic }, { headers: corsHeaders });
     }
     return new Response('Not Found', { status: 404, headers: corsHeaders });
   },
