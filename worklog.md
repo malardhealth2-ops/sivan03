@@ -972,3 +972,43 @@ Stage Summary:
 - Applies to both custom-topic and auto-scheduled (6h) generations.
 - Robust fallback to category-based scene pool if LLM prompt generation fails.
 - Verified end-to-end via logs, VLM image analysis, and Agent Browser.
+
+---
+Task ID: register-and-logo
+Agent: main
+Task: (1) Add passenger registration option so users can sign up. (2) Replace site logo with user-uploaded sivanlogo.JPG.
+
+Work Log:
+LOGO:
+- User uploaded /home/z/my-project/upload/sivanlogo.JPG (822x768 JPEG, "SIVAN VIP TAXI" circular logo with taxi silhouette, gold/red/charcoal palette).
+- Installed sharp, converted uploaded JPG to a proper 512x512 PNG with white contain-background at /home/z/my-project/public/logo.png (backed up old logo to logo.old.bak).
+- VLM-verified the converted PNG: shows "SIVAN" gold, "VIP" red, "TAXI" charcoal, taxi silhouette, circular border, "24/7".
+- logo.png now served with correct content-type image/png (HTTP 200, 143KB). All existing references (Navbar, Footer, BookingModal, HeroSection, AdminPanel, blog JSON-LD) automatically pick up the new logo since they all use src="/logo.png".
+
+REGISTRATION:
+- Updated src/lib/store.ts AuthState: mode now 'login' | 'register'; added fullName + phone fields; added setAuthFullName + setAuthPhone actions; closeAuth/openAuth reset the new fields.
+- Updated src/app/api/auth/register/route.ts: added required `password` field (min 4) to zod schema; now stores user.password so the user can log back in via /api/auth/login (which checks user.password === password).
+- Rewrote src/components/sivan/AuthModal.tsx into a dual-mode modal:
+  * Login mode: username + password (unchanged behavior, admin still opens admin panel).
+  * Register mode: fullName + phone (Iranian mobile regex 09XXXXXXXXX) + password (min 4).
+  * Toggle links at the bottom switch between modes without closing the modal.
+  * Client-side validation with inline error messages.
+  * On successful registration: auto-logs-in the passenger (sets auth.user + isVerified), shows success screen + toast, no second login needed.
+  * Show/hide password eye toggle preserved.
+- Updated src/components/sivan/Navbar.tsx: added a "ثبت‌نام" ghost/outline button next to the existing "ورود" gold button, in both the desktop header and the mobile sheet.
+
+Verification:
+- Lint: clean (no errors).
+- Dev log: POST /api/auth/register 200, POST /api/auth/login 200, no runtime errors.
+- Agent Browser:
+  * Homepage header shows new SIVAN VIP TAXI logo (VLM-confirmed) + both "ثبت‌نام" and "ورود" buttons.
+  * Register modal: 3 fields render, submit disabled until valid; filling valid data + submit -> success screen + toast "ثبت‌نام موفق بود! خوش آمدید، تست کاربر سیوان عزیز".
+  * DB check: user created with phone, fullName, password (matches), role=passenger, linked Passenger profile with referral code REF-XXXXXX.
+  * Login modal: logging in with the just-registered phone+password -> success screen + toast "خوش آمدید، تست کاربر سیوان عزیز".
+  * Toggle link "ثبت‌نام کنید" / "وارد شوید" switches modes correctly.
+- Cleaned up the test user from DB after verification.
+
+Stage Summary:
+- New SIVAN VIP TAXI logo (from user upload) is live across the entire site (navbar, footer, modal, admin, blog JSON-LD).
+- Passengers can now register (fullName + phone + password) via a dedicated "ثبت‌نام" button; registration auto-logs them in and creates a Passenger profile with referral code. Registered users can log back in with phone+password.
+- Admin login (admin/sivan2024) is unaffected.

@@ -5,6 +5,7 @@ import { z } from 'zod';
 const registerSchema = z.object({
   phone: z.string().regex(/^09[0-9]{9}$/),
   fullName: z.string().min(2).max(100),
+  password: z.string().min(4).max(100),
   role: z.enum(['passenger', 'driver']).default('passenger'),
   email: z.string().email().optional(),
   nationalId: z.string().optional()
@@ -21,11 +22,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'این شماره قبلاً ثبت شده است' }, { status: 400 });
     }
 
-    // Create user
+    // Create user (with password so they can log back in via /api/auth/login)
     const user = await db.user.create({
       data: {
         phone: data.phone,
         fullName: data.fullName,
+        password: data.password,
         email: data.email,
         role: data.role,
         isVerified: true,

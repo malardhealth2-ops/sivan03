@@ -47,9 +47,12 @@ interface AuthUser {
 
 interface AuthState {
   isOpen: boolean;
-  mode: 'login';
+  mode: 'login' | 'register';
   username: string;
   password: string;
+  // Registration-only fields
+  fullName: string;
+  phone: string;
   error: string;
   user: AuthUser | null;
   isVerified: boolean;
@@ -84,6 +87,8 @@ interface AppState {
   closeAuth: () => void;
   setAuthUsername: (username: string) => void;
   setAuthPassword: (password: string) => void;
+  setAuthFullName: (fullName: string) => void;
+  setAuthPhone: (phone: string) => void;
   setAuthError: (error: string) => void;
   setAuthUser: (user: AuthUser | null) => void;
   setAuthVerified: (val: boolean) => void;
@@ -146,11 +151,13 @@ export const useAppStore = create<AppState>((set) => ({
   resetBooking: () => set({ booking: { currentStep: -1, formData: { ...initialBookingForm, originCity: { province: '', city: '' }, destCity: { province: '', city: '' } }, estimatedPrice: null, estimatedDuration: null, bookingCode: null, isSubmitting: false } }),
 
   // Auth
-  auth: { isOpen: false, mode: 'login', username: '', password: '', error: '', user: null, isVerified: false },
+  auth: { isOpen: false, mode: 'login', username: '', password: '', fullName: '', phone: '', error: '', user: null, isVerified: false },
   openAuth: (mode) => set((s) => ({ auth: { ...s.auth, isOpen: true, mode, error: '' } })),
-  closeAuth: () => set((s) => ({ auth: { ...s.auth, isOpen: false, username: '', password: '', error: '', user: null, isVerified: false } })),
+  closeAuth: () => set((s) => ({ auth: { ...s.auth, isOpen: false, username: '', password: '', fullName: '', phone: '', error: '', user: null, isVerified: false } })),
   setAuthUsername: (username) => set((s) => ({ auth: { ...s.auth, username } })),
   setAuthPassword: (password) => set((s) => ({ auth: { ...s.auth, password } })),
+  setAuthFullName: (fullName) => set((s) => ({ auth: { ...s.auth, fullName } })),
+  setAuthPhone: (phone) => set((s) => ({ auth: { ...s.auth, phone } })),
   setAuthError: (error) => set((s) => ({ auth: { ...s.auth, error } })),
   setAuthUser: (user) => set((s) => ({ auth: { ...s.auth, user } })),
   setAuthVerified: (val) => set((s) => ({ auth: { ...s.auth, isVerified: val } })),
