@@ -735,3 +735,42 @@ Stage Summary:
   - Works in both local dev (via Next.js proxy routes) and the cloud-sandbox preview (via gateway XTransformPort).
 - BlogPostModal already had text-justify styling (text-justify + [&_p]:text-justify), so no CSS changes were needed.
 - The 24-topic rotation ensures content variety and SEO relevance to the site's VIP taxi travel niche.
+
+---
+Task ID: 17
+Agent: main
+Task: Diversify AI blog topics — not only travel safety, also tourism, luxury cars vs economy cars, scenic destinations, etc.
+
+Work Log:
+- User clarified the AI blog should NOT be only about travel safety. It should also cover گردشگری (tourism), خودروهای لوکس و مزایا نسبت به اقتصادی (luxury cars & their advantages over economy cars), مناطق زیبای گردشگری (scenic tourist areas), and similar diverse topics.
+- Inspected existing DB: all 5 previously generated posts were safety-focused (راهنمای ایمنی سفر...) — confirmed the problem.
+- Rewrote mini-services/blog-generator/index.ts (v3):
+  - Added a TopicCategory union: 'tourism' | 'luxury-cars' | 'luxury-vs-economy' | 'travel-guide' | 'travel-tips' | 'safety' | 'sivan-brand'.
+  - Expanded TOPICS from 24 → 45 topics across the 7 categories:
+    * tourism (12): جاذبه‌های مشهد/شیراز/اصفهان/نوشهر/کیش/قشم/ماسوله/تبریز/یزد/کرمان + best travel season + salt lake
+    * luxury-cars (12): امکانات/صندلی چرمی/عایق صدا/تهویه/تعلیق/ایمنی فعال/طراحی داخلی + Mercedes E/BMW 5/Audi A6/Land Cruiser/Sonata
+    * luxury-vs-economy (7): لوکس یا اقتصادی/هزینه پنهان اقتصادی/ارزش لوکس در جاده/مقایسه راحتی/خستگی راننده/ایمنی لوکس-اقتصادی/فضای داخلی و چمدان
+    * travel-guide (6): تهران→مشهد/اصفهان/شیراز/رشت/تبریز/کیش
+    * travel-tips (5): بسته‌بندی/خستگی/استراحت در جاده/سفر با کودکان/زمان سفر
+    * safety (2): فقط ایمنی سفر شب + چک‌لیست ایمنی خودرو (intentionally minimal)
+    * sivan-brand (3): چرا سیوان/تفاوت با آژانس/هزینه تاکسی VIP
+  - Added weighted CATEGORY_ORDER rotation (13 entries) so the blog has a balanced mix and safety is only ~1 in 13 posts. pickTopic() now picks the next category in the rotation, then the next unused topic within that category — prevents topic-clumping.
+  - Added category-aware COVER_SCENES: each category has its own pool of purely-English image prompts (tourism gets Persian landscapes/architecture, luxury-cars gets interiors/detail shots, luxury-vs-economy gets side-by-side comparisons, travel-guide gets scenic highways, travel-tips gets lifestyle/suitcase shots, safety gets rest-stop/dashboard shots, sivan-brand gets fleet/chauffeur shots). This gives visual variety matching the article's theme.
+  - Updated generateCoverImage() signature to accept the full Topic and pick scenes from COVER_SCENES[topic.category].
+  - Updated LLM system prompt to explicitly mention the diverse topic scope (گردشگری، خودروهای لوکس، مقایسه با اقتصادی، راهنمای سفر، نکات عملی، گاهی ایمنی) so the model writes content in the right tone for each category.
+- Verified end-to-end via Agent Browser:
+  - Triggered 2 immediate generations.
+  - Post #6: "جاذبه‌های گردشگری مشهد: راهنمای جامع دیدنی‌های حضرت رضا (ع)" — tourism category, with AI cover image (Persian mosque/landscape scene), 2915 chars of HTML content, SEO tags including focus keyword, natural mention of Sivan.
+  - Post #7: "امکانات خودرو لوکس: تجربه‌ای متفاوت از سفر" — luxury-cars category, with AI cover image (luxury interior scene), 9 paragraphs, 5 h2, 4 h3, justified text confirmed (firstP textAlign=justify), h3 in gold #D4AF37.
+  - Homepage blog section displays both new diverse posts with cover images rendered.
+  - Modal opens correctly, cover image loads, justified Persian text, proper heading hierarchy, gold h3 headings.
+- Lint passes clean. Blog-generator service (port 3005) running healthy with bun --hot auto-reload.
+- Dev server (port 3000) running cleanly, no errors.
+
+Stage Summary:
+- AI blog topics now diverse across 7 categories (tourism, luxury-cars, luxury-vs-economy, travel-guide, travel-tips, safety, sivan-brand) with 45 total topics.
+- Weighted rotation ensures tourism/luxury-cars dominate (~5/13 each), safety is minimal (~1/13).
+- Cover images are category-aware: tourism articles get scenic Persian landscapes, luxury-car articles get interior/detail shots, etc.
+- LLM system prompt updated to embrace the diverse scope and write in the right tone per category.
+- Verified 2 new posts generated correctly (tourism + luxury-cars) with proper SEO structure, AI cover images, and justified text in the modal.
+- Files changed: mini-services/blog-generator/index.ts (TOPICS expansion, CATEGORY_ORDER rotation, COVER_SCENES per-category, generateCoverImage signature, system prompt).

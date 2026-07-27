@@ -1,10 +1,18 @@
 /**
- * Sivan AI Blog Generator (v2)
- * =============================
+ * Sivan AI Blog Generator (v3 — diversified topics)
+ * ================================================
  *
  * Automatically generates and publishes a new SEO-optimized blog article (with
  * an AI-generated cover image and justified Persian HTML text) every 6 hours
  * using the z-ai-web-dev-sdk (LLM chat completions + image generation).
+ *
+ * Topics are diversified across 5 categories so the blog isn't only about
+ * travel safety — it also covers Iranian tourism & scenic destinations, luxury
+ * cars & their features, luxury-vs-economy car comparisons, city travel guides,
+ * and a smaller set of travel-safety pieces.
+ *
+ * Cover images are category-aware: tourist destinations get landscape/scenery
+ * prompts, luxury-car articles get interior/detail shots, etc.
  *
  * Runs as a Bun mini-service on port 3005. The Next.js app can trigger an
  * on-demand generation via the gateway: POST /generate?XTransformPort=3005
@@ -34,41 +42,133 @@ let isGenerating = false;
 let lastGeneratedAt: string | null = null;
 let lastError: string | null = null;
 
-// Rotating list of blog topics related to VIP taxi travel in Iran.
-// Each topic is SEO-oriented (targets a real user search intent) and maps to
-// a focus keyword that the LLM is instructed to weave into the article.
-const TOPICS: { title: string; keyword: string }[] = [
-  { title: 'نکات ایمنی سفر بین شهری با تاکسی VIP', keyword: 'ایمنی سفر بین شهری' },
-  { title: 'بهترین مسیرهای سفر از تهران به شمال ایران', keyword: 'مسیر سفر تهران به شمال' },
-  { title: 'چگونه خودروی مناسب برای سفر خانوادگی انتخاب کنیم', keyword: 'خودروی مناسب سفر خانوادگی' },
-  { title: 'مزایای تاکسی VIP نسبت به رانندگی شخصی در سفرهای طولانی', keyword: 'مزایای تاکسی VIP' },
-  { title: 'راهنمای سفر راحت با خانواده و کودکان', keyword: 'سفر با کودکان' },
-  { title: 'صرفه‌جویی در زمان و انرژی با تاکسی دربستی', keyword: 'تاکسی دربستی بین شهری' },
-  { title: 'تجهیزات و امکانات یک خودروی لوکس حرفه‌ای', keyword: 'امکانات خودرو لوکس' },
-  { title: 'مدیریت خستگی در سفرهای طولانی بین شهری', keyword: 'خستگی در سفر بین شهری' },
-  { title: 'بهترین زمان و فصل سفر به مشهد', keyword: 'سفر به مشهد' },
-  { title: 'سفر ایمن در شب؛ نکاتی که باید بدانید', keyword: 'سفر شب ایمن' },
-  { title: 'تاریخچه و تکامل تاکسی‌های VIP در ایران', keyword: 'تاکسی VIP در ایران' },
-  { title: 'معیارهای انتخاب راننده حرفه‌ای برای سفر', keyword: 'راننده حرفه‌ای سفر' },
-  { title: 'تأثیر راحتی خودرو بر کیفیت سفر', keyword: 'راحتی خودرو در سفر' },
-  { title: 'راهنمای بسته‌بندی چمدان برای سفر بین شهری', keyword: 'بسته‌بندی چمدان سفر' },
-  { title: 'چرا تاکسی ویژه سیوان انتخاب هوشمندانه‌ای است', keyword: 'تاکسی ویژه سیوان' },
-  { title: 'هزینه سفر با تاکسی VIP چگونه محاسبه می‌شود', keyword: 'هزینه تاکسی VIP' },
-  { title: 'تفاوت تاکسی اقتصادی و لوکس در سفر بین شهری', keyword: 'تاکسی اقتصادی یا لوکس' },
-  { title: 'راهنمای سفر تهران به اصفهان با خودروی VIP', keyword: 'سفر تهران به اصفهان' },
-  { title: 'سفر تهران به شیراز؛ راهنمای کامل مسیر', keyword: 'سفر تهران به شیراز' },
-  { title: 'نکات بهداشتی در سفرهای بین شهری', keyword: 'بهداشت در سفر' },
-  { title: 'اپلیکیشن رزرو تاکسی VIP چگونه کار می‌کند', keyword: 'رزرو تاکسی VIP' },
-  { title: 'مقایسه هزینه سفر با خودرو شخصی و تاکسی دربستی', keyword: 'هزینه سفر شخصی یا دربستی' },
-  { title: 'راهنمای انتخاب بهترین سرویس سفر بین شهری', keyword: 'بهترین سرویس سفر بین شهری' },
-  { title: 'نکات رانندگی در جاده‌های کوهستانی ایران', keyword: 'رانندگی در جاده کوهستانی' },
-];
-let topicIndex = 0;
+// Diversified topic pool. Each topic carries:
+//   - title:   the article's working title (LLM may refine it)
+//   - keyword: the SEO focus keyword the LLM must weave in
+//   - category: drives which cover-image scene pool is used
+//
+// Categories & weights (so the blog isn't dominated by one theme):
+//   tourism          -> Iranian scenic destinations, travel seasons, hidden gems
+//   luxury-cars      -> features & benefits of luxury vehicles (interior, ride quality, options)
+//   luxury-vs-economy-> direct comparisons: why a luxury car beats an economy car on long trips
+//   travel-guide     -> city-to-city route guides (Tehran→Mashhad, etc.)
+//   travel-tips      -> packing, comfort, fatigue, booking — practical traveller advice
+//   safety           -> a SMALL set of travel-safety pieces (kept, but no longer the majority)
+//   sivan-brand      -> why Sivan VIP taxi is the smart choice (conversion-focused)
+type TopicCategory =
+  | 'tourism'
+  | 'luxury-cars'
+  | 'luxury-vs-economy'
+  | 'travel-guide'
+  | 'travel-tips'
+  | 'safety'
+  | 'sivan-brand';
 
-function pickTopic(): { title: string; keyword: string } {
-  const t = TOPICS[topicIndex % TOPICS.length];
-  topicIndex++;
-  return t;
+interface Topic {
+  title: string;
+  keyword: string;
+  category: TopicCategory;
+}
+
+const TOPICS: Topic[] = [
+  // ---- گردشگری و مناطق زیبای ایران (tourism) ----
+  { title: 'جاذبه‌های گردشگری مشهد که هر مسافری باید ببیند', keyword: 'جاذبه‌های گردشگری مشهد', category: 'tourism' },
+  { title: 'زیبایی‌های شیراز؛ شهر گل و شب‌نما', keyword: 'جاذبه‌های گردشگری شیراز', category: 'tourism' },
+  { title: 'اصفهان شهر نصف جهان؛ راهنمای گردشگری', keyword: 'گردشگری اصفهان', category: 'tourism' },
+  { title: 'تابستان در نوشهر و چالوس؛ بهترین مسیر فرار از گرما', keyword: 'گردشگری نوشهر و چالوس', category: 'tourism' },
+  { title: 'جزیره کیش؛ بهشت گردشگری در خلیج فارس', keyword: 'گردشگری کیش', category: 'tourism' },
+  { title: 'جزیره قشم و عجایب طبیعی آن', keyword: 'گردشگری قشم', category: 'tourism' },
+  { title: 'ماسوله؛ روستای پلکانی تاریخ ایران', keyword: 'گردشگری ماسوله', category: 'tourism' },
+  { title: 'تبریز در یک روز؛ بازار، مسجد کبود و قهوه‌خانه‌ها', keyword: 'گردشگری تبریز', category: 'tourism' },
+  { title: 'دریاچه نمک مهابان و عجایب مسیر تهران-قم', keyword: 'دریاچه نمک قم', category: 'tourism' },
+  { title: 'بهترین فصل سفر به شمال ایران برای دیدن طبیعت', keyword: 'بهترین فصل سفر به شمال', category: 'tourism' },
+  { title: 'یزد شهر بادگیرها و کویر نقره‌ای', keyword: 'گردشگری یزد', category: 'tourism' },
+  { title: 'کرمان و دل کویر؛ راهنمای سفر به گنبد فتح‌آباد', keyword: 'گردشگری کرمان', category: 'tourism' },
+
+  // ---- خودروهای لوکس و مزایا (luxury-cars) ----
+  { title: 'امکانات خودرو لوکس که کیفیت سفر را متحول می‌کند', keyword: 'امکانات خودرو لوکس', category: 'luxury-cars' },
+  { title: 'چرا صندلی چرمی در سفرهای طولانی مهم است؟', keyword: 'صندلی چرمی خودرو لوکس', category: 'luxury-cars' },
+  { title: 'عایق صدا در خودرو لوکس و تأثیر آن بر آرامش سفر', keyword: 'عایق صدا خودرو', category: 'luxury-cars' },
+  { title: 'سیستم تهویه مطبوع در خودروهای لوکس؛ فراتر از کولر', keyword: 'تهویه خودرو لوکس', category: 'luxury-cars' },
+  { title: 'مرسدس بنز کلاس E؛ پادشاه جاده‌های ایران', keyword: 'مرسدس بنز کلاس E', category: 'luxury-cars' },
+  { title: 'بی‌ام‌و سری ۵؛ ترکیب اسپرت و لوکس برای سفر', keyword: 'بی ام و سری 5', category: 'luxury-cars' },
+  { title: 'آئودی A6 و جذابیت طراحی آلمان در جاده‌های ایران', keyword: 'آئودی A6', category: 'luxury-cars' },
+  { title: 'تویوتا لندکروزر؛ بهترین همراه جاده‌های کوهستانی', keyword: 'تویوتا لندکروزر', category: 'luxury-cars' },
+  { title: 'هیوندای سوناتا؛ لوکس اما اقتصادی برای سفر خانوادگی', keyword: 'هیوندای سوناتا', category: 'luxury-cars' },
+  { title: 'سیستم تعلیق در خودروهای لوکس و راحتی سرنشینان', keyword: 'سیستم تعلیق خودرو', category: 'luxury-cars' },
+  { title: 'ایمنی فعال در خودروهای لوکس؛ از ترمز ABS تا کیسه هوا', keyword: 'ایمنی خودرو لوکس', category: 'luxury-cars' },
+  { title: 'طراحی داخلی خودرو لوکس؛ فضایی که خستگی را فراموش می‌کنید', keyword: 'طراحی داخلی خودرو لوکس', category: 'luxury-cars' },
+
+  // ---- مقایسه لوکس و اقتصادی (luxury-vs-economy) ----
+  { title: 'خودرو لوکس یا اقتصادی؟ کدام برای سفر بین شهری بهتر است', keyword: 'خودرو لوکس یا اقتصادی', category: 'luxury-vs-economy' },
+  { title: 'هزینه پنهان سفر با خودرو اقتصادی که نمی‌بینید', keyword: 'هزینه سفر خودرو اقتصادی', category: 'luxury-vs-economy' },
+  { title: 'چرا خودرو لوکس در جاده‌های طولانی ارزشش را دارد؟', keyword: 'ارزش خودرو لوکس سفر', category: 'luxury-vs-economy' },
+  { title: 'مقایسه راحتی خودرو لوکس و پراید در سفر تهران-مشهد', keyword: 'راحتی خودرو لوکس پراید', category: 'luxury-vs-economy' },
+  { title: 'خستگی راننده در خودرو اقتصادی vs خودرو لوکس', keyword: 'خستگی راننده خودرو', category: 'luxury-vs-economy' },
+  { title: 'ایمنی خودرو لوکس در برابر خودرو اقتصادی؛ تفاوت فاجعه‌بار', keyword: 'ایمنی لوکس اقتصادی', category: 'luxury-vs-economy' },
+  { title: 'فضای داخلی و چمدان؛ برتری خودرو لوکس در سفر خانوادگی', keyword: 'فضای داخلی خودرو سفر', category: 'luxury-vs-economy' },
+
+  // ---- راهنمای سفر شهر به شهر (travel-guide) ----
+  { title: 'راهنمای کامل سفر تهران به مشهد با خودرو', keyword: 'سفر تهران به مشهد', category: 'travel-guide' },
+  { title: 'سفر تهران به اصفهان؛ مسیر، توقف‌ها و جاذبه‌ها', keyword: 'سفر تهران به اصفهان', category: 'travel-guide' },
+  { title: 'سفر تهران به شیراز از جاده قدیم و جدید', keyword: 'سفر تهران به شیراز', category: 'travel-guide' },
+  { title: 'سفر تهران به رشت و انزلی؛ راهنمای جاده هراز', keyword: 'سفر تهران به رشت', category: 'travel-guide' },
+  { title: 'سفر تهران به تبریز از جاده قزوین-زنجان', keyword: 'سفر تهران به تبریز', category: 'travel-guide' },
+  { title: 'مسیر تهران به کیش؛ پرواز یا سفر زمینی؟', keyword: 'سفر تهران به کیش', category: 'travel-guide' },
+
+  // ---- نکات عملی سفر (travel-tips) ----
+  { title: 'راهنمای بسته‌بندی چمدان برای سفر بین شهری', keyword: 'بسته‌بندی چمدان سفر', category: 'travel-tips' },
+  { title: 'مدیریت خستگی در سفرهای طولانی بین شهری', keyword: 'خستگی در سفر بین شهری', category: 'travel-tips' },
+  { title: 'بهترین زمان استراحت در جاده؛ هر چند ساعت یک‌بار؟', keyword: 'استراحت در جاده', category: 'travel-tips' },
+  { title: 'سفر با کودکان؛ راهنمای آرامش خانواده در جاده', keyword: 'سفر با کودکان', category: 'travel-tips' },
+  { title: 'چگونه زمان سفر را برای ترافیک کمتر برنامه‌ریزی کنیم', keyword: 'زمان سفر ترافیک', category: 'travel-tips' },
+
+  // ---- ایمنی سفر (safety — intentionally small) ----
+  { title: 'نکات کلیدی ایمنی سفر بین شهری در شب', keyword: 'ایمنی سفر شب', category: 'safety' },
+  { title: 'چک‌لیست ایمنی خودرو پیش از سفر طولانی', keyword: 'چک لیست ایمنی خودرو', category: 'safety' },
+
+  // ---- برند سیوان (sivan-brand) ----
+  { title: 'چرا تاکسی ویژه سیوان انتخاب هوشمندانه‌ای است', keyword: 'تاکسی ویژه سیوان', category: 'sivan-brand' },
+  { title: 'تفاوت تاکسی دربستی سیوان با آژانس‌های معمولی', keyword: 'تاکسی دربستی سیوان', category: 'sivan-brand' },
+  { title: 'هزینه سفر با تاکسی VIP چگونه محاسبه می‌شود', keyword: 'هزینه تاکسی VIP', category: 'sivan-brand' },
+];
+
+// Weighted category rotation so the blog has a balanced mix.
+// Each cycle picks the next category from this weighted list, then picks the
+// next unused topic within that category. This avoids topic-clumping.
+const CATEGORY_ORDER: TopicCategory[] = [
+  'tourism',
+  'luxury-cars',
+  'luxury-vs-economy',
+  'travel-guide',
+  'tourism',
+  'luxury-cars',
+  'travel-tips',
+  'luxury-vs-economy',
+  'tourism',
+  'luxury-cars',
+  'sivan-brand',
+  'travel-guide',
+  'safety', // intentionally rare: ~1 in 13
+];
+let cycleIndex = 0;
+const categoryTopicIndex: Record<TopicCategory, number> = {
+  tourism: 0,
+  'luxury-cars': 0,
+  'luxury-vs-economy': 0,
+  'travel-guide': 0,
+  'travel-tips': 0,
+  safety: 0,
+  'sivan-brand': 0,
+};
+
+function pickTopic(): Topic {
+  const category = CATEGORY_ORDER[cycleIndex % CATEGORY_ORDER.length];
+  cycleIndex++;
+  const pool = TOPICS.filter((t) => t.category === category);
+  const idx = categoryTopicIndex[category] % pool.length;
+  categoryTopicIndex[category]++;
+  return pool[idx];
 }
 
 function makeSlug(title: string): string {
@@ -151,19 +251,56 @@ function parseArticle(raw: string): {
   return { title, excerpt, html, tags, metaDescription };
 }
 
-async function generateCoverImage(title: string, slug: string, topic: string): Promise<string | null> {
+// Category-aware cover-image scene pools. All prompts are kept purely English
+// (no Persian) to avoid the image API's content filter. Each category has its
+// own visual identity so a tourism article doesn't get a car-only cover, etc.
+const COVER_SCENES: Record<TopicCategory, string[]> = {
+  tourism: [
+    'a breathtaking aerial view of an Iranian tourist destination at golden hour, mountains and traditional Persian architecture, warm cinematic light, professional travel photography, no text, no watermark',
+    'a scenic Iranian mountain road winding through lush green forests in spring, soft morning mist, cinematic landscape photography, vibrant, professional, no text, no watermark',
+    'a beautiful Persian historic mosque and garden at sunset, golden light reflecting on tile work, cinematic travel photography, professional, elegant, no text, no watermark',
+    'a coastal road along the Persian Gulf at twilight, palm trees, calm sea, cinematic warm tones, professional travel photography, no text, no watermark',
+    'a desert landscape in central Iran at sunset, sand dunes and distant mountains, dramatic orange sky, cinematic travel photography, professional, no text, no watermark',
+  ],
+  'luxury-cars': [
+    'a luxurious black leather car interior with ambient golden lighting, premium dashboard, elegant stitching, professional automotive photography, cinematic, moody, high quality, no text, no watermark',
+    'a close-up of a luxury car front grille and LED headlights at night, rain droplets, cinematic lighting, professional automotive photography, elegant, no text, no watermark',
+    'a sleek black luxury sedan parked in a dimly lit upscale setting, dramatic side lighting, reflective floor, professional automotive photography, cinematic, no text, no watermark',
+    'a luxury car wheel and leather seat detail shot, warm ambient lighting, professional automotive photography, cinematic, elegant, no text, no watermark',
+  ],
+  'luxury-vs-economy': [
+    'a side-by-side comparison of a sleek black luxury sedan and a small white economy car on a clean showroom floor, dramatic lighting, professional automotive photography, cinematic, no text, no watermark',
+    'a split-image of a luxury car premium interior versus a basic economy car interior, warm vs cool lighting, professional automotive photography, cinematic, no text, no watermark',
+    'a black luxury sedan overtaking a small economy car on an open highway at sunset, motion blur, cinematic automotive photography, professional, no text, no watermark',
+  ],
+  'travel-guide': [
+    'a scenic Iranian highway stretching toward distant mountains at golden hour, a luxury sedan driving, cinematic travel photography, professional, warm tones, no text, no watermark',
+    'a winding mountain road in northern Iran with a black luxury car, lush green forest, soft morning light, cinematic travel photography, professional, no text, no watermark',
+    'a long open desert highway in central Iran at sunset, a luxury sedan in the distance, dramatic sky, cinematic travel photography, professional, no text, no watermark',
+  ],
+  'travel-tips': [
+    'a neatly packed travel suitcase with essentials beside a luxury car trunk, warm soft lighting, professional lifestyle photography, cinematic, elegant, no text, no watermark',
+    'a family loading luggage into a luxury SUV in front of a modern home, warm morning light, professional lifestyle photography, cinematic, no text, no watermark',
+    'a steaming cup of coffee and a map on a luxury car dashboard, road trip mood, warm cinematic lighting, professional photography, no text, no watermark',
+  ],
+  safety: [
+    'a black luxury sedan parked safely at a highway rest stop at dusk, warm interior light, calm mood, professional automotive photography, cinematic, no text, no watermark',
+    'a dashboard view of a luxury car at night showing modern safety dashboard lights, cinematic moody lighting, professional automotive photography, no text, no watermark',
+  ],
+  'sivan-brand': [
+    'a fleet of sleek black luxury sedans lined up at night under golden lights, professional automotive photography, cinematic, elegant, premium, no text, no watermark',
+    'a professional chauffeur opening the door of a black luxury sedan for a passenger, upscale setting, warm cinematic lighting, professional photography, elegant, no text, no watermark',
+    'a black luxury sedan with a subtle gold accent parked in front of an elegant modern building at dusk, cinematic lighting, professional automotive photography, premium, no text, no watermark',
+  ],
+};
+
+async function generateCoverImage(
+  title: string,
+  slug: string,
+  topic: Topic
+): Promise<string | null> {
   if (!zai) return null;
-  // NOTE: The image generation API has a content filter that sometimes flags
-  // prompts containing non-English text or certain words. So we keep the
-  // prompt purely English, generic, and safe — no article title, no Persian.
-  // We rotate through a few scene variants for visual variety.
-  const scenes = [
-    'a sleek black luxury sedan parked on an Iranian highway at golden hour, dramatic orange sky, mountains in background, professional automotive photography, cinematic, moody dark tones, elegant, high quality, no text, no watermark',
-    'a black luxury Mercedes sedan driving on a desert highway at sunset, warm golden light, distant mountains, cinematic travel photography, professional, elegant, no text, no watermark',
-    'a black luxury BMW car on a mountain road at dawn, soft mist, dramatic sky, professional automotive photography, cinematic, moody, elegant, no text, no watermark',
-    'a black luxury sedan on a coastal highway at twilight, ocean in background, cinematic lighting, professional travel photography, elegant, moody, no text, no watermark',
-    'a black luxury car on a winding mountain road at golden hour, autumn trees, cinematic photography, professional, elegant, high quality, no text, no watermark',
-  ];
+  const scenes = COVER_SCENES[topic.category] || COVER_SCENES['travel-guide'];
   const scene = scenes[Math.floor(Math.random() * scenes.length)];
   try {
     const response = await zai.images.generations.create({
@@ -195,10 +332,10 @@ async function generateArticle(): Promise<{ ok: boolean; title?: string; slug?: 
   lastError = null;
 
   const topic = pickTopic();
-  console.log(`[blog-generator] generating article for topic: ${topic.title} (keyword: ${topic.keyword})`);
+  console.log(`[blog-generator] generating article for topic: ${topic.title} (keyword: ${topic.keyword}, category: ${topic.category})`);
 
   const systemPrompt =
-    'تو یک نویسنده حرفه‌ای محتوای سفر و متخصص سئو (SEO) هستی که برای وب‌سایت «تاکسی ویژه سیوان» (یک سرویس تاکسی VIP بین شهری در ایران با ناوگان خودروهای لوکس) مطلب می‌نویسی. لحن تو حرفه‌ای، صمیمی و قابل اعتماد است. مقاله‌هایی که می‌نویسی باکیفیت، مفید، خوانا و سئو-بهینه هستند و به مسافران در سفرهای بین شهری کمک می‌کنند. تو قوانین سئو (کلمه کلیدی، ساختار هدینگ، متا دیسکریپشن) را به‌خوبی می‌دانی.';
+    'تو یک نویسنده حرفه‌ای محتوای سفر، گردشگری و خودرو هستی که برای وب‌سایت «تاکسی ویژه سیوان» (یک سرویس تاکسی VIP بین شهری در ایران با ناوگان خودروهای لوکس) مطلب می‌نویسی. موضوعات مقاله‌های تو متنوع است: گردشگری و معرفی مناطق زیبای ایران، معرفی خودروهای لوکس و امکانات آن‌ها، مقایسه خودرو لوکس با خودرو اقتصادی، راهنمای سفر بین شهرهای ایران، نکات عملی سفر و گاهی مسائل ایمنی. لحن تو حرفه‌ای، صمیمی و قابل اعتماد است و با مخاطب ایرانی صحبت می‌کنی. مقاله‌هایی که می‌نویسی باکیفیت، مفید، خوانا و سئو-بهینه هستند. تو قوانین سئو (کلمه کلیدی، ساختار هدینگ، متا دیسکریپشن) را به‌خوبی می‌دانی. در هر مقاله، در صورت مرتبط بودن، می‌توانی به‌طور طبیعی و غیرتبلیغاتی به سرویس «تاکسی ویژه سیوان» اشاره کنی.';
 
   const userPrompt = `یک مقاله کامل، باکیفیت و سئو-بهینه درباره موضوع زیر بنویس:
 
@@ -267,7 +404,7 @@ async function generateArticle(): Promise<{ ok: boolean; title?: string; slug?: 
   }
 
   const slug = makeSlug(parsed.title);
-  const featuredImageUrl = await generateCoverImage(parsed.title, slug, topic.title);
+  const featuredImageUrl = await generateCoverImage(parsed.title, slug, topic);
 
   try {
     const post = await db.blogPost.create({
