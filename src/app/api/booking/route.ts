@@ -4,6 +4,19 @@ import { z } from 'zod';
 import { getPricingConfig, calculateFare, TRIP_TYPE_LABELS } from '@/lib/pricing';
 import { sendPushToAll } from '@/lib/push';
 
+// GET /api/booking — list all trips for the admin panel (newest first)
+export async function GET() {
+  try {
+    const trips = await db.trip.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    return NextResponse.json(trips);
+  } catch {
+    return NextResponse.json([]);
+  }
+}
+
 const bookingSchema = z.object({
   originAddress: z.string().min(1),
   destAddress: z.string().min(1),
@@ -151,7 +164,10 @@ export async function POST(request: NextRequest) {
 
     const trip = await db.trip.create({
       data: {
+        bookingCode,
         passengerId: null,
+        passengerName: data.fullName,
+        passengerPhone: data.phone,
         originAddress: data.originAddress,
         originLat: null,
         originLng: null,

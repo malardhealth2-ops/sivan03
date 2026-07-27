@@ -99,8 +99,11 @@ model Vehicle {
 
 model Trip {
   id              String    @id @default(cuid())
+  bookingCode     String    @default("")
   passengerId     String?
   driverId        String?
+  passengerName   String?
+  passengerPhone  String?
   originAddress   String
   originLat       Float?
   originLng       Float?
