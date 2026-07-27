@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Phone, Menu, X, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,18 +10,22 @@ import { useAppStore } from '@/lib/store';
 import { formatJalaaliDate, getTehranTimeString, getTehranTime, toPersianDigits } from '@/lib/jalaali';
 import { Shield } from 'lucide-react';
 
-const navLinks = [
+type NavLink = { label: string; href: string; route?: string };
+
+const navLinks: NavLink[] = [
   { label: 'خانه', href: '#hero' },
   { label: 'مسیرها', href: '#routes' },
   { label: 'خدمات', href: '#services' },
   { label: 'ناوگان', href: '#fleet' },
   { label: 'درباره ما', href: '#why-us' },
-  { label: 'بلاگ', href: '#blog' },
+  { label: 'بلاگ', href: '#blog', route: '/blog' },
   { label: 'تماس', href: '#contact' },
 ];
 
 export function Navbar() {
   const { openAuth, mobileMenuOpen, setMobileMenuOpen, setAdminOpen } = useAppStore();
+  const pathname = usePathname();
+  const isHome = pathname === '/';
   const [scrolled, setScrolled] = useState(false);
   const [jalaliDateStr, setJalaliDateStr] = useState('');
   const [tehranTimeStr, setTehranTimeStr] = useState('');
@@ -43,11 +48,25 @@ export function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleNavClick = (href: string) => {
+  const handleNavClick = (link: NavLink) => {
     setMobileMenuOpen(false);
-    const el = document.querySelector(href);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
+    // Links with a dedicated route (e.g. /blog) always navigate there
+    // regardless of the current page.
+    if (link.route) {
+      window.location.href = link.route;
+      return;
+    }
+    if (isHome) {
+      // On the homepage, smooth-scroll to the target section.
+      const el = document.querySelector(link.href);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else {
+      // Not on the homepage (e.g. /blog, /blog/[slug]) — navigate to the
+      // homepage with the section hash so the browser loads home and jumps
+      // to the requested section.
+      window.location.href = '/' + link.href;
     }
   };
 
@@ -66,7 +85,16 @@ export function Navbar() {
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 sm:h-20">
             {/* Logo */}
-            <a href="#hero" className="flex items-center gap-2.5 group">
+            <a
+              href={isHome ? '#hero' : '/'}
+              onClick={(e) => {
+                if (isHome) {
+                  e.preventDefault();
+                  handleNavClick({ label: 'خانه', href: '#hero' });
+                }
+              }}
+              className="flex items-center gap-2.5 group cursor-pointer"
+            >
               <img
                 src="/logo.png"
                 alt="تاکسی ویژه سیوان"
@@ -82,7 +110,7 @@ export function Navbar() {
               {navLinks.map((link) => (
                 <button
                   key={link.href}
-                  onClick={() => handleNavClick(link.href)}
+                  onClick={() => handleNavClick(link)}
                   className="px-3 py-2 text-sm text-[#a1a1aa] hover:text-[#D4AF37] transition-colors duration-200 rounded-md hover:bg-[#D4AF37]/5"
                 >
                   {link.label}
@@ -147,7 +175,7 @@ export function Navbar() {
             {navLinks.map((link) => (
               <SheetClose asChild key={link.href}>
                 <button
-                  onClick={() => handleNavClick(link.href)}
+                  onClick={() => handleNavClick(link)}
                   className="flex items-center px-4 py-3 text-[#a1a1aa] hover:text-[#D4AF37] hover:bg-[#D4AF37]/5 rounded-lg transition-colors text-right"
                 >
                   {link.label}

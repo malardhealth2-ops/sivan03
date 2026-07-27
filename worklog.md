@@ -1012,3 +1012,34 @@ Stage Summary:
 - New SIVAN VIP TAXI logo (from user upload) is live across the entire site (navbar, footer, modal, admin, blog JSON-LD).
 - Passengers can now register (fullName + phone + password) via a dedicated "ثبت‌نام" button; registration auto-logs them in and creates a Passenger profile with referral code. Registered users can log back in with phone+password.
 - Admin login (admin/sivan2024) is unaffected.
+
+---
+Task ID: fix-blog-header-nav
+Agent: main
+Task: Fix header menus and logo link not working on blog article pages. User: "وقتی وارد صفحه یه مقاله میشم، دیگه منوهای هدر و لینک لوگو کار نمی کنه"
+
+Work Log:
+- Root cause: Navbar used anchor links (#hero, #routes, #services, #fleet, #why-us, #blog, #contact) + document.querySelector(href) for smooth-scrolling. On /blog and /blog/[slug] pages those section IDs don't exist in the DOM, so querySelector returned null and nothing happened. The logo was <a href="#hero"> which only changed the URL hash (no navigation to home).
+- Fixed src/components/sivan/Navbar.tsx:
+  * Added usePathname() from next/navigation to detect current route; isHome = pathname === '/'.
+  * handleNavClick now takes a NavLink object. Logic:
+    - If link has a dedicated `route` (e.g. /blog) -> always window.location.href = link.route, regardless of current page.
+    - Else if isHome -> smooth-scroll via scrollIntoView (unchanged behavior).
+    - Else (on /blog or /blog/[slug]) -> window.location.href = '/' + href (e.g. /#services) so the browser loads the homepage and jumps to the requested section.
+  * Logo: href={isHome ? '#hero' : '/'}. On homepage, onClick preventDefault + smooth scroll. On other pages, the anchor naturally navigates to '/' (homepage).
+  * Added NavLink type with optional `route` field; gave 'بلاگ' link route: '/blog' so clicking "بلاگ" from any page goes to the full blog listing (more intuitive than scrolling to the homepage's small blog preview).
+  * Updated all 3 call sites (desktop nav, mobile sheet, logo) to pass the link object.
+- Applied to BOTH affected pages (/blog listing and /blog/[slug] article) since both render the same Navbar.
+
+Verification (Agent Browser):
+- Blog article page -> click logo -> navigated to http://localhost:3000/ (homepage). ✓
+- Blog article page -> click "خدمات" -> navigated to http://localhost:3000/#services, scrolled to services section (scrollY 1516 ≈ section top 1528). ✓
+- Blog article page -> click "بلاگ" -> navigated to http://localhost:3000/blog (dedicated blog listing). ✓
+- Blog listing page (/blog) -> click "خانه" -> navigated to http://localhost:3000/#hero, scrolled to top. ✓
+- Homepage -> click "تماس" -> URL unchanged (stayed /#hero), smooth-scrolled to contact section (scrollY 7364). Existing homepage behavior preserved. ✓
+- Lint: clean. Dev log: no errors.
+
+Stage Summary:
+- Header nav menu and logo link now work on ALL pages (homepage, /blog listing, /blog/[slug] articles).
+- On non-homepage pages, nav links navigate to the homepage with the section hash (auto-scrolls to the section); the "بلاگ" link goes directly to /blog.
+- On the homepage, the original smooth-scroll behavior is fully preserved.
