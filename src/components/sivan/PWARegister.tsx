@@ -22,17 +22,48 @@ export function PWARegister() {
     );
   });
 
-  // Register service worker
+  // Register service worker (PRODUCTION ONLY).
+  // In dev mode the SW's chunk caching breaks Next.js Turbopack HMR — cached
+  // /_next/* chunks with stale hashes get served after recompile and React
+  // throws "client-side exception". So we never register the SW during dev,
+  // and we also proactively UNREGISTER any SW + clear caches that a previous
+  // dev session may have left behind (so the broken preview self-heals).
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
+    if (!('serviceWorker' in navigator)) return;
+
+    // Always clean up leftover SW + caches in dev so stale chunks don't
+    // keep getting served after the server has recompiled.
+    if (process.env.NODE_ENV !== 'production') {
+      (async () => {
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((r) => r.unregister()));
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((k) => caches.delete(k)));
+          }
+          if (regs.length > 0) {
+            // Force a clean reload so no stale SW-controlled response remains.
+            window.location.reload();
+          }
+        } catch (err) {
+          console.warn('[PWA] dev cleanup failed:', err);
+        }
+      })();
+      return;
+    }
+
+    // Production: register the SW.
+    const register = () => {
       navigator.serviceWorker
         .register('/sw.js', { scope: '/' })
         .then((reg) => {
-          // Check for updates periodically
           setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
         })
         .catch((err) => console.warn('[PWA] SW registration failed:', err));
-    }
+    };
+    if (document.readyState === 'complete') register();
+    else window.addEventListener('load', register, { once: true });
   }, []);
 
   // Listen for beforeinstallprompt + appinstalled

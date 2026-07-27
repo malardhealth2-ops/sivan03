@@ -54,7 +54,17 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin (e.g. OSM tiles, Nominatim)
   if (url.origin !== self.location.origin) return;
 
-  // Skip Next.js HMR/dev internals
+  // *** DEV SAFETY ***
+  // Next.js dev server (Turbopack) generates /_next/* URLs with content hashes
+  // that change on every recompile. If we cache them and serve stale copies
+  // after a recompile, the browser loads chunks that no longer exist on the
+  // server → React throws "client-side exception" and the page goes blank.
+  // Same for HMR/websocket endpoints. So in dev we must NEVER intercept them.
+  const isDev = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1' || self.location.port === '3000';
+  if (isDev && (url.pathname.startsWith('/_next/') || url.pathname.startsWith('/__nextjs'))) {
+    return; // let the request go straight to the network, no caching
+  }
+  // Always skip HMR websocket upgrade regardless of dev/prod
   if (url.pathname.startsWith('/_next/webpack-hmr')) return;
 
   // API requests: network-first, no cache fallback (always fresh)

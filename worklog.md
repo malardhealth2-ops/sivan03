@@ -671,3 +671,21 @@ Work Log:
 Stage Summary:
 - Live preview blank-screen issue fixed by whitelisting the *.space-z.ai preview origin in next.config.ts allowedDevOrigins.
 - Dev server running cleanly on port 3000, page fully interactive, no hydration/jalaali errors, no cross-origin blocking.
+
+---
+Task ID: 15
+Agent: main
+Task: Fix "Application error: a client-side exception has occurred" in live preview (stale service worker serving broken Turbopack chunks)
+
+Work Log:
+- Root cause: The PWA service worker (public/sw.js) was caching /_next/* dev chunks and navigation HTML. Next.js Turbopack changes chunk hashes on every recompile, so the SW served stale chunks whose URLs no longer exist on the server → React failed to bootstrap → generic "client-side exception" error page (blank preview).
+- The previous session only skipped /_next/webpack-hmr in the SW fetch handler — that was insufficient because /_next/static/chunks/*.js were still being cache-first'd.
+- Fixed public/sw.js fetch handler: added explicit DEV detection (hostname localhost/127.0.0.1 OR port 3000) and bypassed the SW entirely for all /_next/* and /__nextjs* paths in dev. Always skips HMR websocket. SW now only caches in production.
+- Fixed src/components/sivan/PWARegister.tsx: SW registration is now PRODUCTION ONLY (process.env.NODE_ENV !== 'production' → return early). In dev, it proactively unregisters any existing SWs and clears all caches (so a stale SW from a previous session self-heals on next load), then reloads if any SW was found.
+- Added src/app/global-error.tsx: a global error boundary that catches any uncaught client-side exception, shows a friendly Persian message (instead of the scary generic one), and automatically attempts SW cleanup + reload so the broken preview self-heals even if React crashes during bootstrap. Also exposes the underlying error.message in a <pre> for debugging.
+- Restarted dev server fresh (killed, cleared .next, restarted). Verified via Agent Browser: GET / 200, page fully renders (Navbar, Tehran clock ۰۸:۵۱, Jalali date ۵ مرداد ۱۴۰۵, hero, all sections), HMR connected, 0 service workers registered in dev, no errors in browser console/errors. Lint passes clean.
+
+Stage Summary:
+- Client-side exception fixed at its root: SW no longer runs in dev, so Turbopack chunk hashes can change freely without stale-cache crashes.
+- Added two layers of self-healing: (1) PWARegister dev cleanup unregisters stale SWs + clears caches on load, (2) global-error.tsx catches any residual crash and auto-cleans+reloads.
+- Dev server running cleanly on port 3000. Preview should now render reliably in the gateway iframe.
