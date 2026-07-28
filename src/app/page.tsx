@@ -18,7 +18,7 @@ import { ContactModal } from '@/components/sivan/ContactModal';
 import { AdminPanel } from '@/components/sivan/AdminPanel';
 import { UserPanel } from '@/components/sivan/UserPanel';
 import { InteractiveMap } from '@/components/sivan/InteractiveMap';
-import { DriverRegisterModal } from '@/components/sivan/DriverRegisterModal';
+
 
 export default function HomePage() {
   return (
@@ -39,7 +39,6 @@ export default function HomePage() {
       <Footer />
       <BookingModal />
       <AuthModal />
-      <DriverRegisterModal />
       <ContactModal />
       <AdminPanel />
       <UserPanel />

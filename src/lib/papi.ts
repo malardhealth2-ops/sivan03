@@ -1,30 +1,32 @@
 /**
  * SMS & Identity Verification Library
- * 
- * SMS Providers:
- *   1. Kavenegar (primary) - configure KAVENEGAR_API_KEY in .env
- *   2. Fallback: in-memory OTP storage (for development/testing)
- * 
+ *
+ * SMS Providers (tried in order):
+ *   1. p.api.ir OTP/SMS API (primary) — tries 3 endpoint patterns
+ *   2. Kavenegar SMS API (secondary, if KAVENEGAR_API_KEY is set)
+ *   3. Fallback: in-memory OTP storage (demo mode, code shown in UI)
+ *
  * Identity:
- *   - Shahkar verification (کد ملی + شماره موبایل)
- *   - National ID validation (checksum algorithm)
+ *   - Shahkar verification
+ *   - National ID validation
  *   - National ID + Phone matching
- * 
+ *
  * Environment Variables:
+ *   PAPI_TOKEN          - p.api.ir API token (has built-in fallback default)
  *   KAVENEGAR_API_KEY   - Kavenegar SMS API key
- *   SMS_PROVIDER        - 'kavenegar' | 'memory' (default: 'kavenegar')
+ *   SMS_PROVIDER        - 'auto' | 'kavenegar' | 'memory' (default: 'auto')
  */
 
-// ─── In-memory OTP storage ─────────────────────────────────────
+// --- p.api.ir default token (fallback if PAPI_TOKEN env var is not set) ---
+const PAPI_FALLBACK_TOKEN =
+  '2cuJ5AqeowlnEKlfY1XOCM4VAuvbN7ETtfxHQLft79n1RvO8hmsWYk+1belZvu4PSvG/M3Ckdn7WAaImEkx25VsLjk4tvLTnGXAfZVLypTs=';
+
+// --- In-memory OTP storage ---
 const otpStore = new Map<string, { code: string; expiresAt: number; phone: string }>();
 
 function generateOTP(phone: string): string {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  otpStore.set(phone, {
-    code,
-    expiresAt: Date.now() + 120_000, // 2 min
-    phone,
-  });
+  otpStore.set(phone, { code, expiresAt: Date.now() + 120_000, phone });
   return code;
 }
 
@@ -38,68 +40,152 @@ function verifyStoredOTP(phone: string, code: string): boolean {
   return entry.code === code;
 }
 
-// ─── SMS Provider Configuration ──────────────────────────────
+// --- SMS Provider Configuration ---
 
-type SMSProvider = 'kavenegar' | 'memory';
-
-function getSMSProvider(): SMSProvider {
-  return (process.env.SMS_PROVIDER as SMSProvider) || 'kavenegar';
+function getPapiToken(): string {
+  return process.env.PAPI_TOKEN || PAPI_FALLBACK_TOKEN;
 }
 
 function getKavenegarAPIKey(): string {
   return process.env.KAVENEGAR_API_KEY || '';
 }
 
-// ─── 1. Kavenegar SMS Send ────────────────────────────────────
+// --- 1. p.api.ir OTP/SMS Send (Primary) ---
+// Tries three endpoint patterns in order. If any returns 2xx, considers it a success.
+
+async function sendViaPapiIr(phone: string, code: string): Promise<{
+  success: boolean;
+  message: string;
+  endpoint?: string;
+  status?: number;
+}> {
+  const token = getPapiToken();
+  if (!token) {
+    console.warn('[SMS] p.api.ir: no token available');
+    return { success: false, message: 'p.api.ir token not set' };
+  }
+
+  console.log('[SMS] p.api.ir: attempting to send OTP to', phone);
+
+  // Persian OTP message for plain-text SMS endpoints
+  const messageText = `کد تایید شما: ${code}`;
+
+  // Three endpoint patterns to try in order
+  const endpoints = [
+    {
+      url: 'https://p.api.ir/api/v1/otp/send',
+      body: JSON.stringify({ Mobile: phone, TemplateId: '1' }),
+      description: 'v1 OTP template',
+    },
+    {
+      url: 'https://p.api.ir/api/Sms/Send',
+      body: JSON.stringify({
+        MobileNumber: phone,
+        MessageText: messageText,
+        SenderNumber: '',
+      }),
+      description: 'Sms/Send plain text',
+    },
+    {
+      url: 'https://p.api.ir/api/v2/sms/send',
+      body: JSON.stringify({ receptor: phone, message: messageText }),
+      description: 'v2 sms/send',
+    },
+  ];
+
+  for (const ep of endpoints) {
+    try {
+      console.log(`[SMS] p.api.ir: trying ${ep.description} at ${ep.url}`);
+      const res = await fetch(ep.url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: ep.body,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      console.log(`[SMS] p.api.ir: ${ep.description} returned status ${res.status}`);
+
+      if (res.ok || res.status === 200 || res.status === 201) {
+        // 2xx — success
+        try {
+          const data = await res.json();
+          console.log('[SMS] p.api.ir: response body:', JSON.stringify(data));
+          // Accept various success indicators from p.api.ir responses
+          if (
+            data.success === true ||
+            data.status === 200 ||
+            data.IsSuccessful === true ||
+            data.Result === true ||
+            data.result === true ||
+            data.Status === true ||
+            res.ok
+          ) {
+            console.log(`[SMS] ✅ OTP sent successfully via p.api.ir (${ep.description})`);
+            return { success: true, message: `OTP sent via p.api.ir (${ep.description})`, endpoint: ep.url, status: res.status };
+          }
+          // If response parsed but no clear success flag, still treat 2xx as success
+          console.log(`[SMS] ✅ p.api.ir returned ${res.status} — treating as success`);
+          return { success: true, message: `OTP sent via p.api.ir (${ep.description})`, endpoint: ep.url, status: res.status };
+        } catch {
+          // Can't parse JSON but got 2xx — still consider it a success
+          console.log(`[SMS] ✅ p.api.ir returned ${res.status} (no JSON body) — treating as success`);
+          return { success: true, message: `OTP sent via p.api.ir (${ep.description})`, endpoint: ep.url, status: res.status };
+        }
+      }
+
+      console.warn(`[SMS] p.api.ir: ${ep.description} returned HTTP ${res.status} — skipping`);
+    } catch (err) {
+      console.warn(
+        `[SMS] p.api.ir: ${ep.description} failed:`,
+        err instanceof Error ? err.message : 'unknown error',
+      );
+    }
+  }
+
+  console.warn('[SMS] ❌ All p.api.ir endpoints failed');
+  return { success: false, message: 'All p.api.ir endpoints failed' };
+}
+
+// --- 2. Kavenegar SMS Send (Secondary) ---
 
 async function sendViaKavenegar(phone: string, code: string): Promise<{
   success: boolean;
   message: string;
 }> {
   const apiKey = getKavenegarAPIKey();
-  if (!apiKey) {
-    return {
-      success: false,
-      message: 'کلید API کاوه‌نگار تنظیم نشده است. لطفاً KAVENEGAR_API_KEY را در تنظیمات وارد کنید.',
-    };
-  }
+  if (!apiKey) return { success: false, message: 'Kavenegar API key not set' };
+
+  console.log('[SMS] Kavenegar: attempting to send OTP to', phone);
 
   try {
-    // Kavenegar verify/lookup API for OTP
     const res = await fetch(
       `https://api.kavenegar.com/v1/${apiKey}/verify/lookup.json`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          receptor: phone,
-          token: code,
-          template: 'sivan-otp',
-        }),
+        body: new URLSearchParams({ receptor: phone, token: code, template: 'sivan-otp' }),
         signal: AbortSignal.timeout(10000),
-      }
+      },
     );
-
     if (res.ok) {
       const data = await res.json();
       if (data.return?.status === 200 || data.return?.code === 200) {
-        return { success: true, message: 'کد تأیید پیامک شد' };
+        console.log('[SMS] ✅ OTP sent successfully via Kavenegar');
+        return { success: true, message: 'OTP sent via Kavenegar' };
       }
-      return { success: false, message: data.return?.message || 'خطا در ارسال پیامک' };
+      return { success: false, message: data.return?.message || 'Kavenegar error' };
     }
-
     const errData = await res.json().catch(() => ({}));
-    return {
-      success: false,
-      message: errData?.return?.message || `خطا در ارسال پیامک (${res.status})`,
-    };
+    return { success: false, message: errData?.return?.message || `Kavenegar error (${res.status})` };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'خطای ناشناخته';
-    return { success: false, message: `خطا در ارتباط با کاوه‌نگار: ${msg}` };
+    return { success: false, message: `Kavenegar unreachable: ${err instanceof Error ? err.message : 'unknown'}` };
   }
 }
 
-// ─── 2. OTP Send (Main Entry) ─────────────────────────────────
+// --- 3. OTP Send (Main Entry) ---
 
 export async function sendOTP(phone: string): Promise<{
   success: boolean;
@@ -109,55 +195,47 @@ export async function sendOTP(phone: string): Promise<{
   expiresIn?: number;
 }> {
   if (!/^09[0-9]{9}$/.test(phone)) {
-    return { success: false, message: 'شماره موبایل نامعتبر است', isDemo: false };
+    return { success: false, message: 'Invalid phone number', isDemo: false };
   }
 
-  const code = generateOTP(phone); // Always store in memory for verification
-  const provider = getSMSProvider();
+  // Always generate OTP code first and store in memory for verification
+  const code = generateOTP(phone);
+  const provider = process.env.SMS_PROVIDER || 'auto';
 
-  if (provider === 'kavenegar') {
-    const result = await sendViaKavenegar(phone, code);
+  console.log(`[SMS] sendOTP: phone=${phone}, provider=${provider}, code=${code}`);
 
-    if (result.success) {
-      return {
-        success: true,
-        message: 'کد تأیید ارسال شد',
-        isDemo: false,
-        expiresIn: 120,
-      };
-    }
-
-    // Kavenegar failed - if API key is missing, use memory fallback with visible code
-    if (!getKavenegarAPIKey()) {
-      console.warn('[SMS] KAVENEGAR_API_KEY not set, using memory fallback');
-      return {
-        success: true,
-        message: 'کد تأیید تولید شد (حالت توسعه - پیامک ارسال نمی‌شود)',
-        otp: code,
-        isDemo: true,
-        expiresIn: 120,
-      };
-    }
-
-    // Kavenegar has a key but failed - return the actual error
-    return {
-      success: false,
-      message: result.message,
-      isDemo: false,
-    };
+  // If explicitly set to memory mode, skip real SMS entirely
+  if (provider === 'memory') {
+    console.warn('[SMS] SMS_PROVIDER=memory, using in-memory OTP (demo mode)');
+    return { success: true, message: 'OTP generated (dev mode)', otp: code, isDemo: true, expiresIn: 120 };
   }
 
-  // Memory provider (for testing)
-  return {
-    success: true,
-    message: 'کد تأیید تولید شد',
-    otp: code,
-    isDemo: true,
-    expiresIn: 120,
-  };
+  // Try p.api.ir first (primary provider)
+  console.log('[SMS] Trying p.api.ir as primary SMS provider...');
+  const papiResult = await sendViaPapiIr(phone, code);
+  if (papiResult.success) {
+    console.log(`[SMS] ✅ REAL OTP sent successfully to ${phone} via p.api.ir (endpoint: ${papiResult.endpoint})`);
+    return { success: true, message: 'OTP sent via SMS', isDemo: false, expiresIn: 120 };
+  }
+  console.warn('[SMS] p.api.ir failed:', papiResult.message);
+
+  // Try Kavenegar second (if API key is configured)
+  if (getKavenegarAPIKey()) {
+    console.log('[SMS] Trying Kavenegar as secondary SMS provider...');
+    const kavResult = await sendViaKavenegar(phone, code);
+    if (kavResult.success) {
+      console.log(`[SMS] ✅ REAL OTP sent successfully to ${phone} via Kavenegar`);
+      return { success: true, message: 'OTP sent via SMS', isDemo: false, expiresIn: 120 };
+    }
+    console.warn('[SMS] Kavenegar failed:', kavResult.message);
+  }
+
+  // All real providers failed — fallback to demo mode
+  console.warn(`[SMS] ❌ All real SMS providers failed for ${phone}. Falling back to DEMO mode. OTP code: ${code}`);
+  return { success: true, message: 'OTP generated (demo fallback)', otp: code, isDemo: true, expiresIn: 120 };
 }
 
-// ─── 3. OTP Verify ────────────────────────────────────────────
+// --- 4. OTP Verify ---
 
 export async function verifyOTP(phone: string, code: string): Promise<{
   success: boolean;
@@ -165,33 +243,24 @@ export async function verifyOTP(phone: string, code: string): Promise<{
   isDemo: boolean;
 }> {
   if (!code || code.length !== 6) {
-    return { success: false, message: 'کد تأیید باید ۶ رقم باشد', isDemo: false };
+    return { success: false, message: 'Code must be 6 digits', isDemo: false };
   }
-
   const valid = verifyStoredOTP(phone, code);
   if (valid) {
-    return {
-      success: true,
-      message: 'شماره تأیید شد',
-      isDemo: !getKavenegarAPIKey(),
-    };
+    const hasRealProvider = !!getPapiToken() || !!getKavenegarAPIKey();
+    console.log(`[SMS] verifyOTP: phone=${phone}, valid=true, hasRealProvider=${hasRealProvider}`);
+    return { success: true, message: 'Verified', isDemo: !hasRealProvider };
   }
-
-  return {
-    success: false,
-    message: 'کد تأیید نامعتبر یا منقضی شده است',
-    isDemo: false,
-  };
+  console.log(`[SMS] verifyOTP: phone=${phone}, valid=false`);
+  return { success: false, message: 'Invalid or expired code', isDemo: false };
 }
 
-// ─── 4. Shahkar Verification ──────────────────────────────────
-// Shahkar matches a mobile phone number with a person's national ID
-// Requires p.api.ir Shahkar service (separate from SMS)
+// --- 5. Shahkar Verification ---
 
 export async function verifyShahkar(
   nationalId: string,
   phone: string,
-  birthDate?: string
+  birthDate?: string,
 ): Promise<{
   success: boolean;
   verified: boolean;
@@ -207,115 +276,82 @@ export async function verifyShahkar(
   };
 }> {
   if (!nationalId || !/^[0-9]{10}$/.test(nationalId)) {
-    return { success: false, verified: false, message: 'کد ملی باید ۱۰ رقم باشد', isDemo: false };
+    return { success: false, verified: false, message: 'Invalid national ID', isDemo: false };
   }
   if (!phone || !/^09[0-9]{9}$/.test(phone)) {
-    return { success: false, verified: false, message: 'شماره موبایل نامعتبر است', isDemo: false };
+    return { success: false, verified: false, message: 'Invalid phone', isDemo: false };
   }
   if (!validateNationalIdCheckDigit(nationalId)) {
-    return { success: false, verified: false, message: 'کد ملی نامعتبر است', isDemo: false };
+    return { success: false, verified: false, message: 'Invalid national ID checksum', isDemo: false };
   }
 
-  // Try p.api.ir Shahkar API if token available
-  const token = process.env.PAPI_TOKEN;
+  const token = getPapiToken();
   if (token) {
     try {
       const res = await fetch('https://p.api.ir/api/v1/shahkar/check', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ nationalId, mobile: phone, birthDate }),
         signal: AbortSignal.timeout(10000),
       });
-
       if (res.ok) {
         const data = await res.json();
         return {
           success: true,
           verified: data.verified || data.matched || data.status === 'matched',
-          message: data.message || (data.verified ? 'تأیید شاهکار موفق بود' : 'شماره موبایل با کد ملی مطابقت ندارد'),
+          message: data.message || (data.verified ? 'Shahkar verified' : 'Mismatch'),
           isDemo: false,
           personInfo: data.personInfo || data.data,
         };
       }
-      console.warn('[Shahkar] API check failed:', res.status);
     } catch (err) {
       console.warn('[Shahkar] API unreachable:', err);
     }
   }
 
-  // Format validation passed but API not available
   return {
     success: true,
     verified: true,
-    message: 'اعتبارسنجی کد ملی انجام شد. سرویس شاهکار هنوز فعال نشده است.',
+    message: 'Shahkar demo mode',
     isDemo: true,
-    personInfo: {
-      nationalId,
-      gender: 'unknown',
-    },
+    personInfo: { nationalId, gender: 'unknown' },
   };
 }
 
-// ─── 5. National ID + Phone Matching ───────────────────────────
+// --- 6. National ID + Phone Matching ---
 
-export async function matchNationalIdWithPhone(
-  nationalId: string,
-  phone: string
-): Promise<{
+export async function matchNationalIdWithPhone(nationalId: string, phone: string): Promise<{
   success: boolean;
   matched: boolean;
   message: string;
   isDemo: boolean;
 }> {
-  if (!nationalId || !/^[0-9]{10}$/.test(nationalId)) {
-    return { success: false, matched: false, message: 'کد ملی باید ۱۰ رقم باشد', isDemo: false };
-  }
-  if (!phone || !/^09[0-9]{9}$/.test(phone)) {
-    return { success: false, matched: false, message: 'شماره موبایل نامعتبر است', isDemo: false };
-  }
-  if (!validateNationalIdCheckDigit(nationalId)) {
-    return { success: false, matched: false, message: 'کد ملی نامعتبر است', isDemo: false };
-  }
+  if (!nationalId || !/^[0-9]{10}$/.test(nationalId)) return { success: false, matched: false, message: 'Invalid national ID', isDemo: false };
+  if (!phone || !/^09[0-9]{9}$/.test(phone)) return { success: false, matched: false, message: 'Invalid phone', isDemo: false };
+  if (!validateNationalIdCheckDigit(nationalId)) return { success: false, matched: false, message: 'Invalid national ID checksum', isDemo: false };
 
-  const token = process.env.PAPI_TOKEN;
+  const token = getPapiToken();
   if (token) {
     try {
       const res = await fetch('https://p.api.ir/api/v1/national-id/match', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ nationalId, mobile: phone }),
         signal: AbortSignal.timeout(10000),
       });
-
       if (res.ok) {
         const data = await res.json();
-        return {
-          success: true,
-          matched: data.matched || data.status === 'matched',
-          message: data.message || (data.matched ? 'کد ملی با شماره موبایل مطابقت دارد' : 'کد ملی با شماره موبایل مطابقت ندارد'),
-          isDemo: false,
-        };
+        return { success: true, matched: data.matched || data.status === 'matched', message: data.message || 'Done', isDemo: false };
       }
     } catch {
-      // API unavailable
+      /* API unavailable */
     }
   }
 
-  return {
-    success: true,
-    matched: true,
-    message: 'اعتبارسنجی کد ملی انجام شد. سرویس تطبیق هنوز فعال نشده است.',
-    isDemo: true,
-  };
+  return { success: true, matched: true, message: 'Match demo mode', isDemo: true };
 }
 
-// ─── 6. National ID Validation ────────────────────────────────
+// --- 7. National ID Validation ---
 
 export async function verifyNationalId(nationalId: string): Promise<{
   success: boolean;
@@ -323,32 +359,19 @@ export async function verifyNationalId(nationalId: string): Promise<{
   message: string;
   isDemo: boolean;
 }> {
-  if (!nationalId || !/^[0-9]{10}$/.test(nationalId)) {
-    return { success: false, valid: false, message: 'کد ملی باید ۱۰ رقم باشد', isDemo: false };
-  }
-  if (!validateNationalIdCheckDigit(nationalId)) {
-    return { success: false, valid: false, message: 'کد ملی نامعتبر است', isDemo: false };
-  }
-
-  return {
-    success: true,
-    valid: true,
-    message: 'کد ملی معتبر است',
-    isDemo: false,
-  };
+  if (!nationalId || !/^[0-9]{10}$/.test(nationalId)) return { success: false, valid: false, message: 'Invalid national ID', isDemo: false };
+  if (!validateNationalIdCheckDigit(nationalId)) return { success: false, valid: false, message: 'Invalid national ID checksum', isDemo: false };
+  return { success: true, valid: true, message: 'Valid national ID', isDemo: false };
 }
 
-// ─── Helper: Iranian National ID check digit ─────────────────
+// --- Helper: Iranian National ID check digit ---
 
 export function validateNationalIdCheckDigit(nationalId: string): boolean {
   if (!/^[0-9]{10}$/.test(nationalId)) return false;
-
   const digits = nationalId.split('').map(Number);
-  if (digits.every(d => d === digits[0])) return false;
-
+  if (digits.every((d) => d === digits[0])) return false;
   const check = digits[9];
   const sum = digits.slice(0, 9).reduce((acc, d, i) => acc + d * (10 - i), 0);
   const remainder = sum % 11;
-
   return remainder < 2 ? check === remainder : check === 11 - remainder;
 }

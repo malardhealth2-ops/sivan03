@@ -144,7 +144,7 @@ function MapInvalidator() {
       map.invalidateSize();
     }, 200);
     return () => clearTimeout(timer);
-  }, [map]);
+  }, ap]);
 
   // Also listen for scroll/resize events that might change the container
   useEffect(() => {
@@ -173,7 +173,7 @@ function MapInvalidator() {
       observer.disconnect();
       if (frameId) cancelAnimationFrame(frameId);
     };
-  }, [map]);
+  }, ap]);
 
   return null;
 }
@@ -629,17 +629,8 @@ export default function InteractiveMapInner() {
     setActiveRoute(0);
   };
 
-  // Build polylines with explicit type casting and memoization
-  const routePolylines = useMemo(() => {
-    if (!routeData?.routes?.length) return [];
-    return routeData.routes.map((route) => {
-      // Ensure each coordinate is a valid [number, number] tuple (lat, lng)
-      const typedPath: L.LatLngExpression[] = route.path
-        .filter((coord) => Array.isArray(coord) && coord.length >= 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number')
-        .map((coord) => [coord[0], coord[1]] as L.LatLngTuple);
-      return typedPath;
-    });
-  }, [routeData]);
+  // Build polylines
+  const routePolylines = routeData?.routes.map((route) => route.path) || [];
 
   return (
     <section id="map" className="py-20 sm:py-24 bg-[#0a0a0a] relative">
@@ -902,7 +893,6 @@ export default function InteractiveMapInner() {
               zoom={6}
               className="w-full h-[500px] sm:h-[600px] lg:h-[650px]"
               zoomControl={true}
-              attributionControl={false}
               whenReady={(mapInstance) => {
                 // Force recalculate size once map is ready
                 setTimeout(() => {
@@ -940,9 +930,8 @@ export default function InteractiveMapInner() {
               {/* Route Polylines */}
               {routePolylines.map((path, index) => (
                 <Polyline
-                  key={`route-${index}-${path.length}`}
-                  positions={path as L.LatLngExpression[]}
-                  pane="overlayPane"
+                  key={index}
+                  positions={path}
                   pathOptions={{
                     color: ROUTE_COLORS[index] || '#666',
                     weight: index === 0 ? 5 : (index === activeRoute ? 4 : 3),
@@ -950,7 +939,6 @@ export default function InteractiveMapInner() {
                     dashArray: index === 0 ? undefined : '8, 8',
                     lineCap: 'round',
                     lineJoin: 'round',
-                    className: 'sivan-route-polyline',
                   }}
                 />
               ))}

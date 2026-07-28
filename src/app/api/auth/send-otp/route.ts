@@ -33,8 +33,15 @@ export async function POST(request: NextRequest) {
       rateLimit.set(phone, { count: 1, firstAt: now });
     }
 
-    // Send OTP via p.api.ir (falls back to demo)
+    // Send OTP via p.api.ir (falls back to demo if all providers fail)
     const result = await sendOTP(phone);
+
+    // Log the result for debugging
+    if (result.isDemo) {
+      console.log(`[OTP Route] DEMO mode for ${phone} — OTP: ${result.otp}`);
+    } else {
+      console.log(`[OTP Route] REAL SMS sent to ${phone} (provider: p.api.ir)`);
+    }
 
     if (!result.success) {
       return NextResponse.json({ error: result.message }, { status: 400 });

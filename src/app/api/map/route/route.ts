@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPricingConfig, calculateFare, rateForTripType } from '@/lib/pricing';
 
 // In-memory caches
-const routeCache = new Map<string, unknown>();
+// NOTE: Route cache disabled to prevent stale 2-point fallbacks from being served.
+// Previously, a failed OSRM call would cache a 2-point direct-distance path, and subsequent
+// requests for the same coordinates would return the stale cached response instead of retrying OSRM.
+// const routeCache = new Map<string, unknown>();
 const reverseGeoCache = new Map<string, string>();
 
 // Rate limiter for Nominatim
@@ -184,10 +187,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'مختصات مبدا و مقصد نامعتبر است' }, { status: 400 });
     }
 
-    // Check cache
-    const cacheKey = `${originLat.toFixed(3)},${originLng.toFixed(3)}-${destLat.toFixed(3)},${destLng.toFixed(3)}`;
-    const cached = routeCache.get(cacheKey);
-    if (cached) return NextResponse.json(cached);
+    // Route cache is disabled — see note above
+    // const cacheKey = `${originLat.toFixed(3)},${originLng.toFixed(3)}-${destLat.toFixed(3)},${destLng.toFixed(3)}`;
+    // const cached = routeCache.get(cacheKey);
+    // if (cached) return NextResponse.json(cached);
 
     // Calculate direct distance always (as fallback and for pricing)
     const directDistanceKm = haversineDistanceKm(originLat, originLng, destLat, destLng);
@@ -236,6 +239,7 @@ export async function GET(request: NextRequest) {
         });
 
         const roadDistanceKm = routes[0].distanceKm;
+        console.log('[Route] Routes returned:', routes.length, 'path coords:', routes[0]?.path?.length);
 
         result = {
           origin: { lat: originLat, lng: originLng, name: originName },
@@ -294,7 +298,8 @@ export async function GET(request: NextRequest) {
     result.pricing = prices;
     result.minFare = pricingConfig.minFare;
 
-    routeCache.set(cacheKey, result);
+    // Route cache disabled — do NOT cache results
+    // routeCache.set(cacheKey, result);
     return NextResponse.json(result);
   } catch (error) {
     console.error('Route API error:', error);

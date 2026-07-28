@@ -1,0 +1,706 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useEffect, useRef, useCallback } from 'react';
+     4→     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→     5→import {
+     6→     6→  User,
+     7→     7→  Loader2,
+     8→     8→  Check,
+     9→     9→  AlertTriangle,
+    10→    10→  UserPlus,
+    11→    11→  LogIn,
+    12→    12→  Shield,
+    13→    13→  Phone,
+    14→    14→  Smartphone,
+    15→    15→  KeyRound,
+    16→    16→  ArrowLeft,
+    17→    17→  Timer,
+    18→    18→  Fingerprint,
+    19→    19→} from 'lucide-react';
+    20→    20→import {
+    21→    21→  Dialog,
+    22→    22→  DialogContent,
+    23→    23→  DialogHeader,
+    24→    24→  DialogTitle,
+    25→    25→  DialogDescription,
+    26→    26→} from '@/components/ui/dialog';
+    27→    27→import { Button } from '@/components/ui/button';
+    28→    28→import { Input } from '@/components/ui/input';
+    29→    29→import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from '@/components/ui/input-otp';
+    30→    30→import { Label } from '@/components/ui/label';
+    31→    31→import { useAppStore } from '@/lib/store';
+    32→    32→import { toast } from 'sonner';
+    33→    33→
+    34→    34→// ─── OTP Step tracking ─────────────────────────────────────────────
+    35→    35→
+    36→    36→type OTPStep = 'phone' | 'code' | 'register' | 'success';
+    37→    37→
+    38→    38→export function AuthModal() {
+    39→    39→  const {
+    40→    40→    auth,
+    41→    41→    closeAuth,
+    42→    42→    setAuthUsername,
+    43→    43→    setAuthFullName,
+    44→    44→    setAuthPhone,
+    45→    45→    setAuthUser,
+    46→    46→    setAuthVerified,
+    47→    47→    adminLogin,
+    48→    48→    setAdminOpen,
+    49→    49→    openAuth,
+    50→    50→    setUserPanelOpen,
+    51→    51→  } = useAppStore();
+    52→    52→
+    53→    53→  const [step, setStep] = useState<OTPStep>('phone');
+    54→    54→  const [loading, setLoading] = useState(false);
+    55→    55→  const [localError, setLocalError] = useState('');
+    56→    56→  const [otpSent, setOtpSent] = useState(false);
+    57→    57→  const [isDemo, setIsDemo] = useState(false);
+    58→    58→  const [demoOtp, setDemoOtp] = useState('');
+    59→    59→  const [countdown, setCountdown] = useState(0);
+    60→    60→  const [isExistingUser, setIsExistingUser] = useState(false);
+    61→    61→  const [existingUser, setExistingUser] = useState<{ id: string; fullName: string; username: string; role: string } | null>(null);
+    62→    62→  const countdownRef = useRef<ReturnType<typeof setInterval>>();
+    63→    63→  const inputRef = useRef<HTMLInputElement>(null);
+    64→    64→
+    65→    65→  // Reset when modal opens/closes
+    66→    66→  useEffect(() => {
+    67→    67→    if (auth.isOpen) {
+    68→    68→      setStep('phone');
+    69→    69→      setLocalError('');
+    70→    70→      setOtpSent(false);
+    71→    71→      setIsDemo(false);
+    72→    72→      setDemoOtp('');
+    73→    73→      setCountdown(0);
+    74→    74→      setIsExistingUser(false);
+    75→    75→      setExistingUser(null);
+    76→    76→      // Focus phone input after mount
+    77→    77→      setTimeout(() => inputRef.current?.focus(), 200);
+    78→    78→    }
+    79→    79→  }, [auth.isOpen]);
+    80→    80→
+    81→    81→  // Countdown timer
+    82→    82→  useEffect(() => {
+    83→    83→    if (countdown > 0) {
+    84→    84→      countdownRef.current = setInterval(() => {
+    85→    85→        setCountdown((c) => {
+    86→    86→          if (c <= 1) {
+    87→    87→            clearInterval(countdownRef.current);
+    88→    88→            return 0;
+    89→    89→          }
+    90→    90→          return c - 1;
+    91→    91→        });
+    92→    92→      }, 1000);
+    93→    93→      return () => clearInterval(countdownRef.current);
+    94→    94→    }
+    95→    95→  }, [countdown]);
+    96→    96→
+    97→    97→  // ─── Step 1: Send OTP ──────────────────────────────────────
+    98→    98→
+    99→    99→  const handleSendOTP = async () => {
+   100→   100→    const phone = auth.phone.trim();
+   101→   101→    if (!phone || !/^09[0-9]{9}$/.test(phone)) {
+   102→   102→      setLocalError('شماره موبایل معتبر وارد کنید (مثال: ۰۹۱۲۳۴۵۶۷۸۹)');
+   103→   103→      return;
+   104→   104→    }
+   105→   105→    setLocalError('');
+   106→   106→    setLoading(true);
+   107→   107→
+   108→   108→    try {
+   109→   109→      const res = await fetch('/api/auth/send-otp', {
+   110→   110→        method: 'POST',
+   111→   111→        headers: { 'Content-Type': 'application/json' },
+   112→   112→        body: JSON.stringify({ phone }),
+   113→   113→      });
+   114→   114→
+   115→   115→      const data = await res.json();
+   116→   116→
+   117→   117→      if (!res.ok) {
+   118→   118→        setLocalError(data.error || 'خطا در ارسال کد تأیید');
+   119→   119→        setLoading(false);
+   120→   120→        return;
+   121→   121→      }
+   122→   122→
+   123→   123→      setOtpSent(true);
+   124→   124→      setIsDemo(!!data.isDemo);
+   125→   125→      if (data.isDemo && data.otp) {
+   126→   126→        setDemoOtp(data.otp);
+   127→   127→      }
+   128→   128→      setCountdown(120);
+   129→   129→      setStep('code');
+   130→   130→      toast.success('کد تأیید ارسال شد');
+   131→   131→    } catch {
+   132→   132→      setLocalError('خطا در ارتباط با سرور');
+   133→   133→    } finally {
+   134→   134→      setLoading(false);
+   135→   135→    }
+   136→   136→  };
+   137→   137→
+   138→   138→  // ─── Step 2: Verify OTP ─────────────────────────────────────
+   139→   139→
+   140→   140→  const handleVerifyOTP = async (code: string) => {
+   141→   141→    if (!code || code.length !== 6) return;
+   142→   142→    setLocalError('');
+   143→   143→    setLoading(true);
+   144→   144→
+   145→   145→    try {
+   146→   146→      const res = await fetch('/api/auth/verify-otp', {
+   147→   147→        method: 'POST',
+   148→   148→        headers: { 'Content-Type': 'application/json' },
+   149→   149→        body: JSON.stringify({ phone: auth.phone, code }),
+   150→   150→      });
+   151→   151→
+   152→   152→      const data = await res.json();
+   153→   153→
+   154→   154→      if (!res.ok) {
+   155→   155→        setLocalError(data.error || 'کد تأیید نامعتبر');
+   156→   156→        setLoading(false);
+   157→   157→        return;
+   158→   158→      }
+   159→   159→
+   160→   160→      if (data.isNewUser) {
+   161→   161→        // New user — go to registration step
+   162→   162→        setStep('register');
+   163→   163→        setLoading(false);
+   164→   164→      } else {
+   165→   165→        // Existing user — login directly
+   166→   166→        setIsExistingUser(true);
+   167→   167→        setExistingUser(data.user);
+   168→   168→        setAuthUser({
+   169→   169→          id: data.user.id,
+   170→   170→          username: data.user.username || data.user.phone,
+   171→   171→          fullName: data.user.fullName,
+   172→   172→          role: data.user.role,
+   173→   173→        });
+   174→   174→        setAuthVerified(true);
+   175→   175→        setStep('success');
+   176→   176→
+   177→   177→        // Admin handling
+   178→   178→        if (data.user?.role === 'admin') {
+   179→   179→          adminLogin(data.user.username, '');
+   180→   180→          setTimeout(() => {
+   181→   181→            setAdminOpen(true);
+   182→   182→            closeAuth();
+   183→   183→          }, 1200);
+   184→   184→        } else {
+   185→   185→          setTimeout(() => {
+   186→   186→            closeAuth();
+   187→   187→            setUserPanelOpen(true);
+   188→   188→          }, 1200);
+   189→   189→        }
+   190→   190→
+   191→   191→        toast.success(`خوش آمدید، ${data.user?.fullName || 'کاربر'} عزیز`);
+   192→   192→      }
+   193→   193→    } catch {
+   194→   194→      setLocalError('خطا در ارتباط با سرور');
+   195→   195→    } finally {
+   196→   196→      setLoading(false);
+   197→   197→    }
+   198→   198→  };
+   199→   199→
+   200→   200→  // ─── Step 3: Complete Registration ──────────────────────────
+   201→   201→
+   202→   202→  const handleCompleteRegistration = async () => {
+   203→   203→    const fullName = auth.fullName.trim();
+   204→   204→    if (!fullName || fullName.length < 2) {
+   205→   205→      setLocalError('نام و نام خانوادگی را کامل وارد کنید');
+   206→   206→      return;
+   207→   207→    }
+   208→   208→    setLocalError('');
+   209→   209→    setLoading(true);
+   210→   210→
+   211→   211→    try {
+   212→   212→      const res = await fetch('/api/auth/register', {
+   213→   213→        method: 'POST',
+   214→   214→        headers: { 'Content-Type': 'application/json' },
+   215→   215→        body: JSON.stringify({
+   216→   216→          username: `user_${auth.phone}`,
+   217→   217→          fullName,
+   218→   218→          password: `pass_${Date.now()}`, // Auto-generated since auth is OTP-based
+   219→   219→          phone: auth.phone,
+   220→   220→        }),
+   221→   221→      });
+   222→   222→
+   223→   223→      const data = await res.json();
+   224→   224→
+   225→   225→      if (!res.ok) {
+   226→   226→        setLocalError(data.error || 'خطا در ثبت‌نام');
+   227→   227→        setLoading(false);
+   228→   228→        return;
+   229→   229→      }
+   230→   230→
+   231→   231→      setAuthUser({
+   232→   232→        id: data.user.id,
+   233→   233→        username: data.user.username,
+   234→   234→        fullName: data.user.fullName,
+   235→   235→        role: data.user.role,
+   236→   236→      });
+   237→   237→      setAuthVerified(true);
+   238→   238→      setStep('success');
+   239→   239→
+   240→   240→      toast.success(`ثبت‌نام موفق! خوش آمدید، ${data.user.fullName} عزیز`);
+   241→   241→      setTimeout(() => {
+   242→   242→        closeAuth();
+   243→   243→        setUserPanelOpen(true);
+   244→   244→      }, 1200);
+   245→   245→    } catch {
+   246→   246→      setLocalError('خطا در ارتباط با سرور');
+   247→   247→    } finally {
+   248→   248→      setLoading(false);
+   249→   249→    }
+   250→   250→  };
+   251→   251→
+   252→   252→  // ─── Legacy login via username/password ─────────────────────
+   253→   253→
+   254→   254→  const [legacyMode, setLegacyMode] = useState(false);
+   255→   255→  const [showPass, setShowPass] = useState(false);
+   256→   256→
+   257→   257→  const handleLegacyLogin = async () => {
+   258→   258→    if (!auth.username || !auth.password) {
+   259→   259→      setLocalError('نام کاربری و رمز عبور را وارد کنید');
+   260→   260→      return;
+   261→   261→    }
+   262→   262→    setLocalError('');
+   263→   263→    setLoading(true);
+   264→   264→
+   265→   265→    try {
+   266→   266→      const res = await fetch('/api/auth/login', {
+   267→   267→        method: 'POST',
+   268→   268→        headers: { 'Content-Type': 'application/json' },
+   269→   269→        body: JSON.stringify({ username: auth.username, password: auth.password }),
+   270→   270→      });
+   271→   271→
+   272→   272→      const data = await res.json();
+   273→   273→
+   274→   274→      if (!res.ok) {
+   275→   275→        setLocalError(data.error || 'خطا در ورود');
+   276→   276→        setLoading(false);
+   277→   277→        return;
+   278→   278→      }
+   279→   279→
+   280→   280→      setAuthUser(data.user || null);
+   281→   281→
+   282→   282→      if (data.user?.role === 'admin') {
+   283→   283→        adminLogin(auth.username, auth.password);
+   284→   284→        setAdminOpen(true);
+   285→   285→        closeAuth();
+   286→   286→        setLoading(false);
+   287→   287→        return;
+   288→   288→      }
+   289→   289→
+   290→   290→      setAuthVerified(true);
+   291→   291→      setLoading(false);
+   292→   292→      toast.success(`خوش آمدید، ${data.user?.fullName || 'کاربر'} عزیز`);
+   293→   293→      setTimeout(() => {
+   294→   294→        closeAuth();
+   295→   295→        setUserPanelOpen(true);
+   296→   296→      }, 900);
+   297→   297→    } catch {
+   298→   298→      setLocalError('خطا در ارتباط با سرور');
+   299→   299→      setLoading(false);
+   300→   300→    }
+   301→   301→  };
+   302→   302→
+   303→   303→  const resetAndClose = () => {
+   304→   304→    setLocalError('');
+   305→   305→    closeAuth();
+   306→   306→  };
+   307→   307→
+   308→   308→  const formatCountdown = (s: number) => {
+   309→   309→    const min = Math.floor(s / 60);
+   310→   310→    const sec = s % 60;
+   311→   311→    return `${min}:${sec.toString().padStart(2, '0')}`;
+   312→   312→  };
+   313→   313→
+   314→   314→  return (
+   315→   315→    <Dialog open={auth.isOpen} onOpenChange={(val) => { if (!val) resetAndClose(); }}>
+   316→   316→      <DialogContent className="bg-[#1a1a1a] border-[#333] max-w-md">
+   317→   317→        <DialogHeader>
+   318→   318→          <DialogTitle className="text-right text-[#fafafa]">
+   319→   319→            {step === 'success'
+   320→   320→              ? 'خوش آمدید!'
+   321→   321→              : step === 'register'
+   322→   322→                ? 'تکمیل ثبت‌نام'
+   323→   323→                : step === 'code'
+   324→   324→                  ? 'تأیید شماره موبایل'
+   325→   325→                  : legacyMode
+   326→   326→                    ? 'ورود با نام کاربری'
+   327→   327→                    : 'ورود / ثبت‌نام'}
+   328→   328→          </DialogTitle>
+   329→   329→          <DialogDescription className="text-right text-[#a1a1aa]">
+   330→   330→            {step === 'success'
+   331→   331→              ? 'حساب شما با موفقیت تأیید شد'
+   332→   332→              : step === 'register'
+   333→   333→                ? 'برای تکمیل ثبت‌نام، نام خود را وارد کنید'
+   334→   334→                : step === 'code'
+   335→   335→                  ? `کد تأیید ارسال شده به ${auth.phone} را وارد کنید`
+   336→   336→                  : legacyMode
+   337→   337→                    ? 'نام کاربری و رمز عبور خود را وارد کنید'
+   338→   338→                    : 'شماره موبایل خود را وارد کنید تا کد تأیید ارسال شود'}
+   339→   339→          </DialogDescription>
+   340→   340→        </DialogHeader>
+   341→   341→
+   342→   342→        <div className="mt-2">
+   343→   343→          <AnimatePresence mode="wait">
+   344→   344→            {/* ─── Success State ─────────────────────────── */}
+   345→   345→            {step === 'success' && (
+   346→   346→              <motion.div
+   347→   347→                key="success"
+   348→   348→                initial={{ opacity: 0, scale: 0.9 }}
+   349→   349→                animate={{ opacity: 1, scale: 1 }}
+   350→   350→                className="text-center py-6 space-y-4"
+   351→   351→              >
+   352→   352→                <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
+   353→   353→                  <Check className="h-8 w-8 text-green-400" />
+   354→   354→                </div>
+   355→   355→                <p className="text-[#fafafa] font-medium">
+   356→   356→                  {auth.user?.fullName ? `${auth.user.fullName} عزیز، خوش آمدید!` : 'خوش آمدید!'}
+   357→   357→                </p>
+   358→   358→                <p className="text-[#a1a1aa] text-xs">در حال ورود به پنل کاربری...</p>
+   359→   359→              </motion.div>
+   360→   360→            )}
+   361→   361→
+   362→   362→            {/* ─── Phone Entry ───────────────────────────── */}
+   363→   363→            {step === 'phone' && !legacyMode && (
+   364→   364→              <motion.div
+   365→   365→                key="phone"
+   366→   366→                initial={{ opacity: 0, x: -20 }}
+   367→   367→                animate={{ opacity: 1, x: 0 }}
+   368→   368→                exit={{ opacity: 0, x: 20 }}
+   369→   369→                className="space-y-4"
+   370→   370→              >
+   371→   371→                <div className="flex justify-center">
+   372→   372→                  <div className="w-16 h-16 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   373→   373→                    <Smartphone className="h-8 w-8 text-[#D4AF37]" />
+   374→   374→                  </div>
+   375→   375→                </div>
+   376→   376→
+   377→   377→                <div className="space-y-2">
+   378→   378→                  <Label className="text-[#fafafa] text-sm">
+   379→   379→                    <Phone className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />
+   380→   380→                    شماره موبایل
+   381→   381→                  </Label>
+   382→   382→                  <Input
+   383→   383→                    ref={inputRef}
+   384→   384→                    type="tel"
+   385→   385→                    placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+   386→   386→                    value={auth.phone}
+   387→   387→                    onChange={(e) => {
+   388→   388→                      const val = e.target.value.replace(/[^0-9]/g, '');
+   389→   389→                      setAuthPhone(val);
+   390→   390→                      setLocalError('');
+   391→   391→                    }}
+   392→   392→                    onKeyDown={(e) => e.key === 'Enter' && handleSendOTP()}
+   393→   393→                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12 text-lg tracking-wider"
+   394→   394→                    dir="ltr"
+   395→   395→                    autoFocus
+   396→   396→                    maxLength={11}
+   397→   397→                  />
+   398→   398→                  <p className="text-[10px] text-[#666]">
+   399→   399→                    کد تأیید به این شماره ارسال می‌شود
+   400→   400→                  </p>
+   401→   401→                </div>
+   402→   402→
+   403→   403→                {localError && (
+   404→   404→                  <motion.div
+   405→   405→                    initial={{ opacity: 0, y: -5 }}
+   406→   406→                    animate={{ opacity: 1, y: 0 }}
+   407→   407→                    className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+   408→   408→                  >
+   409→   409→                    <AlertTriangle className="h-4 w-4 shrink-0" />
+   410→   410→                    {localError}
+   411→   411→                  </motion.div>
+   412→   412→                )}
+   413→   413→
+   414→   414→                <Button
+   415→   415→                  onClick={handleSendOTP}
+   416→   416→                  disabled={loading || auth.phone.length !== 11}
+   417→   417→                  className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium"
+   418→   418→                >
+   419→   419→                  {loading ? (
+   420→   420→                    <Loader2 className="h-4 w-4 animate-spin" />
+   421→   421→                  ) : (
+   422→   422→                    <>
+   423→   423→                      <Fingerprint className="h-4 w-4 ml-2" />
+   424→   424→                      ارسال کد تأیید
+   425→   425→                    </>
+   426→   426→                  )}
+   427→   427→                </Button>
+   428→   428→
+   429→   429→                {/* Switch to legacy login */}
+   430→   430→                <div className="text-center text-xs text-[#a1a1aa] pt-1">
+   431→   431→                  ورود با نام کاربری؟{' '}
+   432→   432→                  <button
+   433→   433→                    type="button"
+   434→   434→                    onClick={() => { setLegacyMode(true); setLocalError(''); }}
+   435→   435→                    className="text-[#D4AF37] hover:text-[#E5C76B] font-medium underline-offset-2 hover:underline"
+   436→   436→                  >
+   437→   437→                    کلیک کنید
+   438→   438→                  </button>
+   439→   439→                </div>
+   440→   440→              </motion.div>
+   441→   441→            )}
+   442→   442→
+   443→   443→            {/* ─── OTP Code Entry ─────────────────────────── */}
+   444→   444→            {step === 'code' && (
+   445→   445→              <motion.div
+   446→   446→                key="code"
+   447→   447→                initial={{ opacity: 0, x: 20 }}
+   448→   448→                animate={{ opacity: 1, x: 0 }}
+   449→   449→                exit={{ opacity: 0, x: -20 }}
+   450→   450→                className="space-y-4"
+   451→   451→              >
+   452→   452→                <div className="flex justify-center">
+   453→   453→                  <div className="w-16 h-16 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   454→   454→                    <KeyRound className="h-8 w-8 text-[#D4AF37]" />
+   455→   455→                  </div>
+   456→   456→                </div>
+   457→   457→
+   458→   458→                <div className="flex flex-col items-center gap-3">
+   459→   459→                  <Label className="text-[#fafafa] text-sm text-center">
+   460→   460→                    کد تأیید ۶ رقمی
+   461→   461→                  </Label>
+   462→   462→                  <InputOTP
+   463→   463→                    maxLength={6}
+   464→   464→                    onComplete={(code) => handleVerifyOTP(code)}
+   465→   465→                    disabled={loading}
+   466→   466→                    containerClassName="justify-center"
+   467→   467→                    dir="ltr"
+   468→   468→                  >
+   469→   469→                    <InputOTPGroup>
+   470→   470→                      <InputOTPSlot index={0} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   471→   471→                      <InputOTPSlot index={1} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   472→   472→                      <InputOTPSlot index={2} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   473→   473→                    </InputOTPGroup>
+   474→   474→                    <InputOTPSeparator className="text-[#666]" />
+   475→   475→                    <InputOTPGroup>
+   476→   476→                      <InputOTPSlot index={3} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   477→   477→                      <InputOTPSlot index={4} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   478→   478→                      <InputOTPSlot index={5} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   479→   479→                    </InputOTPGroup>
+   480→   480→                  </InputOTP>
+   481→   481→
+   482→   482→                  {/* Demo OTP display */}
+   483→   483→                  {isDemo && demoOtp && (
+   484→   484→                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-2 text-center">
+   485→   485→                      <p className="text-amber-400 text-xs mb-1">حالت آزمایشی — کد تأیید:</p>
+   486→   486→                      <p className="text-amber-300 font-mono text-lg tracking-widest font-bold">{demoOtp}</p>
+   487→   487→                    </div>
+   488→   488→                  )}
+   489→   489→
+   490→   490→                  {/* Countdown / Resend */}
+   491→   491→                  <div className="flex items-center gap-2 text-xs">
+   492→   492→                    {countdown > 0 ? (
+   493→   493→                      <>
+   494→   494→                        <Timer className="h-3 w-3 text-[#a1a1aa]" />
+   495→   495→                        <span className="text-[#a1a1aa]">
+   496→   496→                          ارسال مجدد تا {formatCountdown(countdown)}
+   497→   497→                        </span>
+   498→   498→                      </>
+   499→   499→                    ) : (
+   500→   500→                      <button
+   501→   501→                        type="button"
+   502→   502→                        onClick={handleSendOTP}
+   503→   503→                        disabled={loading}
+   504→   504→                        className="text-[#D4AF37] hover:text-[#E5C76B] font-medium"
+   505→   505→                      >
+   506→   506→                        ارسال مجدد کد تأیید
+   507→   507→                      </button>
+   508→   508→                    )}
+   509→   509→                  </div>
+   510→   510→                </div>
+   511→   511→
+   512→   512→                {localError && (
+   513→   513→                  <motion.div
+   514→   514→                    initial={{ opacity: 0, y: -5 }}
+   515→   515→                    animate={{ opacity: 1, y: 0 }}
+   516→   516→                    className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+   517→   517→                  >
+   518→   518→                    <AlertTriangle className="h-4 w-4 shrink-0" />
+   519→   519→                    {localError}
+   520→   520→                  </motion.div>
+   521→   521→                )}
+   522→   522→
+   523→   523→                {loading && (
+   524→   524→                  <div className="flex items-center justify-center gap-2 text-sm text-[#a1a1aa]">
+   525→   525→                    <Loader2 className="h-4 w-4 animate-spin text-[#D4AF37]" />
+   526→   526→                    در حال تأیید...
+   527→   527→                  </div>
+   528→   528→                )}
+   529→   529→
+   530→   530→                {/* Back button */}
+   531→   531→                <Button
+   532→   532→                  variant="ghost"
+   533→   533→                  size="sm"
+   534→   534→                  onClick={() => { setStep('phone'); setLocalError(''); }}
+   535→   535→                  className="w-full text-[#a1a1aa] hover:text-[#fafafa]"
+   536→   536→                >
+   537→   537→                  <ArrowLeft className="h-4 w-4 ml-1" />
+   538→   538→                  تغییر شماره موبایل
+   539→   539→                </Button>
+   540→   540→              </motion.div>
+   541→   541→            )}
+   542→   542→
+   543→   543→            {/* ─── Registration (New User) ────────────────── */}
+   544→   544→            {step === 'register' && (
+   545→   545→              <motion.div
+   546→   546→                key="register"
+   547→   547→                initial={{ opacity: 0, x: 20 }}
+   548→   548→                animate={{ opacity: 1, x: 0 }}
+   549→   549→                exit={{ opacity: 0, x: -20 }}
+   550→   550→                className="space-y-4"
+   551→   551→              >
+   552→   552→                <div className="flex justify-center">
+   553→   553→                  <div className="w-16 h-16 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   554→   554→                    <UserPlus className="h-8 w-8 text-[#D4AF37]" />
+   555→   555→                  </div>
+   556→   556→                </div>
+   557→   557→
+   558→   558→                <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-xl text-sm">
+   559→   559→                  <Check className="h-4 w-4 text-green-400 shrink-0" />
+   560→   560→                  <span className="text-green-300">شماره موبایل {auth.phone} تأیید شد</span>
+   561→   561→                </div>
+   562→   562→
+   563→   563→                <div className="space-y-2">
+   564→   564→                  <Label className="text-[#fafafa] text-sm">
+   565→   565→                    <User className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />
+   566→   566→                    نام و نام خانوادگی
+   567→   567→                  </Label>
+   568→   568→                  <Input
+   569→   569→                    placeholder="مثال: علی رضایی"
+   570→   570→                    value={auth.fullName}
+   571→   571→                    onChange={(e) => { setAuthFullName(e.target.value); setLocalError(''); }}
+   572→   572→                    onKeyDown={(e) => e.key === 'Enter' && handleCompleteRegistration()}
+   573→   573→                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
+   574→   574→                    autoFocus
+   575→   575→                  />
+   576→   576→                </div>
+   577→   577→
+   578→   578→                {localError && (
+   579→   579→                  <motion.div
+   580→   580→                    initial={{ opacity: 0, y: -5 }}
+   581→   581→                    animate={{ opacity: 1, y: 0 }}
+   582→   582→                    className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+   583→   583→                  >
+   584→   584→                    <AlertTriangle className="h-4 w-4 shrink-0" />
+   585→   585→                    {localError}
+   586→   586→                  </motion.div>
+   587→   587→                )}
+   588→   588→
+   589→   589→                <Button
+   590→   590→                  onClick={handleCompleteRegistration}
+   591→   591→                  disabled={loading || !auth.fullName.trim() || auth.fullName.trim().length < 2}
+   592→   592→                  className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium"
+   593→   593→                >
+   594→   594→                  {loading ? (
+   595→   595→                    <Loader2 className="h-4 w-4 animate-spin" />
+   596→   596→                  ) : (
+   597→   597→                    <>
+   598→   598→                      <UserPlus className="h-4 w-4 ml-2" />
+   599→   599→                      تکمیل ثبت‌نام
+   600→   600→                    </>
+   601→   601→                  )}
+   602→   602→                </Button>
+   603→   603→              </motion.div>
+   604→   604→            )}
+   605→   605→
+   606→   606→            {/* ─── Legacy Username Login ───────────────────── */}
+   607→   607→            {step === 'phone' && legacyMode && (
+   608→   608→              <motion.div
+   609→   609→                key="legacy"
+   610→   610→                initial={{ opacity: 0, x: 20 }}
+   611→   611→                animate={{ opacity: 1, x: 0 }}
+   612→   612→                exit={{ opacity: 0, x: -20 }}
+   613→   613→                className="space-y-4"
+   614→   614→              >
+   615→   615→                <div className="flex justify-center">
+   616→   616→                  <div className="w-16 h-16 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   617→   617→                    <Shield className="h-8 w-8 text-[#D4AF37]" />
+   618→   618→                  </div>
+   619→   619→                </div>
+   620→   620→
+   621→   621→                <div className="space-y-2">
+   622→   622→                  <Label className="text-[#fafafa] text-sm">
+   623→   623→                    <User className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />
+   624→   624→                    نام کاربری
+   625→   625→                  </Label>
+   626→   626→                  <Input
+   627→   627→                    placeholder="نام کاربری خود را وارد کنید"
+   628→   628→                    value={auth.username}
+   629→   629→                    onChange={(e) => { setAuthUsername(e.target.value); setLocalError(''); }}
+   630→   630→                    onKeyDown={(e) => e.key === 'Enter' && handleLegacyLogin()}
+   631→   631→                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
+   632→   632→                    dir="ltr"
+   633→   633→                    autoFocus
+   634→   634→                  />
+   635→   635→                </div>
+   636→   636→
+   637→   637→                <div className="space-y-2">
+   638→   638→                  <Label className="text-[#fafafa] text-sm">
+   639→   639→                    رمز عبور
+   640→   640→                  </Label>
+   641→   641→                  <div className="relative">
+   642→   642→                    <Input
+   643→   643→                      type={showPass ? 'text' : 'password'}
+   644→   644→                      placeholder="رمز عبور"
+   645→   645→                      value={auth.password}
+   646→   646→                      onChange={(e) => { setAuthPassword(e.target.value); setLocalError(''); }}
+   647→   647→                      onKeyDown={(e) => e.key === 'Enter' && handleLegacyLogin()}
+   648→   648→                      className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
+   649→   649→                      dir="ltr"
+   650→   650→                    />
+   651→   651→                    <button
+   652→   652→                      type="button"
+   653→   653→                      onClick={() => setShowPass(!showPass)}
+   654→   654→                      className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1aa] hover:text-[#fafafa]"
+   655→   655→                    >
+   656→   656→                      {showPass ? <Check className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+   657→   657→                    </button>
+   658→   658→                  </div>
+   659→   659→                </div>
+   660→   660→
+   661→   661→                {localError && (
+   662→   662→                  <motion.div
+   663→   663→                    initial={{ opacity: 0, y: -5 }}
+   664→   664→                    animate={{ opacity: 1, y: 0 }}
+   665→   665→                    className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+   666→   666→                  >
+   667→   667→                    <AlertTriangle className="h-4 w-4 shrink-0" />
+   668→   668→                    {localError}
+   669→   669→                  </motion.div>
+   670→   670→                )}
+   671→   671→
+   672→   672→                <Button
+   673→   673→                  onClick={handleLegacyLogin}
+   674→   674→                  disabled={loading || !auth.username || !auth.password}
+   675→   675→                  className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium"
+   676→   676→                >
+   677→   677→                  {loading ? (
+   678→   678→                    <Loader2 className="h-4 w-4 animate-spin" />
+   679→   679→                  ) : (
+   680→   680→                    <>
+   681→   681→                      <LogIn className="h-4 w-4 ml-2" />
+   682→   682→                      ورود به حساب
+   683→   683→                    </>
+   684→   684→                  )}
+   685→   685→                </Button>
+   686→   686→
+   687→   687→                {/* Switch back to OTP */}
+   688→   688→                <div className="text-center text-xs text-[#a1a1aa] pt-1">
+   689→   689→                  ورود با شماره موبایل؟{' '}
+   690→   690→                  <button
+   691→   691→                    type="button"
+   692→   692→                    onClick={() => { setLegacyMode(false); setLocalError(''); }}
+   693→   693→                    className="text-[#D4AF37] hover:text-[#E5C76B] font-medium underline-offset-2 hover:underline"
+   694→   694→                  >
+   695→   695→                    کلیک کنید
+   696→   696→                  </button>
+   697→   697→                </div>
+   698→   698→              </motion.div>
+   699→   699→            )}
+   700→   700→          </AnimatePresence>
+   701→   701→        </div>
+   702→   702→      </DialogContent>
+   703→   703→    </Dialog>
+   704→   704→  );
+   705→   705→}
+   706→   706→

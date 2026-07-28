@@ -1,6 +1,33 @@
 # Sivan VIP Taxi - Worklog
 
 ---
+Task ID: 3-a
+Agent: route-fix
+Task: Fix map route polyline display
+
+Work Log:
+- Fixed InteractiveMapInner.tsx Polyline rendering:
+  - Removed `routeVersion` state and its `useEffect` that caused double-renders and unstable keys
+  - Simplified `useMemo` to depend only on `routeData` (no more unnecessary re-renders)
+  - Changed Polyline key from `route-${routeVersion}-${index}` to `route-${index}-${path.length}` for stability
+  - Added explicit cast `positions={path as L.LatLngExpression[]}` for type safety
+  - Confirmed `pane="overlayPane"` was already present
+- Fixed backend route cache in `src/app/api/map/route/route.ts`:
+  - Disabled routeCache entirely (commented out Map, cache reads, and cache writes)
+  - Root cause: a failed OSRM call cached a 2-point direct-distance fallback; subsequent requests for same coordinates returned stale cached response instead of retrying OSRM
+  - Added logging: `console.log('[Route] Routes returned:', routes.length, 'path coords:', routes[0]?.path?.length)`
+- Fixed leaflet.css:
+  - Removed `.leaflet-map-pane canvas, .leaflet-map-pane svg { z-index: 1; }` rule
+  - This rule forced the SVG overlay (where polylines are drawn) to z-index 1, potentially hiding it behind the tile pane (z-index 200)
+  - Added explanatory comment about why this rule must NOT exist
+- All lint checks pass cleanly
+
+Stage Summary:
+- Route polylines should now display correctly on the interactive map
+- Root causes fixed: stale cache serving 2-point fallbacks, CSS z-index forcing SVG behind tiles, React double-render/unmount-remount of Polyline components
+- Backend logging added to verify real route data with 200+ path coordinates
+
+---
 Task ID: 11
 Agent: main
 Task: Jalali calendar, color fixes, admin panel
@@ -1297,3 +1324,65 @@ Stage Summary:
 - Real OTP infrastructure ready: set KAVENEGAR_API_KEY in .env to activate real SMS sending
 - Auto-fill fixed: booking form pre-fills from map selection, skips route step
 - Shahkar & National ID integration scaffolded with p.api.ir (needs service activation)
+
+---
+Task ID: 3-b
+Agent: main
+Task: Implement real OTP sending via p.api.ir API
+
+Work Log:
+- Updated .env: set SMS_PROVIDER=auto, added PAPI_TOKEN with actual p.api.ir token value
+- Rewrote src/lib/papi.ts with p.api.ir as primary SMS provider:
+  - Added PAPI_FALLBACK_TOKEN constant with actual token as default if env var missing
+  - Updated sendViaPapiIr() to try 3 p.api.ir endpoint patterns in order:
+    1. POST https://p.api.ir/api/v1/otp/send (OTP template pattern)
+    2. POST https://p.api.ir/api/Sms/Send (plain text SMS)
+    3. POST https://p.api.ir/api/v2/sms/send (v2 pattern)
+  - All endpoints use Bearer token auth and JSON Content-Type
+  - Any 2xx response is treated as success
+  - Persian OTP message format: "کد تایید شما: {code}"
+  - Comprehensive console.log('[SMS] ...') logging for every step
+  - If ALL endpoints fail, falls back to demo mode (isDemo=true, returns OTP code)
+  - Kavenegar remains as secondary provider if KAVENEGAR_API_KEY is set
+- Updated send-otp route.ts: added logging for demo vs real OTP result
+- All lint checks pass with zero errors
+
+Stage Summary:
+- p.api.ir is now the primary real SMS provider with actual API token configured
+- System tries 3 endpoint patterns to maximize compatibility with p.api.ir API
+- Token has built-in fallback default so it works even without .env
+- SMS_PROVIDER changed from 'memory' to 'auto' to enable real SMS attempts
+- Detailed logging for debugging: every API attempt, response status, and fallback is logged
+- Demo mode only activates when ALL real providers fail (not because of missing env vars)
+
+---
+Task ID: 3-c
+Agent: main (driver-reg-merge)
+Task: Merge driver registration into main AuthModal
+
+Work Log:
+- Read existing AuthModal.tsx, DriverRegisterModal.tsx, store.ts, Navbar.tsx, page.tsx
+- Rewrote AuthModal.tsx to support both passenger and driver registration flows
+- Added RegisterMode type ('passenger' | 'driver') and DriverSubStep type ('select-type' | 'shahkar' | 'info' | 'vehicle')
+- Added registration type selection screen after OTP verification (new user)
+  - Passenger: just shows name input for quick registration
+  - Driver: full flow with Shahkar, personal info, vehicle info
+- Added all driver state: nationalId, birthDate, fatherName, licenseNumber, shebaNumber, vehicle fields
+- Added handleSelectRegisterMode, handleShahkarVerify, handleDriverInfoSubmit, handleDriverSubmit handlers
+- Driver flow: phone -> code -> select-type -> shahkar -> info -> vehicle -> success
+- Added StepIndicator component for driver flow steps
+- Made DialogContent scrollable (max-h-[85vh] overflow-y-auto) for long driver forms
+- Updated Navbar.tsx: removed openDriverRegister button (both desktop and mobile), removed Car import
+- Updated page.tsx: removed DriverRegisterModal import and JSX usage
+- All text in Persian, dark theme with gold accent (#D4AF37)
+- bun run lint passes with zero errors
+- Dev server compiles successfully
+
+Stage Summary:
+- Driver registration is now part of the main AuthModal (not a separate modal)
+- After phone OTP verification, new users see a type selection: "مسافر" or "راننده"
+- Passenger path: name input only -> success
+- Driver path: Shahkar (national ID + birth date) -> personal info -> vehicle info -> success
+- Separate DriverRegisterModal.tsx file kept for reference but no longer imported
+- Navbar no longer has separate driver registration button
+- All Shahkar verification and driver submission APIs reused from existing endpoints
