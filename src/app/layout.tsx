@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 import "@/styles/leaflet.css";
 import { Toaster } from "@/components/ui/sonner";
 import { PWARegister } from "@/components/sivan/PWARegister";

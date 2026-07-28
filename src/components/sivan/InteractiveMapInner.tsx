@@ -98,6 +98,53 @@ function MapClickHandler({
 
 // ─── Fly to Bounds ───────────────────────────────────────────────────────────
 
+// ─── Invalidate Map Size Handler ─────────────────────────────────────────────
+
+function MapInvalidator() {
+  const map = useMap();
+
+  useEffect(() => {
+    // Force Leaflet to recalculate its size after the container is fully rendered
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [map]);
+
+  // Also listen for scroll/resize events that might change the container
+  useEffect(() => {
+    let frameId: number;
+    const handleUpdate = () => {
+      if (frameId) cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false });
+      });
+    };
+
+    window.addEventListener('resize', handleUpdate);
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          setTimeout(() => map.invalidateSize({ animate: false }), 100);
+        }
+      }
+    }, { threshold: 0.1 });
+
+    const container = map.getContainer();
+    if (container) observer.observe(container);
+
+    return () => {
+      window.removeEventListener('resize', handleUpdate);
+      observer.disconnect();
+      if (frameId) cancelAnimationFrame(frameId);
+    };
+  }, [map]);
+
+  return null;
+}
+
+// ─── Fit to Bounds Handler ──────────────────────────────────────────────────
+
 function FitBoundsHandler({
   points,
   routeData,
@@ -680,6 +727,12 @@ export default function InteractiveMapInner() {
               zoom={6}
               className="w-full h-[500px] sm:h-[600px] lg:h-[650px]"
               zoomControl={true}
+              whenReady={(mapInstance) => {
+                // Force recalculate size once map is ready
+                setTimeout(() => {
+                  mapInstance.target.invalidateSize();
+                }, 100);
+              }}
             >
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -687,6 +740,7 @@ export default function InteractiveMapInner() {
               />
 
               <MapClickHandler onSelectPoint={handleSelectPoint} />
+              <MapInvalidator />
               <FitBoundsHandler points={{ origin, destination }} routeData={routeData} />
 
               {/* Origin Marker */}
