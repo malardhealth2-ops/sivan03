@@ -1218,3 +1218,25 @@ Stage Summary:
 - Route info panel shows: distance, estimated time, pricing grid, origin-destination names
 - Note: DeepSeek API key has insufficient balance, using z-ai-web-dev-sdk VLM as fallback only
 
+
+---
+Task ID: 16
+Agent: main
+Task: Update route colors and investigate p.api.ir services
+
+Work Log:
+- Updated ROUTE_COLORS in InteractiveMapInner.tsx:
+  - Main road: #3B82F6 (blue, solid line, weight 5, full opacity)
+  - Alternative 1: #9CA3AF (gray, dashed line, weight 3, opacity 0.45)
+  - Alternative 2: #D1D5DB (lighter gray, dashed, weight 3, opacity 0.45)
+  - Alternative 3: #E5E7EB (very light gray, dashed, weight 3, opacity 0.45)
+- Updated polyline rendering: main route always 5px solid, alternatives progressively thinner and more transparent
+- Route legend and RouteDetailCard use new colors automatically
+- Investigated p.api.ir: Blazor server app requiring mobile login
+  - Used web-reader to scrape api.ir/services page
+  - Found 6 services: احراز هویت شاهکار, استعلام شخص حقوقی, احراز ویدئویی بایومتریک, استعلام وضعیت پاسپورت, استعلام نمره منفی گواهینامه, استعلام کارت و سند خودرو
+
+Stage Summary:
+- Route lines now: blue solid (main road) + gray dashed (alternatives)
+- p.api.ir services identified: identity verification (Shahkar), biometric auth, passport check, driving license score, vehicle card/ownership verification
+

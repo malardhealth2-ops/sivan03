@@ -104,10 +104,10 @@ const destIcon = createDestIcon();
 // ─── Route Colors ─────────────────────────────────────────────────────────────
 
 const ROUTE_COLORS = [
-  '#D4AF37',
-  '#10B981',
-  '#8B5CF6',
-  '#F59E0B',
+  '#3B82F6',  // Blue - main road
+  '#9CA3AF',  // Light gray - alternative 1
+  '#D1D5DB',  // Lighter gray - alternative 2
+  '#E5E7EB',  // Very light gray - alternative 3
 ];
 
 const ROUTE_LABELS = ['مسیر اصلی', 'مسیر جایگزین ۱', 'مسیر جایگزین ۲', 'مسیر جایگزین ۳'];
@@ -835,9 +835,9 @@ export default function InteractiveMapInner() {
                   positions={path}
                   pathOptions={{
                     color: ROUTE_COLORS[index] || '#666',
-                    weight: index === activeRoute ? 5 : 3,
-                    opacity: index === activeRoute ? 1 : 0.5,
-                    dashArray: index === 0 ? undefined : '10, 10',
+                    weight: index === 0 ? 5 : (index === activeRoute ? 4 : 3),
+                    opacity: index === 0 ? 1 : (index === activeRoute ? 0.8 : 0.45),
+                    dashArray: index === 0 ? undefined : '8, 8',
                     lineCap: 'round',
                     lineJoin: 'round',
                   }}
