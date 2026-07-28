@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPricingConfig, calculateFare, rateForTripType } from '@/lib/pricing';
 
 // In-memory caches
 const routeCache = new Map<string, unknown>();
@@ -6,7 +7,7 @@ const reverseGeoCache = new Map<string, string>();
 
 // Rate limiter for Nominatim
 let lastNominatimCall = 0;
-const NOMINATIM_MIN_INTERVAL = 1100;
+const NOMINATIM_MIN_INTERVAL = 1200;
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,6 +51,19 @@ function formatDistance(meters: number): number {
   return Math.round((meters / 1000) * 10) / 10;
 }
 
+// Haversine formula for direct distance between two points
+function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+}
+
 // Reverse geocode coordinates to get place name using Nominatim
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
@@ -57,7 +71,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   if (cached) return cached;
 
   try {
-    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fa&zoom=14`;
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fa&zoom=16&addressdetails=1`;
     const res = await rateLimitedFetch(url, 8000);
 
     if (!res.ok) return `${lat.toFixed(4)}، ${lng.toFixed(4)}`;
@@ -65,11 +79,31 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
     const data = await res.json();
     if (!data || !data.display_name) return `${lat.toFixed(4)}، ${lng.toFixed(4)}`;
 
-    const parts = data.display_name.split(',').map((s: string) => s.trim());
-    const displayName = parts.slice(0, 3).join('، ');
+    const addr = data.address || {};
+    const parts: string[] = [];
+    if (addr.road || addr.pedestrian || addr.residential || addr.suburb || addr.neighbourhood) {
+      const localName = addr.road || addr.pedestrian || addr.residential || addr.suburb || addr.neighbourhood;
+      if (localName) parts.push(localName);
+    }
+    if (addr.city || addr.town || addr.village) {
+      const cityName = addr.city || addr.town || addr.village;
+      if (!parts.includes(cityName)) parts.push(cityName);
+    }
+    if (addr.state || addr.province) {
+      const stateName = addr.state || addr.province;
+      if (!parts.includes(stateName)) parts.push(stateName);
+    }
 
-    reverseGeoCache.set(key, displayName);
-    return displayName;
+    if (parts.length === 0) {
+      const displayName = data.display_name.split(',').map((s: string) => s.trim());
+      const displayNameClean = displayName.slice(0, 3).join('، ');
+      reverseGeoCache.set(key, displayNameClean);
+      return displayNameClean;
+    }
+
+    const cleanName = parts.slice(0, 3).join('، ');
+    reverseGeoCache.set(key, cleanName);
+    return cleanName;
   } catch {
     return `${lat.toFixed(4)}، ${lng.toFixed(4)}`;
   }
@@ -86,7 +120,6 @@ async function fetchOSRMRoute(
   const baseDelay = 800;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    // Try with alternatives first
     try {
       const urlWithAlts = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson&alternatives=true`;
       const controller = new AbortController();
@@ -99,7 +132,6 @@ async function fetchOSRMRoute(
         },
       }).finally(() => clearTimeout(timeout));
       if (res.ok) return res;
-      // If OSRM returns 4xx/5xx, wait and retry
       if (attempt < maxRetries - 1) {
         await wait(baseDelay * (attempt + 1));
         continue;
@@ -112,7 +144,7 @@ async function fetchOSRMRoute(
     }
   }
 
-  // Final fallback without alternatives
+  // Fallback without alternatives
   try {
     const urlNoAlts = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
     const controller = new AbortController();
@@ -150,62 +182,112 @@ export async function GET(request: NextRequest) {
     const cached = routeCache.get(cacheKey);
     if (cached) return NextResponse.json(cached);
 
-    // Fetch route from OSRM with retry
+    // Calculate direct distance always (as fallback and for pricing)
+    const directDistanceKm = haversineDistanceKm(originLat, originLng, destLat, destLng);
+
+    // Fetch route from OSRM
     const response = await fetchOSRMRoute(originLat, originLng, destLat, destLng);
 
-    if (!response) {
-      return NextResponse.json(
-        { error: 'خطا در اتصال به سرویس مسیریابی. لطفاً چند لحظه صبر کنید و دوباره تلاش کنید.' },
-        { status: 503 }
-      );
-    }
-
-    let data;
-    try {
-      data = await response.json();
-    } catch {
-      return NextResponse.json({ error: 'خطا در پردازش پاسخ مسیریابی.' }, { status: 500 });
-    }
-
-    if (!data.routes || data.routes.length === 0) {
-      return NextResponse.json({ error: 'مسیری بین این دو نقطه یافت نشد' }, { status: 404 });
-    }
-
-    // Reverse geocode origin and destination
+    // Reverse geocode origin and destination (independent of route success)
     const [originName, destName] = await Promise.all([
       reverseGeocode(originLat, originLng),
       reverseGeocode(destLat, destLng),
     ]);
 
-    // Process routes
-    const routes = data.routes.map((route: {
-      distance: number;
-      duration: number;
-      geometry: { coordinates: number[][] };
-    }, index: number) => {
-      const path = route.geometry.coordinates.map(
-        (coord: number[]) => [coord[1], coord[0]] as [number, number]
-      );
+    // Get pricing config
+    const pricingConfig = await getPricingConfig();
 
-      return {
-        index,
-        distanceKm: formatDistance(route.distance),
-        durationMin: Math.round(route.duration / 60),
-        durationFormatted: formatDuration(route.duration),
-        path,
-        steps: [] as { instruction: string; type: string; modifier?: string }[],
+    let result: Record<string, unknown>;
+
+    if (response) {
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      if (data && data.routes && data.routes.length > 0) {
+        // OSRM route found - use real road distance
+        const routes = data.routes.map((route: {
+          distance: number;
+          duration: number;
+          geometry: { coordinates: number[][] };
+        }, index: number) => {
+          const path = route.geometry.coordinates.map(
+            (coord: number[]) => [coord[1], coord[0]] as [number, number]
+          );
+
+          return {
+            index,
+            distanceKm: formatDistance(route.distance),
+            durationMin: Math.round(route.duration / 60),
+            durationFormatted: formatDuration(route.duration),
+            path,
+            steps: [] as { instruction: string; type: string; modifier?: string }[],
+          };
+        });
+
+        const roadDistanceKm = routes[0].distanceKm;
+
+        result = {
+          origin: { lat: originLat, lng: originLng, name: originName },
+          destination: { lat: destLat, lng: destLng, name: destName },
+          routes,
+          totalRoutes: routes.length,
+          directDistanceKm,
+          distanceSource: 'road', // road distance from OSRM
+        };
+      } else {
+        // OSRM returned but no routes - use direct distance
+        const estimatedDurationMin = Math.round((directDistanceKm / 80) * 60); // ~80 km/h average
+        result = {
+          origin: { lat: originLat, lng: originLng, name: originName },
+          destination: { lat: destLat, lng: destLng, name: destName },
+          routes: [{
+            index: 0,
+            distanceKm: directDistanceKm,
+            durationMin: estimatedDurationMin,
+            durationFormatted: formatDuration(estimatedDurationMin * 60),
+            path: [],
+            steps: [],
+          }],
+          totalRoutes: 1,
+          directDistanceKm,
+          distanceSource: 'direct', // Haversine direct distance
+        };
+      }
+    } else {
+      // OSRM completely failed - use direct distance with estimation
+      const estimatedDurationMin = Math.round((directDistanceKm / 80) * 60);
+      result = {
+        origin: { lat: originLat, lng: originLng, name: originName },
+        destination: { lat: destLat, lng: destLng, name: destName },
+        routes: [{
+          index: 0,
+          distanceKm: directDistanceKm,
+          durationMin: estimatedDurationMin,
+          durationFormatted: formatDuration(estimatedDurationMin * 60),
+          path: [],
+          steps: [],
+        }],
+        totalRoutes: 1,
+        directDistanceKm,
+        distanceSource: 'direct', // Haversine direct distance
       };
-    });
+    }
 
-    const result = {
-      origin: { lat: originLat, lng: originLng, name: originName },
-      destination: { lat: destLat, lng: destLng, name: destName },
-      routes,
-      totalRoutes: routes.length,
-    };
+    // Calculate pricing for all trip types based on distance
+    const usedDistance = result.routes[0].distanceKm as number;
+    const prices: Record<string, { price: number; ratePerKm: number }> = {};
+    for (const type of ['economy', 'vip', 'luxury', 'van', 'electric']) {
+      const fare = calculateFare(pricingConfig, type, usedDistance);
+      prices[type] = { price: fare.price, ratePerKm: fare.ratePerKm };
+    }
+    result.pricing = prices;
+    result.minFare = pricingConfig.minFare;
 
     routeCache.set(cacheKey, result);
-
     return NextResponse.json(result);
   } catch (error) {
     console.error('Route API error:', error);

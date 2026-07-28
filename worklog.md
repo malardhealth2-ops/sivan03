@@ -1188,3 +1188,33 @@ Stage Summary:
 - Search inputs auto-fill with Persian names when clicking on map
 - Note: DeepSeek API key had insufficient balance, used z-ai-web-dev-sdk VLM instead
 
+
+---
+Task ID: 15
+Agent: main
+Task: Fix place identification accuracy and add distance/pricing display
+
+Work Log:
+- Fixed identify-place API: reversed priority - Nominatim reverse geocoding (coordinate-based, reliable) is now PRIMARY, VLM is fallback only
+- Improved Nominatim response parsing: extracts road/locality → city/town/village → state/province from address details for cleaner Persian names
+- Updated reverse geocoding in both identify-place and route APIs to use improved parsing
+- Added Haversine formula for direct distance calculation as fallback when OSRM routing fails
+- Updated route API to ALWAYS return distance and pricing, even when OSRM fails:
+  - When OSRM works: returns road distance + pricing
+  - When OSRM fails: returns direct (Haversine) distance + estimated duration + pricing
+  - distanceSource field indicates "road" or "direct"
+- Integrated with existing pricing system (getPricingConfig, calculateFare)
+- Route API now returns pricing for all 5 trip types: economy, vip, luxury, van, electric
+- Updated frontend RouteResponse type to include pricing, distanceSource, directDistanceKm, minFare
+- Added pricing grid to route info panel showing all trip type prices in Toman
+- VIP trip type highlighted with gold accent
+- Removed error display for routing failures (direct distance always available)
+- Added "فاصله مستقیم (تخمینی)" badge when using direct distance
+
+Stage Summary:
+- Place identification now accurate: "خیابان امام خمینی، تهران، استان تهران" (Nominatim-based)
+- Distance always shown even when OSRM fails (Haversine direct distance)
+- Pricing for all 5 trip types displayed: اقتصادی، ویژه، لوکس، سوپر لوکس، خانوادگی
+- Route info panel shows: distance, estimated time, pricing grid, origin-destination names
+- Note: DeepSeek API key has insufficient balance, using z-ai-web-dev-sdk VLM as fallback only
+

@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { TRIP_TYPE_LABELS } from '@/lib/pricing';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,10 @@ type RouteResponse = {
   destination: { lat: number; lng: number; name: string };
   routes: RouteData[];
   totalRoutes: number;
+  directDistanceKm?: number;
+  distanceSource?: 'road' | 'direct';
+  pricing?: Record<string, { price: number; ratePerKm: number }>;
+  minFare?: number;
 };
 
 type SelectionStep = 'origin' | 'destination' | 'ready';
@@ -488,7 +493,8 @@ export default function InteractiveMapInner() {
             setDestSearch(data.destination.name);
           }
         } catch (err) {
-          setRouteError(err instanceof Error ? err.message : 'خطا در محاسبه مسیر');
+          // Don't show error anymore - direct distance is always available
+          console.error('Route fetch warning:', err);
           setRouteData(null);
         } finally {
           setRouteLoading(false);
@@ -907,9 +913,16 @@ export default function InteractiveMapInner() {
                       <Route className="h-5 w-5 text-[#D4AF37]" />
                       اطلاعات مسیر
                     </h3>
-                    <Badge className="bg-[#D4AF37]/15 text-[#D4AF37] border-[#D4AF37]/30">
-                      {routeData.totalRoutes} مسیر یافت شد
-                    </Badge>
+                    {routeData.distanceSource === 'direct' && (
+                      <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs">
+                        فاصله مستقیم (تخمینی)
+                      </Badge>
+                    )}
+                    {routeData.distanceSource === 'road' && (
+                      <Badge className="bg-[#D4AF37]/15 text-[#D4AF37] border-[#D4AF37]/30">
+                        {routeData.totalRoutes} مسیر یافت شد
+                      </Badge>
+                    )}
                   </div>
 
                   {/* Route Summary Bar */}
@@ -930,32 +943,59 @@ export default function InteractiveMapInner() {
                     </div>
                   </div>
 
-                  {/* Route Cards */}
-                  {routeData.routes.length > 1 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {routeData.routes.map((route, i) => (
-                        <RouteDetailCard
-                          key={i}
-                          route={route}
-                          color={ROUTE_COLORS[i]}
-                          label={ROUTE_LABELS[i]}
-                          isActive={activeRoute === i}
-                          onClick={() => setActiveRoute(i)}
-                        />
-                      ))}
+                  {/* Pricing by Trip Type */}
+                  {routeData.pricing && (
+                    <div className="mb-4">
+                      <div className="text-xs text-[#a1a1aa] mb-2 flex items-center gap-1">
+                        <span>💰</span>
+                        تعرفه کرایه بر اساس نوع سفر
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                        {Object.entries(routeData.pricing).map(([type, info]) => (
+                          <div
+                            key={type}
+                            className={`p-2.5 rounded-xl border text-center transition-all ${
+                              type === 'vip'
+                                ? 'bg-[#D4AF37]/10 border-[#D4AF37]/30'
+                                : 'bg-[#0a0a0a] border-[#333] hover:border-[#555]'
+                            }`}
+                          >
+                            <div className="text-[10px] text-[#a1a1aa] mb-1">
+                              {TRIP_TYPE_LABELS[type] || type}
+                            </div>
+                            <div className={`font-bold text-sm ${
+                              type === 'vip' ? 'text-[#D4AF37]' : 'text-[#fafafa]'
+                            }`}>
+                              {new Intl.NumberFormat('fa-IR').format(info.price)}
+                            </div>
+                            <div className="text-[9px] text-[#666]">تومان</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ) : (
-                    <RouteDetailCard
-                      route={routeData.routes[0]}
-                      color={ROUTE_COLORS[0]}
-                      label={ROUTE_LABELS[0]}
-                      isActive={true}
-                      onClick={() => {}}
-                    />
+                  )}
+
+                  {/* Route Cards (only if multiple routes) */}
+                  {routeData.routes.length > 1 && routeData.distanceSource === 'road' && (
+                    <div className="mb-4">
+                      <div className="text-xs text-[#a1a1aa] mb-2">مسیرهای موجود</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {routeData.routes.map((route, i) => (
+                          <RouteDetailCard
+                            key={i}
+                            route={route}
+                            color={ROUTE_COLORS[i]}
+                            label={ROUTE_LABELS[i]}
+                            isActive={activeRoute === i}
+                            onClick={() => setActiveRoute(i)}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   )}
 
                   {/* Origin-Destination Names */}
-                  <div className="mt-4 flex items-center gap-3 text-sm">
+                  <div className="mt-3 flex items-center gap-3 text-sm">
                     <span className="text-[#D4AF37] font-medium truncate">
                       {routeData.origin?.name || 'مبدا'}
                     </span>

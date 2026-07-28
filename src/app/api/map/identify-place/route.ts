@@ -4,6 +4,72 @@ import { NextRequest, NextResponse } from 'next/server';
 const placeCache = new Map<string, { name: string; timestamp: number }>();
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
+// Rate limiter for Nominatim
+let lastNominatimCall = 0;
+const NOMINATIM_MIN_INTERVAL = 1200;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Reverse geocode using Nominatim - PRIMARY method (reliable)
+async function reverseGeocodeNominatim(lat: number, lng: number): Promise<string> {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastNominatimCall;
+  if (timeSinceLastCall < NOMINATIM_MIN_INTERVAL) {
+    await wait(NOMINATIM_MIN_INTERVAL - timeSinceLastCall);
+  }
+  lastNominatimCall = Date.now();
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fa&zoom=16&addressdetails=1`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'SivanVIPTaxi/1.0',
+        'Accept-Language': 'fa',
+      },
+    }).finally(() => clearTimeout(timeout));
+
+    if (!res.ok) return '';
+
+    const data = await res.json();
+    if (!data || !data.display_name) return '';
+
+    // Build a clean Persian name from address details if available
+    const addr = data.address || {};
+    const parts: string[] = [];
+
+    // Priority: road/locality > neighbourhood > city > state
+    if (addr.road || addr.pedestrian || addr.residential || addr.suburb || addr.neighbourhood) {
+      const localName = addr.road || addr.pedestrian || addr.residential || addr.suburb || addr.neighbourhood;
+      if (localName) parts.push(localName);
+    }
+    if (addr.city || addr.town || addr.village) {
+      const cityName = addr.city || addr.town || addr.village;
+      if (!parts.includes(cityName)) parts.push(cityName);
+    }
+    if (addr.state || addr.province) {
+      const stateName = addr.state || addr.province;
+      if (!parts.includes(stateName)) parts.push(stateName);
+    }
+
+    // Fallback to display_name parsing if address details aren't useful
+    if (parts.length === 0) {
+      const displayName = data.display_name.split(',').map((s: string) => s.trim());
+      // Take first 3 meaningful parts
+      return displayName.slice(0, 3).join('، ');
+    }
+
+    return parts.slice(0, 3).join('، ');
+  } catch {
+    return '';
+  }
+}
+
 // Lat/lng to tile coordinates at given zoom level
 function latLngToTile(lat: number, lng: number, zoom: number): { x: number; y: number } {
   const n = Math.pow(2, zoom);
@@ -39,10 +105,9 @@ async function fetchMapTileAsBase64(lat: number, lng: number, zoom: number = 15)
   }
 }
 
-// Identify place using VLM (z-ai-web-dev-sdk)
+// Identify place using VLM (z-ai-web-dev-sdk) - FALLBACK only
 async function identifyPlaceWithVLM(mapImageUrl: string, lat: number, lng: number): Promise<string | null> {
   try {
-    // Dynamic import to avoid issues
     const ZAI = (await import('z-ai-web-dev-sdk')).default;
     const zai = await ZAI.create();
 
@@ -53,7 +118,7 @@ async function identifyPlaceWithVLM(mapImageUrl: string, lat: number, lng: numbe
           content: [
             {
               type: 'text',
-              text: `این یک تصویر نقشه OpenStreetMap است. مختصات نقطه مرکزی تقریباً ${lat.toFixed(4)} عرض شمالی و ${lng.toFixed(4)} طول شرقی است. این نقطه در کجای ایران قرار دارد؟ لطفاً نام دقیق شهر، محله یا منطقه را به زبان فارسی بنویس. فقط یک نام کوتاه و دقیق بنویس (مثلاً: "میدان نقش جهان، اصفهان" یا "خیابان ولیعصر، تهران"). اگر نام دقیق مشخص نیست، نام شهر و استان را بنویس. فقط نام مکان را بنویس و چیز اضافی ننویس.`
+              text: `مختصات این نقطه: عرض=${lat.toFixed(4)} طول=${lng.toFixed(4)}. این نقطه روی نقشه ایران کجاست؟ فقط نام مکان را به فارسی بنویس (مثلاً: تهران، اصفهان، شیراز). حداکثر ۳ کلمه.`
             },
             {
               type: 'image_url',
@@ -66,40 +131,12 @@ async function identifyPlaceWithVLM(mapImageUrl: string, lat: number, lng: numbe
     });
 
     const placeName = response.choices[0]?.message?.content?.trim();
-    if (placeName && placeName.length > 1 && placeName.length < 100) {
+    if (placeName && placeName.length > 1 && placeName.length < 80) {
       return placeName;
     }
     return null;
-  } catch (error) {
-    console.error('VLM identify error:', error);
-    return null;
-  }
-}
-
-// Reverse geocode using Nominatim as fallback
-async function reverseGeocodeNominatim(lat: number, lng: number): Promise<string> {
-  try {
-    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fa&zoom=16`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'SivanVIPTaxi/1.0',
-        'Accept-Language': 'fa',
-      },
-    }).finally(() => clearTimeout(timeout));
-
-    if (!res.ok) return '';
-
-    const data = await res.json();
-    if (!data || !data.display_name) return '';
-
-    const parts = data.display_name.split(',').map((s: string) => s.trim());
-    return parts.slice(0, 3).join('، ');
   } catch {
-    return '';
+    return null;
   }
 }
 
@@ -121,19 +158,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ name: cached.name });
     }
 
-    // Fetch map tile for VLM analysis
-    const mapImageUrl = await fetchMapTileAsBase64(lat, lng, 15);
-
     let placeName: string | null = null;
 
-    // Try VLM first if map tile is available
-    if (mapImageUrl) {
-      placeName = await identifyPlaceWithVLM(mapImageUrl, lat, lng);
-    }
+    // PRIMARY: Nominatim reverse geocoding (coordinates-based, reliable)
+    placeName = await reverseGeocodeNominatim(lat, lng);
 
-    // Fallback to Nominatim
+    // FALLBACK: VLM if Nominatim fails
     if (!placeName) {
-      placeName = await reverseGeocodeNominatim(lat, lng);
+      const mapImageUrl = await fetchMapTileAsBase64(lat, lng, 15);
+      if (mapImageUrl) {
+        placeName = await identifyPlaceWithVLM(mapImageUrl, lat, lng);
+      }
     }
 
     // Ultimate fallback
