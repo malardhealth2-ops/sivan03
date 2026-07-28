@@ -430,6 +430,36 @@ export function BookingModal() {
                 transition={{ duration: 0.3 }}
                 className="space-y-5"
               >
+                {/* Route summary from map */}
+                {booking.formData.origin && booking.formData.destination && (
+                  <div className="p-4 bg-[#0a0a0a] rounded-xl border border-[#D4AF37]/30 space-y-2">
+                    <div className="flex items-center gap-2 text-[#D4AF37] text-xs font-medium mb-1">
+                      <Route className="h-3.5 w-3.5" />
+                      مسیر انتخاب شده از نقشه
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-[#fafafa] truncate max-w-[40%]">{booking.formData.origin}</span>
+                      <ArrowLeft className="h-4 w-4 text-[#a1a1aa] rotate-180 flex-shrink-0" />
+                      <span className="text-[#fafafa] truncate max-w-[40%]">{booking.formData.destination}</span>
+                    </div>
+                    {booking.formData.distanceKm && (
+                      <div className="flex items-center gap-3 text-xs text-[#a1a1aa]">
+                        <span className="flex items-center gap-1">
+                          <Navigation className="h-3 w-3" />
+                          {new Intl.NumberFormat('fa-IR').format(booking.formData.distanceKm)} کیلومتر
+                        </span>
+                        {booking.formData.durationMin && (
+                          <span>
+                            ({booking.formData.durationMin >= 60
+                              ? `${Math.floor(booking.formData.durationMin / 60)} ساعت و ${booking.formData.durationMin % 60} دقیقه`
+                              : `${booking.formData.durationMin} دقیقه`})
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <JalaliDatePicker
                     value={booking.formData.date}

@@ -1,0 +1,83 @@
+[
+  {
+    "url": "https://www.api.ir",
+    "name": "پلفترم ابری وب سرویس - api.ir",
+    "snippet": "ارائه انواع api، شاهکار، احراز هویت، OTP ، استعلام حقوقی، ثبت احوال، استعلام کد پستی، پیامک، تماس؛، بانکی و ...",
+    "host_name": "www.api.ir",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.otpservice.io/en/api",
+    "name": "API - OTP Service",
+    "snippet": "We provide free access to our APIs. You can access the API documentation by clicking here. To use the APIs, you need to have a pay-as-you-go plan. Read more",
+    "host_name": "www.otpservice.io",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.descope.com/api/otp",
+    "name": "OTP Authentication API",
+    "snippet": "Use the Descope REST API to build one-time password (OTP) authentication for your application. The One-Time-Password APIs require two phases. phase verifies ...",
+    "host_name": "docs.descope.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebOTP_API",
+    "name": "WebOTP API - MDN Web Docs",
+    "snippet": "Oct 30, 2025 — The WebOTP API provides a streamlined user experience for web apps to verify that a phone number belongs to a user when using it as a sign-in factor. Read more",
+    "host_name": "developer.mozilla.org",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.miare.ir/docs",
+    "name": "Introduction – Miare API",
+    "snippet": "This is Miare's Third-Party API , designed to enable registered Miare users to integrate our delivery services into their applications. This document walks",
+    "host_name": "www.miare.ir",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://help.zscaler.com/legacy-apis/understanding-zscaler-client-connector-api",
+    "name": "Understanding the Zscaler Client Connector API",
+    "snippet": "Devices API resources allow you to retrieve a list of devices, their basic details, OTP single-use passwords and app profile passwords for a device, etc. To ... Read more",
+    "host_name": "help.zscaler.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.interopengine.com/2017/open-api-documentation.html",
+    "name": "Open API Documentation for Client Application Developers",
+    "snippet": "Feb 12, 2020 — This documentation allows applications to query a public-facing API enabled by a Data Holder. Data Holders wishing to publish such a public- ... Read more",
+    "host_name": "www.interopengine.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://devdocs.veriff.com/apidocs/veriff-public-api-guides",
+    "name": "Veriff API Documentation and API Reference",
+    "snippet": "Jun 4, 2026 — Integrate Veriff's Public API for seamless user verification, manage API keys, and enhance security with shared secret key rotation.",
+    "host_name": "devdocs.veriff.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.withpersona.com/api-introduction",
+    "name": "Introduction",
+    "snippet": "The Persona API is a powerful tool that enables you to integrate identity verification, risk assessment, and compliance solutions into your applications. Read more",
+    "host_name": "docs.withpersona.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  }
+]

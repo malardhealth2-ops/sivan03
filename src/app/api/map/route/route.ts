@@ -109,22 +109,53 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   }
 }
 
-// Fetch route from OSRM with retry and fallback
+// OSRM server list for redundancy
+const OSRM_SERVERS = [
+  'https://router.project-osrm.org',
+  'https://routing.openstreetmap.de/routed-car/route/v1',
+];
+
+// Fetch route from OSRM with retry across multiple servers
 async function fetchOSRMRoute(
   originLat: number,
   originLng: number,
   destLat: number,
   destLng: number
 ): Promise<Response | null> {
-  const maxRetries = 3;
-  const baseDelay = 800;
+  const maxRetries = 2;
+  const baseDelay = 600;
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  for (const server of OSRM_SERVERS) {
+    // Try with alternatives first
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const urlWithAlts = `${server}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson&alternatives=true`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(urlWithAlts, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'SivanVIPTaxi/1.0',
+            'Accept-Encoding': 'gzip, deflate',
+          },
+        }).finally(() => clearTimeout(timeout));
+        if (res.ok) return res;
+        if (attempt < maxRetries - 1) {
+          await wait(baseDelay * (attempt + 1));
+        }
+      } catch {
+        if (attempt < maxRetries - 1) {
+          await wait(baseDelay * (attempt + 1));
+        }
+      }
+    }
+
+    // Try without alternatives
     try {
-      const urlWithAlts = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson&alternatives=true`;
+      const urlNoAlts = `${server}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      const res = await fetch(urlWithAlts, {
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const res = await fetch(urlNoAlts, {
         signal: controller.signal,
         headers: {
           'User-Agent': 'SivanVIPTaxi/1.0',
@@ -132,33 +163,9 @@ async function fetchOSRMRoute(
         },
       }).finally(() => clearTimeout(timeout));
       if (res.ok) return res;
-      if (attempt < maxRetries - 1) {
-        await wait(baseDelay * (attempt + 1));
-        continue;
-      }
     } catch {
-      if (attempt < maxRetries - 1) {
-        await wait(baseDelay * (attempt + 1));
-        continue;
-      }
+      // Try next server
     }
-  }
-
-  // Fallback without alternatives
-  try {
-    const urlNoAlts = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const res = await fetch(urlNoAlts, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'SivanVIPTaxi/1.0',
-        'Accept-Encoding': 'gzip, deflate',
-      },
-    }).finally(() => clearTimeout(timeout));
-    if (res.ok) return res;
-  } catch {
-    // Failed
   }
 
   return null;
@@ -239,8 +246,8 @@ export async function GET(request: NextRequest) {
           distanceSource: 'road', // road distance from OSRM
         };
       } else {
-        // OSRM returned but no routes - use direct distance
-        const estimatedDurationMin = Math.round((directDistanceKm / 80) * 60); // ~80 km/h average
+        // OSRM returned but no routes - use direct distance with direct line on map
+        const estimatedDurationMin = Math.round((directDistanceKm / 80) * 60);
         result = {
           origin: { lat: originLat, lng: originLng, name: originName },
           destination: { lat: destLat, lng: destLng, name: destName },
@@ -249,16 +256,16 @@ export async function GET(request: NextRequest) {
             distanceKm: directDistanceKm,
             durationMin: estimatedDurationMin,
             durationFormatted: formatDuration(estimatedDurationMin * 60),
-            path: [],
+            path: [[originLat, originLng], [destLat, destLng]] as [number, number][],
             steps: [],
           }],
           totalRoutes: 1,
           directDistanceKm,
-          distanceSource: 'direct', // Haversine direct distance
+          distanceSource: 'direct',
         };
       }
     } else {
-      // OSRM completely failed - use direct distance with estimation
+      // OSRM completely failed - use direct distance with direct line on map
       const estimatedDurationMin = Math.round((directDistanceKm / 80) * 60);
       result = {
         origin: { lat: originLat, lng: originLng, name: originName },
@@ -268,12 +275,12 @@ export async function GET(request: NextRequest) {
           distanceKm: directDistanceKm,
           durationMin: estimatedDurationMin,
           durationFormatted: formatDuration(estimatedDurationMin * 60),
-          path: [],
+          path: [[originLat, originLng], [destLat, destLng]] as [number, number][],
           steps: [],
         }],
         totalRoutes: 1,
         directDistanceKm,
-        distanceSource: 'direct', // Haversine direct distance
+        distanceSource: 'direct',
       };
     }
 

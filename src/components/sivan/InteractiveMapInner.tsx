@@ -343,9 +343,17 @@ function RideRequestButtons({
 
   const handleBookRide = () => {
     // Pre-fill booking form with map data
+    // Extract city name from the place name (last part after comma)
+    const originName = routeData.origin?.name || origin?.name || '';
+    const destName = routeData.destination?.name || destination?.name || '';
+    const originCityName = originName.split('،').pop()?.trim() || originName.split(',').pop()?.trim() || originName;
+    const destCityName = destName.split('،').pop()?.trim() || destName.split(',').pop()?.trim() || destName;
+
     updateBookingForm({
-      origin: routeData.origin?.name || origin?.name || '',
-      destination: routeData.destination?.name || destination?.name || '',
+      origin: originName,
+      destination: destName,
+      originCity: { province: '', city: originCityName },
+      destCity: { province: '', city: destCityName },
       originLat: origin?.lat,
       originLng: origin?.lng,
       destLat: destination?.lat,
@@ -357,9 +365,9 @@ function RideRequestButtons({
     });
 
     setBookingLoading(true);
-    // Open booking modal after a brief delay
+    // Open booking modal - skip step 0 (route already selected on map), start at step 1 (time)
     setTimeout(() => {
-      setBookingStep(0);
+      setBookingStep(1);
       setBookingLoading(false);
     }, 200);
   };

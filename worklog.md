@@ -1270,3 +1270,30 @@ Stage Summary:
 - Ride request + call buttons displayed after route calculation on map
 - Driver registration link added to navbar
 
+
+---
+Task ID: 15
+Agent: Main Agent
+Task: Fix route display, implement real OTP, fix auto-fill origin/destination
+
+Work Log:
+- Investigated p.api.ir API - discovered it's a Blazor SPA without public REST endpoints
+- p.api.ir bearer token is for dashboard session, not for direct API calls
+- Fixed route display: when OSRM returns empty path (timeout/fail), now draws direct line from origin to destination on map (was showing nothing before)
+- Added alternative OSRM server (routing.openstreetmap.de) for better reliability
+- Implemented real OTP system using Kavenegar SMS gateway (kavenegar.com)
+- Created proper SMS provider abstraction in src/lib/papi.ts
+- Configured .env with SMS_PROVIDER and KAVENEGAR_API_KEY settings
+- When KAVENEGAR_API_KEY is set, OTP is sent via real SMS; when not set, shows code for development
+- Fixed auto-fill: when clicking "ثبت درخواست سفر" from map, booking modal now skips step 0 (route already selected) and starts at step 1 (time selection)
+- Pre-fills originCity and destCity in booking form from map data
+- Added route summary card in step 1 of booking modal showing selected origin/destination/distance
+- Route colors already set to blue (main) and gray (alternatives) from previous work
+- All lint checks pass
+
+Stage Summary:
+- Route display fixed: always shows something on map (road path or direct line)
+- OSRM redundancy: 2 servers configured (project-osrm.org + routing.openstreetmap.de)
+- Real OTP infrastructure ready: set KAVENEGAR_API_KEY in .env to activate real SMS sending
+- Auto-fill fixed: booking form pre-fills from map selection, skips route step
+- Shahkar & National ID integration scaffolded with p.api.ir (needs service activation)
