@@ -58,7 +58,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fa&zoom=14`;
-    const res = await rateLimitedFetch(url, 6000);
+    const res = await rateLimitedFetch(url, 8000);
 
     if (!res.ok) return `${lat.toFixed(4)}، ${lng.toFixed(4)}`;
 
@@ -75,39 +75,58 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   }
 }
 
-// Fetch route from OSRM with fallback
+// Fetch route from OSRM with retry and fallback
 async function fetchOSRMRoute(
   originLat: number,
   originLng: number,
   destLat: number,
   destLng: number
 ): Promise<Response | null> {
-  // Try with alternatives first
-  try {
-    const urlWithAlts = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson&alternatives=true`;
-    const controller1 = new AbortController();
-    const timeout1 = setTimeout(() => controller1.abort(), 20000);
-    const res = await fetch(urlWithAlts, {
-      signal: controller1.signal,
-      headers: { 'User-Agent': 'SivanVIPTaxi/1.0' },
-    }).finally(() => clearTimeout(timeout1));
-    if (res.ok) return res;
-  } catch {
-    // Fall through to no-alternatives
+  const maxRetries = 3;
+  const baseDelay = 800;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    // Try with alternatives first
+    try {
+      const urlWithAlts = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson&alternatives=true`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch(urlWithAlts, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'SivanVIPTaxi/1.0',
+          'Accept-Encoding': 'gzip, deflate',
+        },
+      }).finally(() => clearTimeout(timeout));
+      if (res.ok) return res;
+      // If OSRM returns 4xx/5xx, wait and retry
+      if (attempt < maxRetries - 1) {
+        await wait(baseDelay * (attempt + 1));
+        continue;
+      }
+    } catch {
+      if (attempt < maxRetries - 1) {
+        await wait(baseDelay * (attempt + 1));
+        continue;
+      }
+    }
   }
 
-  // Fallback without alternatives
+  // Final fallback without alternatives
   try {
     const urlNoAlts = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
-    const controller2 = new AbortController();
-    const timeout2 = setTimeout(() => controller2.abort(), 15000);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(urlNoAlts, {
-      signal: controller2.signal,
-      headers: { 'User-Agent': 'SivanVIPTaxi/1.0' },
-    }).finally(() => clearTimeout(timeout2));
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'SivanVIPTaxi/1.0',
+        'Accept-Encoding': 'gzip, deflate',
+      },
+    }).finally(() => clearTimeout(timeout));
     if (res.ok) return res;
   } catch {
-    // Both failed
+    // Failed
   }
 
   return null;
@@ -131,20 +150,28 @@ export async function GET(request: NextRequest) {
     const cached = routeCache.get(cacheKey);
     if (cached) return NextResponse.json(cached);
 
-    // Fetch route from OSRM
+    // Fetch route from OSRM with retry
     const response = await fetchOSRMRoute(originLat, originLng, destLat, destLng);
 
     if (!response) {
-      return NextResponse.json({ error: 'خطا در اتصال به سرویس مسیریابی. لطفاً دوباره تلاش کنید.' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'خطا در اتصال به سرویس مسیریابی. لطفاً چند لحظه صبر کنید و دوباره تلاش کنید.' },
+        { status: 503 }
+      );
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      return NextResponse.json({ error: 'خطا در پردازش پاسخ مسیریابی.' }, { status: 500 });
+    }
 
     if (!data.routes || data.routes.length === 0) {
       return NextResponse.json({ error: 'مسیری بین این دو نقطه یافت نشد' }, { status: 404 });
     }
 
-    // Reverse geocode origin and destination (non-blocking, don't fail on error)
+    // Reverse geocode origin and destination
     const [originName, destName] = await Promise.all([
       reverseGeocode(originLat, originLng),
       reverseGeocode(destLat, destLng),

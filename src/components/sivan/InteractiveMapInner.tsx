@@ -50,20 +50,46 @@ type SelectionStep = 'origin' | 'destination' | 'ready';
 function createOriginIcon(): L.DivIcon {
   return L.divIcon({
     className: '',
-    html: `<div class="sivan-marker-origin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4m-10-10h4m12 0h4"/></svg></div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    tooltipAnchor: [0, -22],
+    html: `
+      <div class="sivan-marker-wrapper">
+        <div class="sivan-marker-pin sivan-marker-pin-origin">
+          <div class="sivan-marker-pin-head">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:white">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 2v4m0 12v4m-10-10h4m12 0h4"/>
+            </svg>
+          </div>
+          <div class="sivan-marker-pin-tail"></div>
+          <div class="sivan-marker-pulse"></div>
+        </div>
+      </div>
+    `,
+    iconSize: [44, 56],
+    iconAnchor: [22, 56],
+    tooltipAnchor: [0, -56],
   });
 }
 
 function createDestIcon(): L.DivIcon {
   return L.divIcon({
     className: '',
-    html: `<div class="sivan-marker-dest"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
-    tooltipAnchor: [0, -42],
+    html: `
+      <div class="sivan-marker-wrapper">
+        <div class="sivan-marker-pin sivan-marker-pin-dest">
+          <div class="sivan-marker-pin-head">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:white">
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+          </div>
+          <div class="sivan-marker-pin-tail"></div>
+          <div class="sivan-marker-pulse"></div>
+        </div>
+      </div>
+    `,
+    iconSize: [44, 56],
+    iconAnchor: [22, 56],
+    tooltipAnchor: [0, -56],
   });
 }
 
@@ -314,6 +340,32 @@ export default function InteractiveMapInner() {
   >([]);
   const [searchLoading, setSearchLoading] = useState<'origin' | 'dest' | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [identifyingPlace, setIdentifyingPlace] = useState<'origin' | 'dest' | null>(null);
+
+  // Identify place name using VLM when clicking on map
+  const identifyPlace = useCallback(async (lat: number, lng: number, type: 'origin' | 'dest') => {
+    setIdentifyingPlace(type);
+    try {
+      const res = await fetch(`/api/map/identify-place?lat=${lat}&lng=${lng}`);
+      if (res.ok) {
+        const data = await res.json();
+        const name = data.name || '';
+        if (name) {
+          if (type === 'origin') {
+            setOriginSearch(name);
+            setOrigin(prev => prev ? { ...prev, name } : null);
+          } else {
+            setDestSearch(name);
+            setDestination(prev => prev ? { ...prev, name } : null);
+          }
+        }
+      }
+    } catch {
+      // Silently fail - the route API will also try to get place names
+    } finally {
+      setIdentifyingPlace(null);
+    }
+  }, []);
 
   // Handle map click
   const handleSelectPoint = useCallback(
@@ -323,17 +375,19 @@ export default function InteractiveMapInner() {
         setRouteData(null);
         setActiveRoute(0);
         setSelectionStep('destination');
+        identifyPlace(lat, lng, 'origin');
       } else if (selectionStep === 'destination') {
         if (origin && Math.abs(origin.lat - lat) < 0.001 && Math.abs(origin.lng - lng) < 0.001) {
           return;
         }
         setDestination({ lat, lng });
         setSelectionStep('ready');
+        identifyPlace(lat, lng, 'destination');
       } else {
         clearSelection();
       }
     },
-    [selectionStep, origin]
+    [selectionStep, origin, identifyPlace]
   );
 
   // Search function
@@ -424,11 +478,12 @@ export default function InteractiveMapInner() {
           const data = await res.json();
           setRouteData(data);
 
-          if (data.origin?.name && !origin.name) {
+          // Always update names from route API (may be more accurate)
+          if (data.origin?.name) {
             setOrigin((prev) => prev ? { ...prev, name: data.origin.name } : prev);
             setOriginSearch(data.origin.name);
           }
-          if (data.destination?.name && !destination.name) {
+          if (data.destination?.name) {
             setDestination((prev) => prev ? { ...prev, name: data.destination.name } : prev);
             setDestSearch(data.destination.name);
           }
@@ -591,7 +646,7 @@ export default function InteractiveMapInner() {
                       setOriginSearch(e.target.value);
                       handleSearch(e.target.value, 'origin');
                     }}
-                    placeholder="جستجوی نام محل مبدا..."
+                    placeholder={identifyingPlace === 'origin' ? 'در حال شناسایی مکان...' : 'جستجوی نام محل مبدا...'}
                     className="pr-9 bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#666] h-11 focus:border-[#D4AF37]/50 rounded-xl"
                   />
                   {originSearch && (
@@ -608,7 +663,10 @@ export default function InteractiveMapInner() {
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  {searchLoading === 'origin' && (
+                  {identifyingPlace === 'origin' && (
+                    <Loader2 className="absolute left-10 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#D4AF37] animate-spin" />
+                  )}
+                  {searchLoading === 'origin' && !identifyingPlace && (
                     <Loader2 className="absolute left-10 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#D4AF37] animate-spin" />
                   )}
                 </div>
@@ -634,7 +692,7 @@ export default function InteractiveMapInner() {
                       setDestSearch(e.target.value);
                       handleSearch(e.target.value, 'dest');
                     }}
-                    placeholder="جستجوی نام محل مقصد..."
+                    placeholder={identifyingPlace === 'dest' ? 'در حال شناسایی مکان...' : 'جستجوی نام محل مقصد...'}
                     className="pr-9 bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#666] h-11 focus:border-[#EF4444]/50 rounded-xl"
                   />
                   {destSearch && (
@@ -652,7 +710,10 @@ export default function InteractiveMapInner() {
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  {searchLoading === 'dest' && (
+                  {identifyingPlace === 'dest' && (
+                    <Loader2 className="absolute left-10 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#EF4444] animate-spin" />
+                  )}
+                  {searchLoading === 'dest' && !identifyingPlace && (
                     <Loader2 className="absolute left-10 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#D4AF37] animate-spin" />
                   )}
                 </div>

@@ -1152,3 +1152,39 @@ Stage Summary:
 - Leaflet controls updated: dark zoom buttons with gold accent, white popups, dark tooltips
 - Existing IntersectionObserver in MapInvalidator ensures tiles render when map scrolls into view
 
+
+---
+Task ID: 14
+Agent: main
+Task: Fix routing error, improve markers, add VLM place identification
+
+Work Log:
+- Fixed OSRM routing API with 3x retry logic and progressive delay (800ms, 1600ms, 2400ms)
+- Added fallback route fetch without alternatives if all retries fail
+- Added gzip encoding and better error handling (503 status for service unavailable)
+- Created /api/map/identify-place API endpoint using z-ai-web-dev-sdk VLM
+  - Fetches OSM map tile at given coordinates (zoom 15)
+  - Sends tile image to VLM with Persian prompt asking for precise place name
+  - Falls back to Nominatim reverse geocoding if VLM fails
+  - 24-hour in-memory cache for identified places
+- Redesigned map markers as elegant pin-style with:
+  - Teardrop/pin shape (border-radius: 50% 50% 50% 0 with rotation)
+  - Gold gradient for origin, red gradient for destination
+  - Drop shadow and inner glow effects
+  - Pulsing animation ring around each marker
+  - Pointed tail extending down from pin head
+- Updated frontend to auto-fill search inputs on map click:
+  - Added identifyPlace() callback that calls /api/map/identify-place
+  - Shows "در حال شناسایی مکان..." placeholder while VLM processes
+  - Loading spinner on input while identifying
+  - Route API also updates names after calculation
+- Updated leaflet.css with pin marker styles and pulse animations
+
+Stage Summary:
+- Routing API now has robust retry logic (3 attempts + fallback)
+- Markers redesigned as elegant pin-shaped with gradient, shadow, and pulse animation
+- VLM place identification working: identifies precise Persian location names from map tiles
+  - Test results: "دزفول، خوزستان", "دهستان احمدفداله، بخش شهیون، شهرستان دزفول" (very precise!)
+- Search inputs auto-fill with Persian names when clicking on map
+- Note: DeepSeek API key had insufficient balance, used z-ai-web-dev-sdk VLM instead
+

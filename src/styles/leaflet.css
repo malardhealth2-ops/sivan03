@@ -98,32 +98,92 @@
   border-bottom-color: #333 !important;
 }
 
-/* Custom marker styles */
-.sivan-marker-origin,
-.sivan-marker-dest {
+/* ─── Elegant Pin Markers ────────────────────────────── */
+
+.sivan-marker-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sivan-marker-pin {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,0.3)) drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+  transition: transform 0.2s ease;
+}
+
+.sivan-marker-pin:hover {
+  transform: scale(1.1);
+}
+
+.sivan-marker-pin-head {
+  width: 32px;
+  height: 32px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.4);
+  border: 2px solid rgba(255,255,255,0.3);
   position: relative;
+  z-index: 2;
 }
 
-.sivan-marker-origin {
-  background: linear-gradient(135deg, #D4AF37, #B8941F);
+.sivan-marker-pin-head svg {
+  transform: rotate(45deg);
 }
 
-.sivan-marker-dest {
-  background: linear-gradient(135deg, #EF4444, #DC2626);
+.sivan-marker-pin-origin .sivan-marker-pin-head {
+  background: linear-gradient(135deg, #E5C76B, #D4AF37, #B8941F);
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.5), inset 0 1px 1px rgba(255,255,255,0.3);
 }
 
-.sivan-marker-origin svg,
-.sivan-marker-dest svg {
-  width: 18px;
-  height: 18px;
-  color: white;
+.sivan-marker-pin-dest .sivan-marker-pin-head {
+  background: linear-gradient(135deg, #F87171, #EF4444, #DC2626);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5), inset 0 1px 1px rgba(255,255,255,0.3);
+}
+
+.sivan-marker-pin-tail {
+  width: 2px;
+  height: 14px;
+  background: linear-gradient(to bottom, rgba(150,150,150,0.6), rgba(150,150,150,0.1));
+  margin-top: -1px;
+  z-index: 1;
+}
+
+/* Pulse animation ring */
+.sivan-marker-pulse {
+  position: absolute;
+  bottom: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  opacity: 0;
+  z-index: 0;
+}
+
+.sivan-marker-pin-origin .sivan-marker-pulse {
+  background: rgba(212, 175, 55, 0.3);
+  animation: markerPulseGold 2s ease-out infinite;
+}
+
+.sivan-marker-pin-dest .sivan-marker-pulse {
+  background: rgba(239, 68, 68, 0.3);
+  animation: markerPulseRed 2s ease-out infinite;
+}
+
+@keyframes markerPulseGold {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+@keyframes markerPulseRed {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2.5); opacity: 0; }
 }
 
 /* Tooltips - clean dark style with gold accent */
