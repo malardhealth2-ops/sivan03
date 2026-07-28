@@ -1102,3 +1102,33 @@ Stage Summary:
 - After register/login, a full UserPanel dashboard opens showing profile, stats, account info, and trip history.
 - Real review system: logged-in passengers submit reviews (star rating + comment + optional route) that appear in the testimonials carousel; guests are prompted to login.
 - All PWA install icons (192/512, maskable, apple-touch, favicon) now use the new SIVAN VIP TAXI logo.
+
+---
+Task ID: 12
+Agent: main
+Task: Create interactive OpenStreetMap with origin/destination selection, route calculation, and alternative routes
+
+Work Log:
+- Installed leaflet, react-leaflet, @types/leaflet packages
+- Created backend API route at /api/map/route with OSRM integration (alternatives=true, fallback to no alternatives)
+- Added reverse geocoding via Nominatim for origin/destination place names
+- Created InteractiveMap wrapper component with next/dynamic (ssr: false) to prevent SSR hydration errors
+- Created InteractiveMapInner component with full Leaflet integration
+- Used CartoDB Dark Matter tiles for dark luxury theme
+- Created custom gold/red marker icons for origin/destination
+- Implemented step-by-step selection flow (origin → destination → route)
+- Added Nominatim search for places (origin and destination)
+- Added route polylines with different colors (gold=main, green=alt1, purple=alt2)
+- Created route info panel with distance, duration, and route cards
+- Added route legend overlay on map for multiple routes
+- Fixed z-index issues with search dropdown overlapping map
+- Added leaflet.css with dark theme styling for all Leaflet controls
+- Integrated map section into main page between Hero and PopularRoutes
+
+Stage Summary:
+- Interactive OpenStreetMap with dark luxury theme fully implemented
+- OSRM routing with alternative routes working (tested Tehran-Isfahan: 2 routes found)
+- Reverse geocoding working for place names in Persian
+- Search functionality for origin/destination places via Nominatim
+- Route info panel showing distance (436.7km), duration (4h 49m), and alternatives
+- All API caching implemented for performance

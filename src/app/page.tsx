@@ -17,6 +17,7 @@ import { AuthModal } from '@/components/sivan/AuthModal';
 import { ContactModal } from '@/components/sivan/ContactModal';
 import { AdminPanel } from '@/components/sivan/AdminPanel';
 import { UserPanel } from '@/components/sivan/UserPanel';
+import { InteractiveMap } from '@/components/sivan/InteractiveMap';
 
 export default function HomePage() {
   return (
@@ -24,6 +25,7 @@ export default function HomePage() {
       <Navbar />
       <main className="flex-1">
         <HeroSection />
+        <InteractiveMap />
         <PopularRoutes />
         <ServicesSection />
         <FleetSection />

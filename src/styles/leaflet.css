@@ -1,0 +1,181 @@
+/* Leaflet CSS - minimal subset needed for react-leaflet */
+.leaflet-container {
+  font-family: 'Vazirmatn', sans-serif;
+  font-size: 14px;
+  direction: rtl;
+}
+
+.leaflet-pane {
+  z-index: 400;
+}
+
+.leaflet-tile-pane {
+  z-index: 200;
+}
+
+.leaflet-overlay-pane {
+  z-index: 400;
+}
+
+.leaflet-marker-pane {
+  z-index: 600;
+}
+
+.leaflet-tooltip-pane {
+  z-index: 650;
+}
+
+.leaflet-popup-pane {
+  z-index: 700;
+}
+
+.leaflet-map-pane canvas,
+.leaflet-map-pane svg {
+  z-index: 1;
+}
+
+.leaflet-control {
+  z-index: 800;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  position: absolute;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.leaflet-top {
+  top: 0;
+}
+
+.leaflet-right {
+  right: 0;
+}
+
+.leaflet-bottom {
+  bottom: 0;
+}
+
+.leaflet-left {
+  left: 0;
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  margin: 12px !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: #1a1a1a !important;
+  color: #D4AF37 !important;
+  border: 1px solid #333 !important;
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  font-size: 18px !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: #2d2d2d !important;
+  color: #E5C76B !important;
+}
+
+.leaflet-control-zoom-in {
+  border-radius: 12px 12px 0 0 !important;
+}
+
+.leaflet-control-zoom-out {
+  border-radius: 0 0 12px 12px !important;
+  border-top: none !important;
+}
+
+.leaflet-bar a {
+  border-bottom-color: #333 !important;
+}
+
+/* Custom marker styles */
+.sivan-marker-origin,
+.sivan-marker-dest {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.4);
+  position: relative;
+}
+
+.sivan-marker-origin {
+  background: linear-gradient(135deg, #D4AF37, #B8941F);
+}
+
+.sivan-marker-dest {
+  background: linear-gradient(135deg, #EF4444, #DC2626);
+}
+
+.sivan-marker-origin svg,
+.sivan-marker-dest svg {
+  width: 18px;
+  height: 18px;
+  color: white;
+}
+
+.leaflet-tooltip {
+  background-color: #1a1a1a !important;
+  color: #fafafa !important;
+  border: 1px solid rgba(212, 175, 55, 0.3) !important;
+  border-radius: 8px !important;
+  padding: 6px 12px !important;
+  font-family: 'Vazirmatn', sans-serif !important;
+  font-size: 12px !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+  direction: rtl !important;
+}
+
+.leaflet-tooltip-top:before {
+  border-top-color: #1a1a1a !important;
+}
+
+.leaflet-tooltip-bottom:before {
+  border-bottom-color: #1a1a1a !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #1a1a1a !important;
+  color: #fafafa !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
+  border: 1px solid #333 !important;
+  font-family: 'Vazirmatn', sans-serif !important;
+  direction: rtl !important;
+}
+
+.leaflet-popup-tip {
+  background: #1a1a1a !important;
+}
+
+.leaflet-popup-close-button {
+  color: #a1a1aa !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #D4AF37 !important;
+}
+
+/* Attribution styling */
+.leaflet-control-attribution {
+  background: rgba(10, 10, 10, 0.7) !important;
+  color: #666 !important;
+  font-size: 10px !important;
+  padding: 2px 6px !important;
+  border-radius: 6px 0 0 0 !important;
+}
+
+.leaflet-control-attribution a {
+  color: #D4AF37 !important;
+}
