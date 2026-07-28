@@ -51,12 +51,15 @@ interface AuthState {
   mode: 'login' | 'register';
   username: string;
   password: string;
-  // Registration-only fields
   fullName: string;
   phone: string;
   error: string;
   user: AuthUser | null;
   isVerified: boolean;
+}
+
+interface DriverRegisterState {
+  isOpen: boolean;
 }
 
 interface AdminState {
@@ -65,11 +68,6 @@ interface AdminState {
   adminUsername: string;
   loginError: string;
   activeTab: 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'emails' | 'notifications' | 'settings';
-  setAdminOpen: (open: boolean) => void;
-  adminLogin: (username: string, password: string) => boolean;
-  adminLogout: () => void;
-  setLoginError: (error: string) => void;
-  setActiveTab: (tab: AdminState['activeTab']) => void;
 }
 
 interface AppState {
@@ -82,7 +80,7 @@ interface AppState {
   setBookingSubmitting: (val: boolean) => void;
   resetBooking: () => void;
 
-  // Auth modal
+  // Auth modal (phone OTP flow)
   auth: AuthState;
   openAuth: (mode: AuthState['mode']) => void;
   closeAuth: () => void;
@@ -94,6 +92,11 @@ interface AppState {
   setAuthUser: (user: AuthUser | null) => void;
   setAuthVerified: (val: boolean) => void;
   authLogout: () => void;
+
+  // Driver register modal
+  driverRegister: DriverRegisterState;
+  openDriverRegister: () => void;
+  closeDriverRegister: () => void;
 
   // User panel (passenger dashboard overlay)
   userPanelOpen: boolean;
@@ -169,6 +172,11 @@ export const useAppStore = create<AppState>((set) => ({
   setAuthVerified: (val) => set((s) => ({ auth: { ...s.auth, isVerified: val } })),
   authLogout: () => set((s) => ({ auth: { ...s.auth, isOpen: false, username: '', password: '', fullName: '', phone: '', error: '', user: null, isVerified: false }, userPanelOpen: false })),
 
+  // Driver register
+  driverRegister: { isOpen: false },
+  openDriverRegister: () => set({ driverRegister: { isOpen: true } }),
+  closeDriverRegister: () => set({ driverRegister: { isOpen: false } }),
+
   // User panel
   userPanelOpen: false,
   setUserPanelOpen: (open) => set({ userPanelOpen: open }),
@@ -183,8 +191,6 @@ export const useAppStore = create<AppState>((set) => ({
   },
   setAdminOpen: (open) => set((s) => ({ admin: { ...s.admin, isAdminOpen: open } })),
   adminLogin: (username, password) => {
-    // Credentials are verified by the API (/api/auth/login) before calling this.
-    // This just records the logged-in admin session in client state.
     if (username && password) {
       set((s) => ({ admin: { ...s.admin, isLoggedIn: true, adminUsername: username, loginError: '' } }));
       return true;

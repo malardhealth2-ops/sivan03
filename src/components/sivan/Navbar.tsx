@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Phone, Menu, X, ChevronDown, UserCircle } from 'lucide-react';
+import { Phone, Menu, X, ChevronDown, UserCircle, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { useAppStore } from '@/lib/store';
@@ -23,7 +23,7 @@ const navLinks: NavLink[] = [
 ];
 
 export function Navbar() {
-  const { openAuth, mobileMenuOpen, setMobileMenuOpen, setAdminOpen, auth, setUserPanelOpen } = useAppStore();
+  const { openAuth, openDriverRegister, mobileMenuOpen, setMobileMenuOpen, setAdminOpen, auth, setUserPanelOpen } = useAppStore();
   const pathname = usePathname();
   const isHome = pathname === '/';
   const [scrolled, setScrolled] = useState(false);
@@ -145,6 +145,14 @@ export function Navbar() {
                 <>
                   <Button
                     variant="ghost"
+                    onClick={openDriverRegister}
+                    className="text-[#a1a1aa] hover:text-[#D4AF37] hover:bg-[#D4AF37]/5 font-medium rounded-lg px-3 h-9 text-sm"
+                  >
+                    <Car className="h-3.5 w-3.5 ml-1" />
+                    ثبت‌نام راننده
+                  </Button>
+                  <Button
+                    variant="ghost"
                     onClick={() => openAuth('register')}
                     className="text-[#a1a1aa] hover:text-[#D4AF37] hover:bg-[#D4AF37]/5 font-medium rounded-lg px-3 h-9 text-sm"
                   >
@@ -227,11 +235,21 @@ export function Navbar() {
               <>
                 <SheetClose asChild>
                   <Button
+                    onClick={() => { setMobileMenuOpen(false); openDriverRegister(); }}
+                    variant="ghost"
+                    className="border-[#333] text-[#a1a1aa] hover:text-[#D4AF37] hover:bg-[#D4AF37]/5 font-medium mx-4 mt-2 flex items-center gap-1.5"
+                  >
+                    <Car className="h-3.5 w-3.5" />
+                    ثبت‌نام راننده
+                  </Button>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Button
                     onClick={() => { setMobileMenuOpen(false); openAuth('register'); }}
                     variant="outline"
                     className="border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] font-medium mx-4 mt-2"
                   >
-                    ثبت‌نام
+                    ثبت‌نام مسافر
                   </Button>
                 </SheetClose>
                 <SheetClose asChild>

@@ -17,12 +17,16 @@ import {
   Waypoints,
   ArrowLeft,
   Info,
+  Car,
+  Phone,
+  UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { TRIP_TYPE_LABELS } from '@/lib/pricing';
+import { useAppStore } from '@/lib/store';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -320,6 +324,93 @@ function RouteDetailCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Ride Request Buttons ─────────────────────────────────────────────────────
+
+function RideRequestButtons({
+  origin,
+  destination,
+  routeData,
+}: {
+  origin: MapPoint | null;
+  destination: MapPoint | null;
+  routeData: RouteResponse;
+}) {
+  const { updateBookingForm, setBookingStep, openAuth, openDriverRegister, auth } = useAppStore();
+  const [bookingLoading, setBookingLoading] = useState(false);
+
+  const handleBookRide = () => {
+    // Pre-fill booking form with map data
+    updateBookingForm({
+      origin: routeData.origin?.name || origin?.name || '',
+      destination: routeData.destination?.name || destination?.name || '',
+      originLat: origin?.lat,
+      originLng: origin?.lng,
+      destLat: destination?.lat,
+      destLng: destination?.lng,
+      distanceKm: routeData.routes[0]?.distanceKm || null,
+      durationMin: routeData.routes[0]?.durationMin || null,
+      fullName: auth.user?.fullName || '',
+      phone: auth.user?.username?.startsWith('driver_') ? '' : auth.phone || '',
+    });
+
+    setBookingLoading(true);
+    // Open booking modal after a brief delay
+    setTimeout(() => {
+      setBookingStep(0);
+      setBookingLoading(false);
+    }, 200);
+  };
+
+  const handleCallRequest = () => {
+    // Open site phone numbers for calling
+    window.open('tel:+989109419743');
+  };
+
+  const handleRegisterDriver = () => {
+    openDriverRegister();
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row gap-3">
+      {/* Book ride button - primary */}
+      <Button
+        onClick={handleBookRide}
+        disabled={bookingLoading}
+        className="flex-1 bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-bold text-base rounded-xl transition-all hover:shadow-lg hover:shadow-[#D4AF37]/20"
+      >
+        {bookingLoading ? (
+          <Loader2 className="h-5 w-5 animate-spin" />
+        ) : (
+          <>
+            <Car className="h-5 w-5 ml-2" />
+            ثبت درخواست سفر
+          </>
+        )}
+      </Button>
+
+      {/* Call for ride button */}
+      <Button
+        onClick={handleCallRequest}
+        variant="outline"
+        className="flex-1 border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10 h-12 font-medium text-base rounded-xl transition-all"
+      >
+        <Phone className="h-5 w-5 ml-2" />
+        تماس برای درخواست
+      </Button>
+
+      {/* Register as driver - subtle link */}
+      <button
+        type="button"
+        onClick={handleRegisterDriver}
+        className="self-center text-xs text-[#a1a1aa] hover:text-[#D4AF37] transition-colors flex items-center gap-1"
+      >
+        <UserPlus className="h-3.5 w-3.5" />
+        ثبت‌نام راننده
+      </button>
+    </div>
   );
 }
 
@@ -995,7 +1086,7 @@ export default function InteractiveMapInner() {
                   )}
 
                   {/* Origin-Destination Names */}
-                  <div className="mt-3 flex items-center gap-3 text-sm">
+                  <div className="mt-3 mb-4 flex items-center gap-3 text-sm">
                     <span className="text-[#D4AF37] font-medium truncate">
                       {routeData.origin?.name || 'مبدا'}
                     </span>
@@ -1004,6 +1095,13 @@ export default function InteractiveMapInner() {
                       {routeData.destination?.name || 'مقصد'}
                     </span>
                   </div>
+
+                  {/* Ride Request Actions */}
+                  <RideRequestButtons
+                    origin={origin}
+                    destination={destination}
+                    routeData={routeData}
+                  />
                 </div>
               </motion.div>
             )}

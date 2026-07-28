@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { z } from 'zod';
+import { verifyOTP } from '@/lib/papi';
 
 const verifySchema = z.object({
   phone: z.string().regex(/^09[0-9]{9}$/),
-  code: z.string().length(6)
+  code: z.string().length(6),
 });
 
 export async function POST(request: NextRequest) {
@@ -12,9 +13,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { phone, code } = verifySchema.parse(body);
 
-    // Demo: accept any 6-digit code
-    if (code.length !== 6) {
-      return NextResponse.json({ error: 'کد نامعتبر' }, { status: 400 });
+    // Verify OTP via p.api.ir (falls back to demo)
+    const result = await verifyOTP(phone, code);
+
+    if (!result.success) {
+      return NextResponse.json({ error: result.message }, { status: 400 });
     }
 
     // Check if user exists
@@ -22,28 +25,37 @@ export async function POST(request: NextRequest) {
       where: { phone },
       include: {
         passenger: true,
-        driver: true
-      }
+        driver: true,
+      },
     });
 
     if (user) {
+      // Update last login and mark verified
+      await db.user.update({
+        where: { id: user.id },
+        data: { isVerified: true, lastLoginAt: new Date() },
+      });
+
       return NextResponse.json({
         success: true,
         isNewUser: false,
+        isDemo: result.isDemo,
         user: {
           id: user.id,
           phone: user.phone,
           fullName: user.fullName,
+          username: user.username,
           role: user.role,
-          isVerified: user.isVerified
-        }
+          isVerified: true,
+        },
       });
     }
 
     return NextResponse.json({
       success: true,
       isNewUser: true,
-      message: 'کاربر جدید. لطفاً اطلاعات خود را تکمیل کنید.'
+      isDemo: result.isDemo,
+      message: 'کاربر جدید. لطفاً اطلاعات خود را تکمیل کنید.',
     });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {

@@ -1240,3 +1240,33 @@ Stage Summary:
 - Route lines now: blue solid (main road) + gray dashed (alternatives)
 - p.api.ir services identified: identity verification (Shahkar), biometric auth, passport check, driving license score, vehicle card/ownership verification
 
+---
+Task ID: 1
+Agent: Main Agent
+Task: Implement OTP verification, Shahkar auth, national ID matching, ride request buttons
+
+Work Log:
+- Investigated p.api.ir API (Blazor SPA, cannot be scraped programmatically)
+- Created src/lib/papi.ts integration library with OTP send/verify, Shahkar verification, national ID matching, national ID validation
+- Updated src/app/api/auth/send-otp/route.ts to use p.api.ir with demo fallback + rate limiting
+- Updated src/app/api/auth/verify-otp/route.ts to use p.api.ir with demo fallback + auto login existing users
+- Created src/app/api/auth/shahkar-verify/route.ts for Shahkar verification (national ID + mobile matching)
+- Created src/app/api/auth/national-id-match/route.ts for national ID + mobile matching
+- Created src/app/api/auth/register-driver/route.ts for driver registration endpoint
+- Rebuilt src/components/sivan/AuthModal.tsx with phone OTP flow (phone entry → OTP code → registration)
+- Created src/components/sivan/DriverRegisterModal.tsx with 5-step driver registration (phone → OTP → Shahkar → personal info → vehicle)
+- Updated src/lib/store.ts with driverRegister state management
+- Updated src/app/page.tsx to include DriverRegisterModal
+- Added ride request buttons (ثبت درخواست سفر + تماس برای درخواست) to InteractiveMapInner.tsx
+- Added ثبت‌نام راننده button to Navbar (desktop + mobile menu)
+- Route colors already blue/gray (verified from previous session)
+
+Stage Summary:
+- Complete OTP verification system using p.api.ir with demo fallback
+- Shahkar verification for driver registration
+- National ID + mobile matching API
+- Phone-based auth modal replacing username/password for passengers
+- 5-step driver registration modal with Shahkar identity verification
+- Ride request + call buttons displayed after route calculation on map
+- Driver registration link added to navbar
+
