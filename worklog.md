@@ -1132,3 +1132,23 @@ Stage Summary:
 - Search functionality for origin/destination places via Nominatim
 - Route info panel showing distance (436.7km), duration (4h 49m), and alternatives
 - All API caching implemented for performance
+
+---
+Task ID: 13
+Agent: main
+Task: Fix map display - Persian names and better visibility
+
+Work Log:
+- Changed map tile layer from CartoDB Dark Matter (English labels, completely dark) to standard OpenStreetMap tiles (Persian/Farsi labels, light readable background)
+- Updated leaflet.css to complement the new light map tiles while keeping dark elegant controls (zoom buttons, tooltips use dark theme with gold accents, popups now white/clean)
+- Verified via agent-browser that map renders with Persian city names (تهران, اصفهان, etc.)
+- Confirmed 24 tiles loading, proper container dimensions, no blank gaps
+- Verified map loads correctly both on fresh page load and after scroll
+
+Stage Summary:
+- Map tile URL changed from `basemaps.cartocdn.com/dark_all` to `tile.openstreetmap.org`
+- Iranian city/province names now display in Persian (Farsi) script
+- Map background is now light with good visibility (green mountains, beige deserts, blue seas)
+- Leaflet controls updated: dark zoom buttons with gold accent, white popups, dark tooltips
+- Existing IntersectionObserver in MapInvalidator ensures tiles render when map scrolls into view
+
