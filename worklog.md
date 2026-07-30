@@ -1534,3 +1534,30 @@ Stage Summary:
   - Booking form pre-fill data (now uses active route's distance/duration)
   - Polyline styling (active route highlighted, others dimmed)
 - OSRM alternatives reliability improved with longer timeout and better server ordering
+---
+Task ID: 13
+Agent: main
+Task: Change auth to username/password login and register for passengers only
+
+Work Log:
+- Completely rewrote AuthModal.tsx (from 997 lines to ~230 lines):
+  - Removed OTP flow, driver registration, Shahkar verification, national ID matching
+  - Simple login form: username + password with show/hide toggle
+  - Simple register form: username + full name + password + confirm password
+  - Smooth animation between login/register modes
+  - Eye icon to toggle password visibility
+  - Validation errors shown inline (username min 3 chars, password match, etc.)
+  - Toast notification on success
+- Renamed API route from /api/auth/register to /api/auth/signup (Next.js 16 reserves 'register'):
+  - Removed Zod dependency from all auth routes
+  - Removed unused auth routes (verify-otp, send-otp, shahkar-verify, national-id-match)
+  - Rewrote register-driver without Zod
+  - Manual validation instead of Zod schemas
+- Updated store: removed phone field from RideRequestButtons
+- Updated AuthModal to call /api/auth/signup
+
+Stage Summary:
+- Login: username + password only
+- Register: username + full name + password + confirm password (passenger only)
+- No more OTP/phone/Shahkar/Driver registration in auth modal
+- API path changed to /api/auth/signup to avoid Next.js 16 reserved path conflict

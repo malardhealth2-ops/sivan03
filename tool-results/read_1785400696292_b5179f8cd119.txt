@@ -1,0 +1,998 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useEffect, useRef } from 'react';
+     4→     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→     5→import {
+     6→     6→  User,
+     7→     7→  Loader2,
+     8→     8→  Check,
+     9→     9→  AlertTriangle,
+    10→    10→  UserPlus,
+    11→    11→  LogIn,
+    12→    12→  Shield,
+    13→    13→  Phone,
+    14→    14→  Smartphone,
+    15→    15→  KeyRound,
+    16→    16→  ArrowLeft,
+    17→    17→  Timer,
+    18→    18→  Fingerprint,
+    19→    19→  Car,
+    20→    20→  IdCard,
+    21→    21→  UserCheck,
+    22→    22→  CreditCard,
+    23→    23→  BadgeCheck,
+    24→    24→} from 'lucide-react';
+    25→    25→import {
+    26→    26→  Dialog,
+    27→    27→  DialogContent,
+    28→    28→  DialogHeader,
+    29→    29→  DialogTitle,
+    30→    30→  DialogDescription,
+    31→    31→} from '@/components/ui/dialog';
+    32→    32→import { Button } from '@/components/ui/button';
+    33→    33→import { Input } from '@/components/ui/input';
+    34→    34→import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from '@/components/ui/input-otp';
+    35→    35→import { Label } from '@/components/ui/label';
+    36→    36→import { useAppStore } from '@/lib/store';
+    37→    37→import { toast } from 'sonner';
+    38→    38→
+    39→    39→// ─── Step tracking ──────────────────────────────────────────────
+    40→    40→
+    41→    41→type OTPStep = 'phone' | 'code' | 'register' | 'success';
+    42→    42→type RegisterMode = 'passenger' | 'driver';
+    43→    43→type DriverSubStep = 'select-type' | 'shahkar' | 'info' | 'vehicle';
+    44→    44→
+    45→    45→export function AuthModal() {
+    46→    46→  const {
+    47→    47→    auth,
+    48→    48→    closeAuth,
+    49→    49→    setAuthUsername,
+    50→    50→    setAuthFullName,
+    51→    51→    setAuthPhone,
+    52→    52→    setAuthUser,
+    53→    53→    setAuthVerified,
+    54→    54→    adminLogin,
+    55→    55→    setAdminOpen,
+    56→    56→    openAuth,
+    57→    57→    setUserPanelOpen,
+    58→    58→  } = useAppStore();
+    59→    59→
+    60→    60→  const [step, setStep] = useState<OTPStep>('phone');
+    61→    61→  const [loading, setLoading] = useState(false);
+    62→    62→  const [localError, setLocalError] = useState('');
+    63→    63→  const [otpSent, setOtpSent] = useState(false);
+    64→    64→  const [isDemo, setIsDemo] = useState(false);
+    65→    65→  const [demoOtp, setDemoOtp] = useState('');
+    66→    66→  const [countdown, setCountdown] = useState(0);
+    67→    67→  const [isExistingUser, setIsExistingUser] = useState(false);
+    68→    68→  const [existingUser, setExistingUser] = useState<{ id: string; fullName: string; username: string; role: string } | null>(null);
+    69→    69→
+    70→    70→  // Legacy login
+    71→    71→  const [legacyMode, setLegacyMode] = useState(false);
+    72→    72→  const [showPass, setShowPass] = useState(false);
+    73→    73→
+    74→    74→  // Driver registration state
+    75→    75→  const [registerMode, setRegisterMode] = useState<RegisterMode>('passenger');
+    76→    76→  const [driverSubStep, setDriverSubStep] = useState<DriverSubStep>('select-type');
+    77→    77→  const [nationalId, setNationalId] = useState('');
+    78→    78→  const [birthDate, setBirthDate] = useState('');
+    79→    79→  const [fatherName, setFatherName] = useState('');
+    80→    80→  const [licenseNumber, setLicenseNumber] = useState('');
+    81→    81→  const [shebaNumber, setShebaNumber] = useState('');
+    82→    82→  const [vehicleType, setVehicleType] = useState('sedan');
+    83→    83→  const [vehicleBrand, setVehicleBrand] = useState('');
+    84→    84→  const [vehicleModel, setVehicleModel] = useState('');
+    85→    85→  const [vehicleYear, setVehicleYear] = useState('');
+    86→    86→  const [vehicleColor, setVehicleColor] = useState('');
+    87→    87→  const [plateNumber, setPlateNumber] = useState('');
+    88→    88→
+    89→    89→  const countdownRef = useRef<ReturnType<typeof setInterval>>();
+    90→    90→  const inputRef = useRef<HTMLInputElement>(null);
+    91→    91→
+    92→    92→  // Reset when modal opens
+    93→    93→  useEffect(() => {
+    94→    94→    if (auth.isOpen) {
+    95→    95→      setStep('phone');
+    96→    96→      setLocalError('');
+    97→    97→      setOtpSent(false);
+    98→    98→      setIsDemo(false);
+    99→    99→      setDemoOtp('');
+   100→   100→      setCountdown(0);
+   101→   101→      setIsExistingUser(false);
+   102→   102→      setExistingUser(null);
+   103→   103→      setLegacyMode(false);
+   104→   104→      setShowPass(false);
+   105→   105→      setRegisterMode('passenger');
+   106→   106→      setDriverSubStep('select-type');
+   107→   107→      setNationalId('');
+   108→   108→      setBirthDate('');
+   109→   109→      setFatherName('');
+   110→   110→      setLicenseNumber('');
+   111→   111→      setShebaNumber('');
+   112→   112→      setVehicleType('sedan');
+   113→   113→      setVehicleBrand('');
+   114→   114→      setVehicleModel('');
+   115→   115→      setVehicleYear('');
+   116→   116→      setVehicleColor('');
+   117→   117→      setPlateNumber('');
+   118→   118→      setTimeout(() => inputRef.current?.focus(), 200);
+   119→   119→    }
+   120→   120→  }, [auth.isOpen]);
+   121→   121→
+   122→   122→  // Countdown timer
+   123→   123→  useEffect(() => {
+   124→   124→    if (countdown > 0) {
+   125→   125→      countdownRef.current = setInterval(() => {
+   126→   126→        setCountdown((c) => {
+   127→   127→          if (c <= 1) { clearInterval(countdownRef.current); return 0; }
+   128→   128→          return c - 1;
+   129→   129→        });
+   130→   130→      }, 1000);
+   131→   131→      return () => clearInterval(countdownRef.current);
+   132→   132→    }
+   133→   133→  }, [countdown]);
+   134→   134→
+   135→   135→  // ─── Step 1: Send OTP ──────────────────────────────────────
+   136→   136→
+   137→   137→  const handleSendOTP = async () => {
+   138→   138→    const phone = auth.phone.trim();
+   139→   139→    if (!phone || !/^09[0-9]{9}$/.test(phone)) {
+   140→   140→      setLocalError('شماره موبایل معتبر وارد کنید (مثال: ۰۹۱۲۳۴۵۶۷۸۹)');
+   141→   141→      return;
+   142→   142→    }
+   143→   143→    setLocalError('');
+   144→   144→    setLoading(true);
+   145→   145→
+   146→   146→    try {
+   147→   147→      const res = await fetch('/api/auth/send-otp', {
+   148→   148→        method: 'POST',
+   149→   149→        headers: { 'Content-Type': 'application/json' },
+   150→   150→        body: JSON.stringify({ phone }),
+   151→   151→      });
+   152→   152→
+   153→   153→      const data = await res.json();
+   154→   154→
+   155→   155→      if (!res.ok) {
+   156→   156→        setLocalError(data.error || 'خطا در ارسال کد تأیید');
+   157→   157→        setLoading(false);
+   158→   158→        return;
+   159→   159→      }
+   160→   160→
+   161→   161→      setOtpSent(true);
+   162→   162→      setIsDemo(!!data.isDemo);
+   163→   163→      if (data.isDemo && data.otp) {
+   164→   164→        setDemoOtp(data.otp);
+   165→   165→      }
+   166→   166→      setCountdown(120);
+   167→   167→      setStep('code');
+   168→   168→      toast.success('کد تأیید ارسال شد');
+   169→   169→    } catch {
+   170→   170→      setLocalError('خطا در ارتباط با سرور');
+   171→   171→    } finally {
+   172→   172→      setLoading(false);
+   173→   173→    }
+   174→   174→  };
+   175→   175→
+   176→   176→  // ─── Step 2: Verify OTP ─────────────────────────────────────
+   177→   177→
+   178→   178→  const handleVerifyOTP = async (code: string) => {
+   179→   179→    if (!code || code.length !== 6) return;
+   180→   180→    setLocalError('');
+   181→   181→    setLoading(true);
+   182→   182→
+   183→   183→    try {
+   184→   184→      const res = await fetch('/api/auth/verify-otp', {
+   185→   185→        method: 'POST',
+   186→   186→        headers: { 'Content-Type': 'application/json' },
+   187→   187→        body: JSON.stringify({ phone: auth.phone, code }),
+   188→   188→      });
+   189→   189→
+   190→   190→      const data = await res.json();
+   191→   191→
+   192→   192→      if (!res.ok) {
+   193→   193→        setLocalError(data.error || 'کد تأیید نامعتبر');
+   194→   194→        setLoading(false);
+   195→   195→        return;
+   196→   196→      }
+   197→   197→
+   198→   198→      if (data.isNewUser) {
+   199→   199→        setStep('register');
+   200→   200→        setDriverSubStep('select-type');
+   201→   201→        setLoading(false);
+   202→   202→      } else {
+   203→   203→        setIsExistingUser(true);
+   204→   204→        setExistingUser(data.user);
+   205→   205→        setAuthUser({
+   206→   206→          id: data.user.id,
+   207→   207→          username: data.user.username || data.user.phone,
+   208→   208→          fullName: data.user.fullName,
+   209→   209→          role: data.user.role,
+   210→   210→        });
+   211→   211→        setAuthVerified(true);
+   212→   212→        setStep('success');
+   213→   213→
+   214→   214→        if (data.user?.role === 'admin') {
+   215→   215→          adminLogin(data.user.username, '');
+   216→   216→          setTimeout(() => { setAdminOpen(true); closeAuth(); }, 1200);
+   217→   217→        } else {
+   218→   218→          setTimeout(() => { closeAuth(); setUserPanelOpen(true); }, 1200);
+   219→   219→        }
+   220→   220→
+   221→   221→        toast.success(`خوش آمدید، ${data.user?.fullName || 'کاربر'} عزیز`);
+   222→   222→      }
+   223→   223→    } catch {
+   224→   224→      setLocalError('خطا در ارتباط با سرور');
+   225→   225→    } finally {
+   226→   226→      setLoading(false);
+   227→   227→    }
+   228→   228→  };
+   229→   229→
+   230→   230→  // ─── Step 3a: Select Registration Type ──────────────────────
+   231→   231→
+   232→   232→  const handleSelectRegisterMode = (mode: RegisterMode) => {
+   233→   233→    setRegisterMode(mode);
+   234→   234→    setLocalError('');
+   235→   235→    if (mode === 'passenger') {
+   236→   236→      // Just show name input — no sub-step change needed
+   237→   237→    } else {
+   238→   238→      setDriverSubStep('shahkar');
+   239→   239→    }
+   240→   240→  };
+   241→   241→
+   242→   242→  // ─── Step 3b: Shahkar Verification (Driver) ─────────────────
+   243→   243→
+   244→   244→  const handleShahkarVerify = async () => {
+   245→   245→    if (!nationalId || !/^[0-9]{10}$/.test(nationalId)) {
+   246→   246→      setLocalError('کد ملی باید ۱۰ رقم باشد');
+   247→   247→      return;
+   248→   248→    }
+   249→   249→    setLocalError('');
+   250→   250→    setLoading(true);
+   251→   251→
+   252→   252→    try {
+   253→   253→      const res = await fetch('/api/auth/shahkar-verify', {
+   254→   254→        method: 'POST',
+   255→   255→        headers: { 'Content-Type': 'application/json' },
+   256→   256→        body: JSON.stringify({ nationalId, phone: auth.phone, birthDate: birthDate || undefined }),
+   257→   257→      });
+   258→   258→
+   259→   259→      const data = await res.json();
+   260→   260→      if (!res.ok) {
+   261→   261→        setLocalError(data.error || 'خطا در تأیید شاهکار');
+   262→   262→        setLoading(false);
+   263→   263→        return;
+   264→   264→      }
+   265→   265→      if (!data.verified) {
+   266→   266→        setLocalError('تطبیق شاهکار انجام نشد. شماره موبایل با کد ملی مطابقت ندارد.');
+   267→   267→        setLoading(false);
+   268→   268→        return;
+   269→   269→      }
+   270→   270→      if (data.personInfo) {
+   271→   271→        if (data.personInfo.firstName || data.personInfo.lastName) {
+   272→   272→          setAuthFullName(`${data.personInfo.firstName || ''} ${data.personInfo.lastName || ''}`.trim());
+   273→   273→        }
+   274→   274→        if (data.personInfo.fatherName) {
+   275→   275→          setFatherName(data.personInfo.fatherName);
+   276→   276→        }
+   277→   277→      }
+   278→   278→      setDriverSubStep('info');
+   279→   279→      toast.success(data.isDemo ? 'تأیید شاهکار موفق (آزمایشی)' : 'تأیید شاهکار موفق');
+   280→   280→    } catch {
+   281→   281→      setLocalError('خطا در ارتباط');
+   282→   282→    } finally {
+   283→   283→      setLoading(false);
+   284→   284→    }
+   285→   285→  };
+   286→   286→
+   287→   287→  // ─── Step 3c: Driver Personal Info ──────────────────────────
+   288→   288→
+   289→   289→  const handleDriverInfoSubmit = () => {
+   290→   290→    const fullName = auth.fullName.trim();
+   291→   291→    if (!fullName || fullName.length < 2) {
+   292→   292→      setLocalError('نام و نام خانوادگی را کامل وارد کنید');
+   293→   293→      return;
+   294→   294→    }
+   295→   295→    setLocalError('');
+   296→   296→    setDriverSubStep('vehicle');
+   297→   297→  };
+   298→   298→
+   299→   299→  // ─── Step 3d: Vehicle Info + Final Submit ───────────────────
+   300→   300→
+   301→   301→  const handleDriverSubmit = async () => {
+   302→   302→    if (!vehicleBrand || !vehicleModel || !vehicleYear || !plateNumber) {
+   303→   303→      setLocalError('اطلاعات خودرو را کامل وارد کنید');
+   304→   304→      return;
+   305→   305→    }
+   306→   306→    setLocalError('');
+   307→   307→    setLoading(true);
+   308→   308→
+   309→   309→    try {
+   310→   310→      // First register as user
+   311→   311→      const regRes = await fetch('/api/auth/register', {
+   312→   312→        method: 'POST',
+   313→   313→        headers: { 'Content-Type': 'application/json' },
+   314→   314→        body: JSON.stringify({
+   315→   315→          username: `driver_${auth.phone}`,
+   316→   316→          fullName: auth.fullName.trim(),
+   317→   317→          password: `pass_${Date.now()}`,
+   318→   318→          phone: auth.phone,
+   319→   319→        }),
+   320→   320→      });
+   321→   321→
+   322→   322→      const regData = await regRes.json();
+   323→   323→
+   324→   324→      // Then submit driver application
+   325→   325→      const driverRes = await fetch('/api/auth/register-driver', {
+   326→   326→        method: 'POST',
+   327→   327→        headers: { 'Content-Type': 'application/json' },
+   328→   328→        body: JSON.stringify({
+   329→   329→          phone: auth.phone,
+   330→   330→          nationalId,
+   331→   331→          fullName: auth.fullName.trim(),
+   332→   332→          fatherName: fatherName.trim(),
+   333→   333→          birthDate: birthDate || undefined,
+   334→   334→          licenseNumber: licenseNumber || undefined,
+   335→   335→          shebaNumber: shebaNumber || undefined,
+   336→   336→          vehicle: {
+   337→   337→            type: vehicleType,
+   338→   338→            brand: vehicleBrand,
+   339→   339→            model: vehicleModel,
+   340→   340→            year: parseInt(vehicleYear) || 1402,
+   341→   341→            color: vehicleColor,
+   342→   342→            plateNumber,
+   343→   343→          },
+   344→   344→        }),
+   345→   345→      });
+   346→   346→
+   347→   347→      const driverData = await driverRes.json();
+   348→   348→
+   349→   349→      if (!driverRes.ok) {
+   350→   350→        setLocalError(driverData.error || 'خطا در ثبت‌نام راننده');
+   351→   351→        setLoading(false);
+   352→   352→        return;
+   353→   353→      }
+   354→   354→
+   355→   355→      // Set authenticated user
+   356→   356→      if (regRes.ok && regData.user) {
+   357→   357→        setAuthUser({
+   358→   358→          id: regData.user.id,
+   359→   359→          username: regData.user.username,
+   360→   360→          fullName: regData.user.fullName,
+   361→   361→          role: regData.user.role,
+   362→   362→        });
+   363→   363→        setAuthVerified(true);
+   364→   364→      }
+   365→   365→
+   366→   366→      setStep('success');
+   367→   367→      toast.success('درخواست ثبت‌نام راننده با موفقیت ثبت شد');
+   368→   368→      setTimeout(() => {
+   369→   369→        closeAuth();
+   370→   370→        if (regRes.ok) setUserPanelOpen(true);
+   371→   371→      }, 1200);
+   372→   372→    } catch {
+   373→   373→      setLocalError('خطا در ارتباط');
+   374→   374→    } finally {
+   375→   375→      setLoading(false);
+   376→   376→    }
+   377→   377→  };
+   378→   378→
+   379→   379→  // ─── Step 3e: Complete Passenger Registration ──────────────
+   380→   380→
+   381→   381→  const handleCompleteRegistration = async () => {
+   382→   382→    const fullName = auth.fullName.trim();
+   383→   383→    if (!fullName || fullName.length < 2) {
+   384→   384→      setLocalError('نام و نام خانوادگی را کامل وارد کنید');
+   385→   385→      return;
+   386→   386→    }
+   387→   387→    setLocalError('');
+   388→   388→    setLoading(true);
+   389→   389→
+   390→   390→    try {
+   391→   391→      const res = await fetch('/api/auth/register', {
+   392→   392→        method: 'POST',
+   393→   393→        headers: { 'Content-Type': 'application/json' },
+   394→   394→        body: JSON.stringify({
+   395→   395→          username: `user_${auth.phone}`,
+   396→   396→          fullName,
+   397→   397→          password: `pass_${Date.now()}`,
+   398→   398→          phone: auth.phone,
+   399→   399→        }),
+   400→   400→      });
+   401→   401→
+   402→   402→      const data = await res.json();
+   403→   403→
+   404→   404→      if (!res.ok) {
+   405→   405→        setLocalError(data.error || 'خطا در ثبت‌نام');
+   406→   406→        setLoading(false);
+   407→   407→        return;
+   408→   408→      }
+   409→   409→
+   410→   410→      setAuthUser({
+   411→   411→        id: data.user.id,
+   412→   412→        username: data.user.username,
+   413→   413→        fullName: data.user.fullName,
+   414→   414→        role: data.user.role,
+   415→   415→      });
+   416→   416→      setAuthVerified(true);
+   417→   417→      setStep('success');
+   418→   418→
+   419→   419→      toast.success(`ثبت‌نام موفق! خوش آمدید، ${data.user.fullName} عزیز`);
+   420→   420→      setTimeout(() => { closeAuth(); setUserPanelOpen(true); }, 1200);
+   421→   421→    } catch {
+   422→   422→      setLocalError('خطا در ارتباط با سرور');
+   423→   423→    } finally {
+   424→   424→      setLoading(false);
+   425→   425→    }
+   426→   426→  };
+   427→   427→
+   428→   428→  // ─── Legacy login via username/password ─────────────────────
+   429→   429→
+   430→   430→  const handleLegacyLogin = async () => {
+   431→   431→    if (!auth.username || !auth.password) {
+   432→   432→      setLocalError('نام کاربری و رمز عبور را وارد کنید');
+   433→   433→      return;
+   434→   434→    }
+   435→   435→    setLocalError('');
+   436→   436→    setLoading(true);
+   437→   437→
+   438→   438→    try {
+   439→   439→      const res = await fetch('/api/auth/login', {
+   440→   440→        method: 'POST',
+   441→   441→        headers: { 'Content-Type': 'application/json' },
+   442→   442→        body: JSON.stringify({ username: auth.username, password: auth.password }),
+   443→   443→      });
+   444→   444→
+   445→   445→      const data = await res.json();
+   446→   446→
+   447→   447→      if (!res.ok) {
+   448→   448→        setLocalError(data.error || 'خطا در ورود');
+   449→   449→        setLoading(false);
+   450→   450→        return;
+   451→   451→      }
+   452→   452→
+   453→   453→      setAuthUser(data.user || null);
+   454→   454→
+   455→   455→      if (data.user?.role === 'admin') {
+   456→   456→        adminLogin(auth.username, auth.password);
+   457→   457→        setAdminOpen(true);
+   458→   458→        closeAuth();
+   459→   459→        setLoading(false);
+   460→   460→        return;
+   461→   461→      }
+   462→   462→
+   463→   463→      setAuthVerified(true);
+   464→   464→      setLoading(false);
+   465→   465→      toast.success(`خوش آمدید، ${data.user?.fullName || 'کاربر'} عزیز`);
+   466→   466→      setTimeout(() => { closeAuth(); setUserPanelOpen(true); }, 900);
+   467→   467→    } catch {
+   468→   468→      setLocalError('خطا در ارتباط با سرور');
+   469→   469→      setLoading(false);
+   470→   470→    }
+   471→   471→  };
+   472→   472→
+   473→   473→  const resetAndClose = () => { setLocalError(''); closeAuth(); };
+   474→   474→
+   475→   475→  const formatCountdown = (s: number) => {
+   476→   476→    const min = Math.floor(s / 60);
+   477→   477→    const sec = s % 60;
+   478→   478→    return `${min}:${sec.toString().padStart(2, '0')}`;
+   479→   479→  };
+   480→   480→
+   481→   481→  // Driver step labels
+   482→   482→  const driverStepLabels = ['موبایل', 'کد تأیید', 'شاهکار', 'اطلاعات', 'خودرو'];
+   483→   483→  const getDriverStepIndex = () => {
+   484→   484→    switch (driverSubStep) {
+   485→   485→      case 'shahkar': return 2;
+   486→   486→      case 'info': return 3;
+   487→   487→      case 'vehicle': return 4;
+   488→   488→      default: return 2;
+   489→   489→    }
+   490→   490→  };
+   491→   491→
+   492→   492→  return (
+   493→   493→    <Dialog open={auth.isOpen} onOpenChange={(val) => { if (!val) resetAndClose(); }}>
+   494→   494→      <DialogContent className="bg-[#1a1a1a] border-[#333] max-w-md max-h-[85vh] overflow-y-auto">
+   495→   495→        <DialogHeader>
+   496→   496→          <DialogTitle className="text-right text-[#fafafa]">
+   497→   497→            {step === 'success'
+   498→   498→              ? 'خوش آمدید!'
+   499→   499→              : step === 'register' && registerMode === 'driver' && driverSubStep === 'vehicle'
+   500→   500→                ? 'اطلاعات خودرو'
+   501→   501→              : step === 'register' && registerMode === 'driver' && driverSubStep === 'info'
+   502→   502→                ? 'اطلاعات شخصی راننده'
+   503→   503→              : step === 'register' && registerMode === 'driver' && driverSubStep === 'shahkar'
+   504→   504→                ? 'تأیید شاهکار'
+   505→   505→                : step === 'register'
+   506→   506→                  ? 'تکمیل ثبت‌نام'
+   507→   507→                : step === 'code'
+   508→   508→                  ? 'تأیید شماره موبایل'
+   509→   509→                  : legacyMode
+   510→   510→                    ? 'ورود با نام کاربری'
+   511→   511→                    : 'ورود / ثبت‌نام'}
+   512→   512→          </DialogTitle>
+   513→   513→          <DialogDescription className="text-right text-[#a1a1aa]">
+   514→   514→            {step === 'success' && 'حساب شما با موفقیت تأیید شد'}
+   515→   515→            {step === 'register' && registerMode === 'driver' && driverSubStep === 'select-type' && 'نوع حساب کاربری خود را انتخاب کنید'}
+   516→   516→            {step === 'register' && registerMode === 'driver' && driverSubStep === 'shahkar' && 'تأیید هویت شاهکار — تطبیق کد ملی با شماره موبایل'}
+   517→   517→            {step === 'register' && registerMode === 'driver' && driverSubStep === 'info' && 'اطلاعات شخصی راننده'}
+   518→   518→            {step === 'register' && registerMode === 'driver' && driverSubStep === 'vehicle' && 'اطلاعات خودرو'}
+   519→   519→            {step === 'register' && registerMode === 'passenger' && 'برای تکمیل ثبت‌نام، نام خود را وارد کنید'}
+   520→   520→            {step === 'code' && `کد تأیید ارسال شده به ${auth.phone} را وارد کنید`}
+   521→   521→            {step === 'phone' && !legacyMode && 'شماره موبایل خود را وارد کنید تا کد تأیید ارسال شود'}
+   522→   522→            {step === 'phone' && legacyMode && 'نام کاربری و رمز عبور خود را وارد کنید'}
+   523→   523→          </DialogDescription>
+   524→   524→        </DialogHeader>
+   525→   525→
+   526→   526→        <div className="mt-2">
+   527→   527→          <AnimatePresence mode="wait">
+   528→   528→            {/* ─── Success State ─────────────────────────── */}
+   529→   529→            {step === 'success' && (
+   530→   530→              <motion.div
+   531→   531→                key="success"
+   532→   532→                initial={{ opacity: 0, scale: 0.9 }}
+   533→   533→                animate={{ opacity: 1, scale: 1 }}
+   534→   534→                className="text-center py-6 space-y-4"
+   535→   535→              >
+   536→   536→                <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
+   537→   537→                  {registerMode === 'driver' ? (
+   538→   538→                    <BadgeCheck className="h-8 w-8 text-green-400" />
+   539→   539→                  ) : (
+   540→   540→                    <Check className="h-8 w-8 text-green-400" />
+   541→   541→                  )}
+   542→   542→                </div>
+   543→   543→                <p className="text-[#fafafa] font-medium">
+   544→   544→                  {registerMode === 'driver'
+   545→   545→                    ? 'درخواست ثبت‌نام راننده شما ثبت شد'
+   546→   546→                    : auth.user?.fullName
+   547→   547→                      ? `${auth.user.fullName} عزیز، خوش آمدید!`
+   548→   548→                      : 'خوش آمدید!'}
+   549→   549→                </p>
+   550→   550→                {registerMode === 'driver' && (
+   551→   551→                  <p className="text-[#a1a1aa] text-xs">پس از بررسی اطلاعات، نتیجه از طریق پیامک اطلاع‌رسانی خواهد شد</p>
+   552→   552→                )}
+   553→   553→                <Button onClick={resetAndClose} className="bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B]">
+   554→   554→                  بستن
+   555→   555→                </Button>
+   556→   556→              </motion.div>
+   557→   557→            )}
+   558→   558→
+   559→   559→            {/* ─── Phone Entry ───────────────────────────── */}
+   560→   560→            {step === 'phone' && !legacyMode && (
+   561→   561→              <motion.div
+   562→   562→                key="phone"
+   563→   563→                initial={{ opacity: 0, x: -20 }}
+   564→   564→                animate={{ opacity: 1, x: 0 }}
+   565→   565→                exit={{ opacity: 0, x: 20 }}
+   566→   566→                className="space-y-4"
+   567→   567→              >
+   568→   568→                <div className="flex justify-center">
+   569→   569→                  <div className="w-16 h-16 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   570→   570→                    <Smartphone className="h-8 w-8 text-[#D4AF37]" />
+   571→   571→                  </div>
+   572→   572→                </div>
+   573→   573→
+   574→   574→                <div className="space-y-2">
+   575→   575→                  <Label className="text-[#fafafa] text-sm">
+   576→   576→                    <Phone className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />
+   577→   577→                    شماره موبایل
+   578→   578→                  </Label>
+   579→   579→                  <Input
+   580→   580→                    ref={inputRef}
+   581→   581→                    type="tel"
+   582→   582→                    placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+   583→   583→                    value={auth.phone}
+   584→   584→                    onChange={(e) => { setAuthPhone(e.target.value.replace(/[^0-9]/g, '')); setLocalError(''); }}
+   585→   585→                    onKeyDown={(e) => e.key === 'Enter' && handleSendOTP()}
+   586→   586→                    className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12 text-lg tracking-wider"
+   587→   587→                    dir="ltr"
+   588→   588→                    autoFocus
+   589→   589→                    maxLength={11}
+   590→   590→                  />
+   591→   591→                  <p className="text-[10px] text-[#666]">کد تأیید به این شماره ارسال می‌شود</p>
+   592→   592→                </div>
+   593→   593→
+   594→   594→                {localError && <ErrorBox msg={localError} />}
+   595→   595→
+   596→   596→                <Button
+   597→   597→                  onClick={handleSendOTP}
+   598→   598→                  disabled={loading || auth.phone.length !== 11}
+   599→   599→                  className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium"
+   600→   600→                >
+   601→   601→                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Fingerprint className="h-4 w-4 ml-2" />ارسال کد تأیید</>}
+   602→   602→                </Button>
+   603→   603→
+   604→   604→                <div className="text-center text-xs text-[#a1a1aa] pt-1">
+   605→   605→                  ورود با نام کاربری؟{' '}
+   606→   606→                  <button type="button" onClick={() => { setLegacyMode(true); setLocalError(''); }} className="text-[#D4AF37] hover:text-[#E5C76B] font-medium underline-offset-2 hover:underline">کلیک کنید</button>
+   607→   607→                </div>
+   608→   608→              </motion.div>
+   609→   609→            )}
+   610→   610→
+   611→   611→            {/* ─── OTP Code Entry ─────────────────────────── */}
+   612→   612→            {step === 'code' && (
+   613→   613→              <motion.div
+   614→   614→                key="code"
+   615→   615→                initial={{ opacity: 0, x: 20 }}
+   616→   616→                animate={{ opacity: 1, x: 0 }}
+   617→   617→                exit={{ opacity: 0, x: -20 }}
+   618→   618→                className="space-y-4"
+   619→   619→              >
+   620→   620→                <div className="flex justify-center">
+   621→   621→                  <div className="w-16 h-16 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   622→   622→                    <KeyRound className="h-8 w-8 text-[#D4AF37]" />
+   623→   623→                  </div>
+   624→   624→                </div>
+   625→   625→
+   626→   626→                <div className="flex flex-col items-center gap-3">
+   627→   627→                  <Label className="text-[#fafafa] text-sm text-center">کد تأیید ۶ رقمی</Label>
+   628→   628→                  <InputOTP maxLength={6} onComplete={(code) => handleVerifyOTP(code)} disabled={loading} containerClassName="justify-center" dir="ltr">
+   629→   629→                    <InputOTPGroup>
+   630→   630→                      <InputOTPSlot index={0} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   631→   631→                      <InputOTPSlot index={1} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   632→   632→                      <InputOTPSlot index={2} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   633→   633→                    </InputOTPGroup>
+   634→   634→                    <InputOTPSeparator className="text-[#666]" />
+   635→   635→                    <InputOTPGroup>
+   636→   636→                      <InputOTPSlot index={3} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   637→   637→                      <InputOTPSlot index={4} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   638→   638→                      <InputOTPSlot index={5} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] h-12 w-12" />
+   639→   639→                    </InputOTPGroup>
+   640→   640→                  </InputOTP>
+   641→   641→
+   642→   642→                  {isDemo && demoOtp && (
+   643→   643→                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-2 text-center">
+   644→   644→                      <p className="text-amber-400 text-xs mb-1">حالت آزمایشی — کد تأیید:</p>
+   645→   645→                      <p className="text-amber-300 font-mono text-lg tracking-widest font-bold">{demoOtp}</p>
+   646→   646→                    </div>
+   647→   647→                  )}
+   648→   648→
+   649→   649→                  <div className="flex items-center gap-2 text-xs">
+   650→   650→                    {countdown > 0 ? (
+   651→   651→                      <><Timer className="h-3 w-3 text-[#a1a1aa]" /><span className="text-[#a1a1aa]">ارسال مجدد تا {formatCountdown(countdown)}</span></>
+   652→   652→                    ) : (
+   653→   653→                      <button type="button" onClick={handleSendOTP} disabled={loading} className="text-[#D4AF37] hover:text-[#E5C76B] font-medium">ارسال مجدد کد تأیید</button>
+   654→   654→                    )}
+   655→   655→                  </div>
+   656→   656→                </div>
+   657→   657→
+   658→   658→                {localError && <ErrorBox msg={localError} />}
+   659→   659→                {loading && <div className="flex items-center justify-center gap-2 text-sm text-[#a1a1aa]"><Loader2 className="h-4 w-4 animate-spin text-[#D4AF37]" />در حال تأیید...</div>}
+   660→   660→
+   661→   661→                <Button variant="ghost" size="sm" onClick={() => { setStep('phone'); setLocalError(''); }} className="w-full text-[#a1a1aa] hover:text-[#fafafa]">
+   662→   662→                  <ArrowLeft className="h-4 w-4 ml-1" />تغییر شماره موبایل
+   663→   663→                </Button>
+   664→   664→              </motion.div>
+   665→   665→            )}
+   666→   666→
+   667→   667→            {/* ─── Registration: Select Type (New User) ────── */}
+   668→   668→            {step === 'register' && driverSubStep === 'select-type' && (
+   669→   669→              <motion.div
+   670→   670→                key="select-type"
+   671→   671→                initial={{ opacity: 0, x: 20 }}
+   672→   672→                animate={{ opacity: 1, x: 0 }}
+   673→   673→                exit={{ opacity: 0, x: -20 }}
+   674→   674→                className="space-y-4"
+   675→   675→              >
+   676→   676→                <div className="flex justify-center">
+   677→   677→                  <div className="w-16 h-16 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   678→   678→                    <UserPlus className="h-8 w-8 text-[#D4AF37]" />
+   679→   679→                  </div>
+   680→   680→                </div>
+   681→   681→
+   682→   682→                <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-xl text-sm">
+   683→   683→                  <Check className="h-4 w-4 text-green-400 shrink-0" />
+   684→   684→                  <span className="text-green-300">شماره موبایل {auth.phone} تأیید شد</span>
+   685→   685→                </div>
+   686→   686→
+   687→   687→                <p className="text-[#a1a1aa] text-sm text-center">نوع حساب کاربری خود را انتخاب کنید</p>
+   688→   688→
+   689→   689→                <div className="grid grid-cols-2 gap-3">
+   690→   690→                  {/* Passenger */}
+   691→   691→                  <button
+   692→   692→                    type="button"
+   693→   693→                    onClick={() => handleSelectRegisterMode('passenger')}
+   694→   694→                    className={`p-4 rounded-xl border text-center transition-all ${
+   695→   695→                      registerMode === 'passenger'
+   696→   696→                        ? 'bg-[#D4AF37]/20 border-[#D4AF37] text-[#D4AF37]'
+   697→   697→                        : 'bg-[#0a0a0a] border-[#333] text-[#a1a1aa] hover:border-[#555] hover:text-[#fafafa]'
+   698→   698→                    }`}
+   699→   699→                  >
+   700→   700→                    <User className="h-8 w-8 mx-auto mb-2" />
+   701→   701→                    <span className="text-sm font-medium block">مسافر</span>
+   702→   702→                    <span className="text-[10px] block mt-1 opacity-70">ثبت‌نام سریع</span>
+   703→   703→                  </button>
+   704→   704→
+   705→   705→                  {/* Driver */}
+   706→   706→                  <button
+   707→   707→                    type="button"
+   708→   708→                    onClick={() => handleSelectRegisterMode('driver')}
+   709→   709→                    className={`p-4 rounded-xl border text-center transition-all ${
+   710→   710→                      registerMode === 'driver'
+   711→   711→                        ? 'bg-[#D4AF37]/20 border-[#D4AF37] text-[#D4AF37]'
+   712→   712→                        : 'bg-[#0a0a0a] border-[#333] text-[#a1a1aa] hover:border-[#555] hover:text-[#fafafa]'
+   713→   713→                    }`}
+   714→   714→                  >
+   715→   715→                    <Car className="h-8 w-8 mx-auto mb-2" />
+   716→   716→                    <span className="text-sm font-medium block">راننده</span>
+   717→   717→                    <span className="text-[10px] block mt-1 opacity-70">ثبت‌نام با احراز هویت</span>
+   718→   718→                  </button>
+   719→   719→                </div>
+   720→   720→
+   721→   721→                {/* Passenger quick register (shown immediately when passenger selected) */}
+   722→   722→                {registerMode === 'passenger' && (
+   723→   723→                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3 pt-2">
+   724→   724→                    <div className="space-y-2">
+   725→   725→                      <Label className="text-[#fafafa] text-sm">
+   726→   726→                        <User className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />
+   727→   727→                        نام و نام خانوادگی
+   728→   728→                      </Label>
+   729→   729→                      <Input
+   730→   730→                        placeholder="مثال: علی رضایی"
+   731→   731→                        value={auth.fullName}
+   732→   732→                        onChange={(e) => { setAuthFullName(e.target.value); setLocalError(''); }}
+   733→   733→                        onKeyDown={(e) => e.key === 'Enter' && handleCompleteRegistration()}
+   734→   734→                        className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12"
+   735→   735→                        autoFocus
+   736→   736→                      />
+   737→   737→                    </div>
+   738→   738→                    {localError && <ErrorBox msg={localError} />}
+   739→   739→                    <Button
+   740→   740→                      onClick={handleCompleteRegistration}
+   741→   741→                      disabled={loading || !auth.fullName.trim() || auth.fullName.trim().length < 2}
+   742→   742→                      className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium"
+   743→   743→                    >
+   744→   744→                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserPlus className="h-4 w-4 ml-2" />تکمیل ثبت‌نام</>}
+   745→   745→                    </Button>
+   746→   746→                  </motion.div>
+   747→   747→                )}
+   748→   748→
+   749→   749→                <Button variant="ghost" size="sm" onClick={() => { setStep('code'); setLocalError(''); }} className="w-full text-[#a1a1aa] hover:text-[#fafafa]">
+   750→   750→                  <ArrowLeft className="h-4 w-4 ml-1" />بازگشت
+   751→   751→                </Button>
+   752→   752→              </motion.div>
+   753→   753→            )}
+   754→   754→
+   755→   755→            {/* ─── Driver: Shahkar Verification ─────────────── */}
+   756→   756→            {step === 'register' && registerMode === 'driver' && driverSubStep === 'shahkar' && (
+   757→   757→              <motion.div
+   758→   758→                key="driver-shahkar"
+   759→   759→                initial={{ opacity: 0, x: 20 }}
+   760→   760→                animate={{ opacity: 1, x: 0 }}
+   761→   761→                exit={{ opacity: 0, x: -20 }}
+   762→   762→                className="space-y-4"
+   763→   763→              >
+   764→   764→                <div className="flex justify-center">
+   765→   765→                  <div className="w-14 h-14 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   766→   766→                    <IdCard className="h-7 w-7 text-[#D4AF37]" />
+   767→   767→                  </div>
+   768→   768→                </div>
+   769→   769→
+   770→   770→                <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-xl text-sm">
+   771→   771→                  <Check className="h-4 w-4 text-green-400 shrink-0" />
+   772→   772→                  <span className="text-green-300">شماره موبایل <span className="font-bold">{auth.phone}</span> تأیید شد</span>
+   773→   773→                </div>
+   774→   774→
+   775→   775→                <div className="space-y-3">
+   776→   776→                  <div className="space-y-1">
+   777→   777→                    <Label className="text-[#fafafa] text-xs">کد ملی (۱۰ رقم) *</Label>
+   778→   778→                    <Input type="text" placeholder="کد ملی ۱۰ رقمی" value={nationalId} onChange={(e) => { setNationalId(e.target.value.replace(/[^0-9]/g, '')); setLocalError(''); }} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" dir="ltr" maxLength={10} autoFocus />
+   779→   779→                  </div>
+   780→   780→                  <div className="space-y-1">
+   781→   781→                    <Label className="text-[#fafafa] text-xs">تاریخ تولد شمسی (اختیاری)</Label>
+   782→   782→                    <Input type="text" placeholder="مثال: ۱۳۷۰/۰۱/۰۱" value={birthDate} onChange={(e) => { setBirthDate(e.target.value); setLocalError(''); }} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" dir="ltr" />
+   783→   783→                  </div>
+   784→   784→                </div>
+   785→   785→
+   786→   786→                {localError && <ErrorBox msg={localError} />}
+   787→   787→                <Button onClick={handleShahkarVerify} disabled={loading || nationalId.length !== 10} className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium">
+   788→   788→                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Shield className="h-4 w-4 ml-2" />تأیید شاهکار</>}
+   789→   789→                </Button>
+   790→   790→                <Button variant="ghost" size="sm" onClick={() => { setDriverSubStep('select-type'); setRegisterMode('passenger'); setLocalError(''); }} className="w-full text-[#a1a1aa] hover:text-[#fafafa]">
+   791→   791→                  <ArrowLeft className="h-4 w-4 ml-1" />بازگشت
+   792→   792→                </Button>
+   793→   793→                <StepIndicator current={getDriverStepIndex()} steps={driverStepLabels} />
+   794→   794→              </motion.div>
+   795→   795→            )}
+   796→   796→
+   797→   797→            {/* ─── Driver: Personal Info ───────────────────── */}
+   798→   798→            {step === 'register' && registerMode === 'driver' && driverSubStep === 'info' && (
+   799→   799→              <motion.div
+   800→   800→                key="driver-info"
+   801→   801→                initial={{ opacity: 0, x: 20 }}
+   802→   802→                animate={{ opacity: 1, x: 0 }}
+   803→   803→                exit={{ opacity: 0, x: -20 }}
+   804→   804→                className="space-y-4"
+   805→   805→              >
+   806→   806→                <div className="flex justify-center">
+   807→   807→                  <div className="w-14 h-14 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   808→   808→                    <UserCheck className="h-7 w-7 text-[#D4AF37]" />
+   809→   809→                  </div>
+   810→   810→                </div>
+   811→   811→
+   812→   812→                <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-xl text-sm">
+   813→   813→                  <Check className="h-4 w-4 text-green-400 shrink-0" />
+   814→   814→                  <span className="text-green-300">تأیید هویت شاهکار انجام شد</span>
+   815→   815→                </div>
+   816→   816→
+   817→   817→                <div className="grid grid-cols-1 gap-3">
+   818→   818→                  <div className="space-y-1">
+   819→   819→                    <Label className="text-[#fafafa] text-xs">نام و نام خانوادگی *</Label>
+   820→   820→                    <Input placeholder="نام کامل" value={auth.fullName} onChange={(e) => { setAuthFullName(e.target.value); setLocalError(''); }} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" autoFocus />
+   821→   821→                  </div>
+   822→   822→                  <div className="space-y-1">
+   823→   823→                    <Label className="text-[#fafafa] text-xs">نام پدر</Label>
+   824→   824→                    <Input placeholder="نام پدر" value={fatherName} onChange={(e) => setFatherName(e.target.value)} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" />
+   825→   825→                  </div>
+   826→   826→                  <div className="space-y-1">
+   827→   827→                    <Label className="text-[#fafafa] text-xs">شماره گواهینامه</Label>
+   828→   828→                    <Input placeholder="شماره گواهینامه رانندگی" value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value.replace(/[^0-9a-zA-Z]/g, ''))} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" dir="ltr" />
+   829→   829→                  </div>
+   830→   830→                  <div className="space-y-1">
+   831→   831→                    <Label className="text-[#fafafa] text-xs">شماره شبا (اختیاری)</Label>
+   832→   832→                    <Input placeholder="IR..." value={shebaNumber} onChange={(e) => setShebaNumber(e.target.value.replace(/[^0-9IR]/g, ''))} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-11" dir="ltr" />
+   833→   833→                  </div>
+   834→   834→                </div>
+   835→   835→
+   836→   836→                {localError && <ErrorBox msg={localError} />}
+   837→   837→                <Button onClick={handleDriverInfoSubmit} disabled={loading || !auth.fullName.trim()} className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium">
+   838→   838→                  مرحله بعد — اطلاعات خودرو
+   839→   839→                </Button>
+   840→   840→                <Button variant="ghost" size="sm" onClick={() => { setDriverSubStep('shahkar'); setLocalError(''); }} className="w-full text-[#a1a1aa] hover:text-[#fafafa]">
+   841→   841→                  <ArrowLeft className="h-4 w-4 ml-1" />بازگشت
+   842→   842→                </Button>
+   843→   843→                <StepIndicator current={getDriverStepIndex()} steps={driverStepLabels} />
+   844→   844→              </motion.div>
+   845→   845→            )}
+   846→   846→
+   847→   847→            {/* ─── Driver: Vehicle Info ────────────────────── */}
+   848→   848→            {step === 'register' && registerMode === 'driver' && driverSubStep === 'vehicle' && (
+   849→   849→              <motion.div
+   850→   850→                key="driver-vehicle"
+   851→   851→                initial={{ opacity: 0, x: 20 }}
+   852→   852→                animate={{ opacity: 1, x: 0 }}
+   853→   853→                exit={{ opacity: 0, x: -20 }}
+   854→   854→                className="space-y-4"
+   855→   855→              >
+   856→   856→                <div className="flex justify-center">
+   857→   857→                  <div className="w-14 h-14 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   858→   858→                    <Car className="h-7 w-7 text-[#D4AF37]" />
+   859→   859→                  </div>
+   860→   860→                </div>
+   861→   861→
+   862→   862→                <div className="space-y-1">
+   863→   863→                  <Label className="text-[#fafafa] text-xs">نوع خودرو</Label>
+   864→   864→                  <div className="grid grid-cols-4 gap-2">
+   865→   865→                    {[
+   866→   866→                      { value: 'sedan', label: 'سدان' },
+   867→   867→                      { value: 'suv', label: 'شاسی‌بلند' },
+   868→   868→                      { value: 'van', label: 'ون' },
+   869→   869→                      { value: 'electric', label: 'برقی' },
+   870→   870→                    ].map((vt) => (
+   871→   871→                      <button
+   872→   872→                        key={vt.value}
+   873→   873→                        type="button"
+   874→   874→                        onClick={() => setVehicleType(vt.value)}
+   875→   875→                        className={`p-2 rounded-lg border text-xs text-center transition-all ${
+   876→   876→                          vehicleType === vt.value
+   877→   877→                            ? 'bg-[#D4AF37]/20 border-[#D4AF37] text-[#D4AF37]'
+   878→   878→                            : 'bg-[#0a0a0a] border-[#333] text-[#a1a1aa] hover:border-[#555]'
+   879→   879→                        }`}
+   880→   880→                      >
+   881→   881→                        {vt.label}
+   882→   882→                      </button>
+   883→   883→                    ))}
+   884→   884→                  </div>
+   885→   885→                </div>
+   886→   886→
+   887→   887→                <div className="grid grid-cols-2 gap-3">
+   888→   888→                  <div className="space-y-1">
+   889→   889→                    <Label className="text-[#fafafa] text-xs">مارک *</Label>
+   890→   890→                    <Input placeholder="مثال: پژو" value={vehicleBrand} onChange={(e) => { setVehicleBrand(e.target.value); setLocalError(''); }} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-10" />
+   891→   891→                  </div>
+   892→   892→                  <div className="space-y-1">
+   893→   893→                    <Label className="text-[#fafafa] text-xs">مدل *</Label>
+   894→   894→                    <Input placeholder="مثال: ۲۰۶" value={vehicleModel} onChange={(e) => { setVehicleModel(e.target.value); setLocalError(''); }} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-10" />
+   895→   895→                  </div>
+   896→   896→                  <div className="space-y-1">
+   897→   897→                    <Label className="text-[#fafafa] text-xs">سال *</Label>
+   898→   898→                    <Input type="text" placeholder="مثال: ۱۴۰۲" value={vehicleYear} onChange={(e) => setVehicleYear(e.target.value)} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-10" dir="ltr" />
+   899→   899→                  </div>
+   900→   900→                  <div className="space-y-1">
+   901→   901→                    <Label className="text-[#fafafa] text-xs">رنگ</Label>
+   902→   902→                    <Input placeholder="مثال: سفید" value={vehicleColor} onChange={(e) => setVehicleColor(e.target.value)} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-10" />
+   903→   903→                  </div>
+   904→   904→                </div>
+   905→   905→                <div className="space-y-1">
+   906→   906→                  <Label className="text-[#fafafa] text-xs">پلاک *</Label>
+   907→   907→                  <Input placeholder="شماره پلاک" value={plateNumber} onChange={(e) => { setPlateNumber(e.target.value); setLocalError(''); }} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-10" dir="ltr" />
+   908→   908→                </div>
+   909→   909→
+   910→   910→                {localError && <ErrorBox msg={localError} />}
+   911→   911→                <Button onClick={handleDriverSubmit} disabled={loading || !vehicleBrand || !vehicleModel || !vehicleYear || !plateNumber} className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium">
+   912→   912→                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="h-4 w-4 ml-2" />ثبت درخواست راننده</>}
+   913→   913→                </Button>
+   914→   914→                <Button variant="ghost" size="sm" onClick={() => { setDriverSubStep('info'); setLocalError(''); }} className="w-full text-[#a1a1aa] hover:text-[#fafafa]">
+   915→   915→                  <ArrowLeft className="h-4 w-4 ml-1" />بازگشت
+   916→   916→                </Button>
+   917→   917→                <StepIndicator current={getDriverStepIndex()} steps={driverStepLabels} />
+   918→   918→              </motion.div>
+   919→   919→            )}
+   920→   920→
+   921→   921→            {/* ─── Legacy Username Login ───────────────────── */}
+   922→   922→            {step === 'phone' && legacyMode && (
+   923→   923→              <motion.div
+   924→   924→                key="legacy"
+   925→   925→                initial={{ opacity: 0, x: 20 }}
+   926→   926→                animate={{ opacity: 1, x: 0 }}
+   927→   927→                exit={{ opacity: 0, x: -20 }}
+   928→   928→                className="space-y-4"
+   929→   929→              >
+   930→   930→                <div className="flex justify-center">
+   931→   931→                  <div className="w-16 h-16 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   932→   932→                    <Shield className="h-8 w-8 text-[#D4AF37]" />
+   933→   933→                  </div>
+   934→   934→                </div>
+   935→   935→
+   936→   936→                <div className="space-y-2">
+   937→   937→                  <Label className="text-[#fafafa] text-sm"><User className="h-3.5 w-3.5 ml-1.5 text-[#D4AF37] inline" />نام کاربری</Label>
+   938→   938→                  <Input placeholder="نام کاربری" value={auth.username} onChange={(e) => { setAuthUsername(e.target.value); setLocalError(''); }} onKeyDown={(e) => e.key === 'Enter' && handleLegacyLogin()} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12" dir="ltr" autoFocus />
+   939→   939→                </div>
+   940→   940→                <div className="space-y-2">
+   941→   941→                  <Label className="text-[#fafafa] text-sm">رمز عبور</Label>
+   942→   942→                  <div className="relative">
+   943→   943→                    <Input type={showPass ? 'text' : 'password'} placeholder="رمز عبور" value={auth.password} onChange={(e) => { setAuthPassword(e.target.value); setLocalError(''); }} onKeyDown={(e) => e.key === 'Enter' && handleLegacyLogin()} className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#888] h-12" dir="ltr" />
+   944→   944→                    <button type="button" onClick={() => setShowPass(!showPass)} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1aa] hover:text-[#fafafa]">
+   945→   945→                      {showPass ? <Check className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+   946→   946→                    </button>
+   947→   947→                  </div>
+   948→   948→                </div>
+   949→   949→
+   950→   950→                {localError && <ErrorBox msg={localError} />}
+   951→   951→
+   952→   952→                <Button onClick={handleLegacyLogin} disabled={loading || !auth.username || !auth.password} className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-medium">
+   953→   953→                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><LogIn className="h-4 w-4 ml-2" />ورود به حساب</>}
+   954→   954→                </Button>
+   955→   955→
+   956→   956→                <div className="text-center text-xs text-[#a1a1aa] pt-1">
+   957→   957→                  ورود با شماره موبایل؟{' '}
+   958→   958→                  <button type="button" onClick={() => { setLegacyMode(false); setLocalError(''); }} className="text-[#D4AF37] hover:text-[#E5C76B] font-medium underline-offset-2 hover:underline">کلیک کنید</button>
+   959→   959→                </div>
+   960→   960→              </motion.div>
+   961→   961→            )}
+   962→   962→          </AnimatePresence>
+   963→   963→        </div>
+   964→   964→      </DialogContent>
+   965→   965→    </Dialog>
+   966→   966→  );
+   967→   967→}
+   968→   968→
+   969→   969→// ─── Sub-components ─────────────────────────────────────────────
+   970→   970→
+   971→   971→function ErrorBox({ msg }: { msg: string }) {
+   972→   972→  return (
+   973→   973→    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+   974→   974→      <AlertTriangle className="h-4 w-4 shrink-0" />
+   975→   975→      {msg}
+   976→   976→    </motion.div>
+   977→   977→  );
+   978→   978→}
+   979→   979→
+   980→   980→function StepIndicator({ current, steps }: { current: number; steps: string[] }) {
+   981→   981→  return (
+   982→   982→    <div className="flex items-center justify-center gap-1.5 pt-2">
+   983→   983→      {steps.map((label, i) => (
+   984→   984→        <div key={i} className="flex items-center gap-1.5">
+   985→   985→          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+   986→   986→            i < current ? 'bg-green-500 text-white' :
+   987→   987→            i === current ? 'bg-[#D4AF37] text-[#0a0a0a]' :
+   988→   988→            'bg-[#2d2d2d] text-[#666]'
+   989→   989→          }`}>
+   990→   990→            {i < current ? <Check className="h-3 w-3" /> : i + 1}
+   991→   991→          </div>
+   992→   992→          {i < steps.length - 1 && <div className={`w-3 h-px ${i < current ? 'bg-green-500' : 'bg-[#333]'}`} />}
+   993→   993→        </div>
+   994→   994→      ))}
+   995→   995→    </div>
+   996→   996→  );
+   997→   997→}
+   998→   998→

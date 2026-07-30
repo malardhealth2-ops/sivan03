@@ -366,7 +366,6 @@ function RideRequestButtons({
       distanceKm: selectedRoute.distanceKm || null,
       durationMin: selectedRoute.durationMin || null,
       fullName: auth.user?.fullName || '',
-      phone: auth.user?.username?.startsWith('driver_') ? '' : auth.phone || '',
     });
 
     setBookingLoading(true);
