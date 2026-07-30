@@ -48,7 +48,7 @@ type RouteResponse = {
   totalRoutes: number;
   directDistanceKm?: number;
   distanceSource?: 'road' | 'direct';
-  pricing?: Record<string, { price: number; ratePerKm: number }>;
+  pricing?: Record<number, Record<string, { price: number; ratePerKm: number }>>;
   minFare?: number;
 };
 
@@ -333,13 +333,18 @@ function RideRequestButtons({
   origin,
   destination,
   routeData,
+  activeRouteIndex,
 }: {
   origin: MapPoint | null;
   destination: MapPoint | null;
   routeData: RouteResponse;
+  activeRouteIndex: number;
 }) {
   const { updateBookingForm, setBookingStep, openAuth, openDriverRegister, auth } = useAppStore();
   const [bookingLoading, setBookingLoading] = useState(false);
+
+  // Use the selected (active) route's distance and duration
+  const selectedRoute = routeData.routes[activeRouteIndex] || routeData.routes[0];
 
   const handleBookRide = () => {
     // Pre-fill booking form with map data
@@ -358,8 +363,8 @@ function RideRequestButtons({
       originLng: origin?.lng,
       destLat: destination?.lat,
       destLng: destination?.lng,
-      distanceKm: routeData.routes[0]?.distanceKm || null,
-      durationMin: routeData.routes[0]?.durationMin || null,
+      distanceKm: selectedRoute.distanceKm || null,
+      durationMin: selectedRoute.durationMin || null,
       fullName: auth.user?.fullName || '',
       phone: auth.user?.username?.startsWith('driver_') ? '' : auth.phone || '',
     });
@@ -486,7 +491,7 @@ export default function InteractiveMapInner() {
         }
         setDestination({ lat, lng });
         setSelectionStep('ready');
-        identifyPlace(lat, lng, 'destination');
+        identifyPlace(lat, lng, 'dest');
       } else {
         clearSelection();
       }
@@ -903,7 +908,7 @@ export default function InteractiveMapInner() {
               className="w-full h-[500px] sm:h-[600px] lg:h-[650px]"
               zoomControl={true}
               attributionControl={false}
-              whenReady={(mapInstance) => {
+              whenReady={(mapInstance: any) => {
                 // Force recalculate size once map is ready
                 setTimeout(() => {
                   mapInstance.target.invalidateSize();
@@ -938,22 +943,25 @@ export default function InteractiveMapInner() {
               )}
 
               {/* Route Polylines */}
-              {routePolylines.map((path, index) => (
-                <Polyline
-                  key={`route-${index}-${path.length}`}
-                  positions={path as L.LatLngExpression[]}
-                  pane="overlayPane"
-                  pathOptions={{
-                    color: ROUTE_COLORS[index] || '#666',
-                    weight: index === 0 ? 5 : (index === activeRoute ? 4 : 3),
-                    opacity: index === 0 ? 1 : (index === activeRoute ? 0.8 : 0.45),
-                    dashArray: index === 0 ? undefined : '8, 8',
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                    className: 'sivan-route-polyline',
-                  }}
-                />
-              ))}
+              {routePolylines.map((path, index) => {
+                const isActive = index === activeRoute;
+                return (
+                  <Polyline
+                    key={`route-${index}-${path.length}`}
+                    positions={path as L.LatLngExpression[]}
+                    pane="overlayPane"
+                    pathOptions={{
+                      color: ROUTE_COLORS[index] || '#666',
+                      weight: isActive ? 5 : 3,
+                      opacity: isActive ? 1 : 0.45,
+                      dashArray: isActive ? undefined : '8, 8',
+                      lineCap: 'round',
+                      lineJoin: 'round',
+                      className: 'sivan-route-polyline',
+                    }}
+                  />
+                );
+              })}
             </MapContainer>
 
             {/* Loading Overlay */}
@@ -1054,15 +1062,20 @@ export default function InteractiveMapInner() {
                     </div>
                   </div>
 
-                  {/* Pricing by Trip Type */}
-                  {routeData.pricing && (
+                  {/* Pricing by Trip Type — uses activeRoute's pricing */}
+                  {routeData.pricing && routeData.pricing[activeRoute] && (
                     <div className="mb-4">
                       <div className="text-xs text-[#a1a1aa] mb-2 flex items-center gap-1">
                         <span>💰</span>
                         تعرفه کرایه بر اساس نوع سفر
+                        {routeData.routes.length > 1 && (
+                          <Badge className="mr-2 text-[10px] py-0" style={{ backgroundColor: `${ROUTE_COLORS[activeRoute]}20`, color: ROUTE_COLORS[activeRoute], borderColor: `${ROUTE_COLORS[activeRoute]}40` }}>
+                            {ROUTE_LABELS[activeRoute]}
+                          </Badge>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                        {Object.entries(routeData.pricing).map(([type, info]) => (
+                        {Object.entries(routeData.pricing[activeRoute]).map(([type, info]) => (
                           <div
                             key={type}
                             className={`p-2.5 rounded-xl border text-center transition-all ${
@@ -1121,6 +1134,7 @@ export default function InteractiveMapInner() {
                     origin={origin}
                     destination={destination}
                     routeData={routeData}
+                    activeRouteIndex={activeRoute}
                   />
                 </div>
               </motion.div>

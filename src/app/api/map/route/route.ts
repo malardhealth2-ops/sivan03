@@ -114,8 +114,8 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 
 // OSRM server list for redundancy (base URLs – /route/v1/driving/ is appended)
 const OSRM_SERVERS = [
-  'https://router.project-osrm.org',
   'https://routing.openstreetmap.de/routed-car',
+  'https://router.project-osrm.org',
 ];
 
 // Fetch route from OSRM with retry across multiple servers
@@ -126,21 +126,22 @@ async function fetchOSRMRoute(
   destLng: number
 ): Promise<Response | null> {
   const maxRetries = 2;
-  const baseDelay = 400;
+  const baseDelay = 500;
+  const ALTS_TIMEOUT = 25000; // alternatives take longer to compute
+  const NO_ALTS_TIMEOUT = 15000;
 
   for (const server of OSRM_SERVERS) {
-    // Try with alternatives first
+    // Try with alternatives first (longer timeout since it's more compute-intensive)
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        const urlWithAlts = `${server}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson&alternatives=true`;
+        const urlWithAlts = `${server}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson&alternatives=true&number=3`;
         console.log(`[Route] OSRM attempt: ${server} (try ${attempt + 1})`);
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
+        const timeout = setTimeout(() => controller.abort(), ALTS_TIMEOUT);
         const res = await fetch(urlWithAlts, {
           signal: controller.signal,
           headers: {
             'User-Agent': 'SivanVIPTaxi/1.0',
-            'Accept-Encoding': 'gzip, deflate',
           },
         }).finally(() => clearTimeout(timeout));
         if (res.ok) {
@@ -159,17 +160,16 @@ async function fetchOSRMRoute(
       }
     }
 
-    // Try without alternatives (some servers don't support it)
+    // Try without alternatives (faster, as fallback)
     try {
       const urlNoAlts = `${server}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
       console.log(`[Route] OSRM no-alts attempt: ${server}`);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), NO_ALTS_TIMEOUT);
       const res = await fetch(urlNoAlts, {
         signal: controller.signal,
         headers: {
           'User-Agent': 'SivanVIPTaxi/1.0',
-          'Accept-Encoding': 'gzip, deflate',
         },
       }).finally(() => clearTimeout(timeout));
       if (res.ok) {
@@ -298,14 +298,18 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Calculate pricing for all trip types based on distance
-    const usedDistance = result.routes[0].distanceKm as number;
-    const prices: Record<string, { price: number; ratePerKm: number }> = {};
-    for (const type of ['economy', 'vip', 'luxury', 'van', 'electric']) {
-      const fare = calculateFare(pricingConfig, type, usedDistance);
-      prices[type] = { price: fare.price, ratePerKm: fare.ratePerKm };
+    // Calculate pricing for EACH route individually (so alternative routes show different prices)
+    const pricingPerRoute: Record<number, Record<string, { price: number; ratePerKm: number }>> = {};
+    for (let ri = 0; ri < result.routes.length; ri++) {
+      const routeDistance = result.routes[ri].distanceKm as number;
+      const prices: Record<string, { price: number; ratePerKm: number }> = {};
+      for (const type of ['economy', 'vip', 'luxury', 'van', 'electric']) {
+        const fare = calculateFare(pricingConfig, type, routeDistance);
+        prices[type] = { price: fare.price, ratePerKm: fare.ratePerKm };
+      }
+      pricingPerRoute[ri] = prices;
     }
-    result.pricing = prices;
+    result.pricing = pricingPerRoute;
     result.minFare = pricingConfig.minFare;
 
     // Route cache disabled — do NOT cache results

@@ -1502,3 +1502,35 @@ Stage Summary:
 - Fix: Corrected the URL from `routing.openstreetmap.de/routed-car/route/v1` to `routing.openstreetmap.de/routed-car`
 - Result: Road routes now reliably display on the map following actual roads/curves
 - Alternative routes render in gray with dashed lines when OSRM returns multiple routes
+---
+Task ID: 12
+Agent: main
+Task: Make prices change when alternative route is selected
+
+Work Log:
+- Modified `src/app/api/map/route/route.ts`:
+  - Changed pricing calculation from single `routes[0].distanceKm` to per-route pricing loop
+  - `result.pricing` is now `Record<number, Record<string, { price, ratePerKm }>>` keyed by route index
+  - Each route gets its own pricing based on its own distance
+  - Increased OSRM alternatives timeout from 15s to 25s (alternatives are more compute-intensive)
+  - Added `number=3` parameter to OSRM alternatives request
+  - Reordered OSRM servers: German server first (more reliable), project OSRM second
+  - Removed `Accept-Encoding: gzip, deflate` header (was causing issues)
+
+- Modified `src/components/sivan/InteractiveMapInner.tsx`:
+  - Updated `RouteResponse` type: `pricing` is now `Record<number, Record<string, ...>>`
+  - Pricing display section now uses `routeData.pricing[activeRoute]` instead of `routeData.pricing`
+  - Added route label badge next to pricing header when multiple routes exist
+  - Updated `RideRequestButtons` component: added `activeRouteIndex` prop
+  - `RideRequestButtons` now uses the active route's distance/duration (not always routes[0])
+  - Updated polyline rendering: active route is bold solid, others are thin dashed (was: always index 0 bold)
+  - Fixed TS error: `identifyPlace(lat, lng, 'destination')` → `'dest'` (type mismatch)
+  - Fixed TS error: `whenReady` callback typed with `any` parameter
+
+Stage Summary:
+- When OSRM returns multiple routes, selecting an alternative route card now updates:
+  - Price display (each route has its own pricing based on its distance)
+  - Distance/duration in summary bar (already worked via `activeRoute`)
+  - Booking form pre-fill data (now uses active route's distance/duration)
+  - Polyline styling (active route highlighted, others dimmed)
+- OSRM alternatives reliability improved with longer timeout and better server ordering
