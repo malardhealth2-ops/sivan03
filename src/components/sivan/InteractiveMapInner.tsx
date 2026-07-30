@@ -60,22 +60,22 @@ function createOriginIcon(): L.DivIcon {
   return L.divIcon({
     className: '',
     html: `
-      <div class="sivan-marker-wrapper">
-        <div class="sivan-marker-pin sivan-marker-pin-origin">
-          <div class="sivan-marker-pin-head">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:white">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M12 2v4m0 12v4m-10-10h4m12 0h4"/>
-            </svg>
-          </div>
-          <div class="sivan-marker-pin-tail"></div>
-          <div class="sivan-marker-pulse"></div>
-        </div>
+      <div style="position:relative;width:36px;height:48px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="48" viewBox="0 0 36 48" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+          <defs>
+            <linearGradient id="originPinGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#E5C76B"/>
+              <stop offset="100%" stop-color="#B8941F"/>
+            </linearGradient>
+          </defs>
+          <path d="M18 48C18 48 0 30 0 18C0 8 8 0 18 0S36 8 36 18C36 30 18 48 18 48Z" fill="url(#originPinGrad)" stroke="#A07A15" stroke-width="1"/>
+          <circle cx="18" cy="18" r="7" fill="white"/>
+        </svg>
       </div>
     `,
-    iconSize: [44, 56],
-    iconAnchor: [22, 56],
-    tooltipAnchor: [0, -56],
+    iconSize: [36, 48],
+    iconAnchor: [18, 48],
+    tooltipAnchor: [0, -48],
   });
 }
 
@@ -83,22 +83,22 @@ function createDestIcon(): L.DivIcon {
   return L.divIcon({
     className: '',
     html: `
-      <div class="sivan-marker-wrapper">
-        <div class="sivan-marker-pin sivan-marker-pin-dest">
-          <div class="sivan-marker-pin-head">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:white">
-              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
-              <circle cx="12" cy="10" r="3"/>
-            </svg>
-          </div>
-          <div class="sivan-marker-pin-tail"></div>
-          <div class="sivan-marker-pulse"></div>
-        </div>
+      <div style="position:relative;width:36px;height:48px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="48" viewBox="0 0 36 48" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+          <defs>
+            <linearGradient id="destPinGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#F87171"/>
+              <stop offset="100%" stop-color="#DC2626"/>
+            </linearGradient>
+          </defs>
+          <path d="M18 48C18 48 0 30 0 18C0 8 8 0 18 0S36 8 36 18C36 30 18 48 18 48Z" fill="url(#destPinGrad)" stroke="#B91C1C" stroke-width="1"/>
+          <circle cx="18" cy="18" r="7" fill="white"/>
+        </svg>
       </div>
     `,
-    iconSize: [44, 56],
-    iconAnchor: [22, 56],
-    tooltipAnchor: [0, -56],
+    iconSize: [36, 48],
+    iconAnchor: [18, 48],
+    tooltipAnchor: [0, -48],
   });
 }
 

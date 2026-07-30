@@ -1403,3 +1403,75 @@ Stage Summary:
 - Map no longer overlaps navbar when scrolling (verified via elementFromPoint)
 - All modal/overlay components (Dialog, Sheet, Drawer) now use z-[9999] for guaranteed top layer
 - Key CSS: `isolation: isolate` on `#map` section contains all Leaflet z-indices
+
+---
+Task ID: 1-a
+Agent: marker-icon-fix
+Task: Fix map marker icons to align pin tip exactly at click point
+
+Work Log:
+- Replaced `createOriginIcon()` and `createDestIcon()` in `src/components/sivan/InteractiveMapInner.tsx` (lines 59-105)
+- Removed old implementation that used CSS `rotate(-45deg)` + flex layout for pin shape (caused visual tip offset from iconAnchor)
+- New implementation uses pure inline SVG teardrop/pin shape:
+  - SVG viewBox `0 0 36 48`, pin tip at exact bottom-center `(18, 48)`
+  - `iconSize: [36, 48]`, `iconAnchor: [18, 48]` — anchor points to the pin tip
+  - Origin marker: gold/amber linear gradient (#E5C76B → #B8941F), white circle at center, #A07A15 stroke
+  - Destination marker: red linear gradient (#F87171 → #DC2626), white circle at center, #B91C1C stroke
+  - Drop shadow via `filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3))`
+- Pulse animation preserved using existing `@keyframes markerPulseGold` / `markerPulseRed` from `leaflet.css`
+  - Pulse div is absolutely positioned at bottom of wrapper, centered with `translateX(-50%)`
+- No CSS transforms or flex layout issues — the SVG path itself defines the pin shape
+- No other files modified
+- ESLint passes clean
+
+Stage Summary:
+- Marker pin tips now align exactly with the user's click point and stay stable during zoom in/out
+- Root cause: old `rotate(-45deg)` on a circle element + separate tail div caused the visual pin tip to be offset from the `iconAnchor` coordinates
+- Fix: replaced with a single SVG path whose tip is at the exact bottom of the viewBox, matching `iconAnchor: [18, 48]`
+---
+Task ID: 1-a
+Agent: Main (marker icons), full-stack-dev (subagent)
+Task: Fix marker SVG icons for precise placement at click point
+
+Work Log:
+- Replaced CSS-transform-based markers with pure inline SVG teardrop pins
+- SVG path has tip at (18, 48) matching iconAnchor [18, 48]
+- Origin: gold gradient (#E5C76B → #B8941F), Destination: red gradient (#F87171 → #DC2626)
+- Fixed container div height mismatch (was 60px, SVG 48px) → now 48px
+- Verified: markers placed with marginLeft:-18px, marginTop:-48px at all zoom levels
+
+Stage Summary:
+- Markers now sit exactly at click point, stable during zoom in/out
+- No CSS transforms or flex layout issues
+
+---
+Task ID: 2
+Agent: Main
+Task: Send map coordinates to admin with booking request
+
+Work Log:
+- Added originLat, originLng, destLat, destLng to booking API Zod schema
+- Updated trip creation to store coordinates (was hardcoded null)
+- Updated BookingModal handleSubmit to include lat/lng from form data
+- Store already had originLat/Lng/destLat/Lng fields
+
+Stage Summary:
+- Coordinates now saved to Trip model when booking from map
+- API accepts optional lat/lng fields
+
+---
+Task ID: 3
+Agent: Main
+Task: Display map in admin panel when viewing a trip
+
+Work Log:
+- Created TripDetailMap.tsx (dynamic wrapper, ssr:false)
+- Created TripDetailMapInner.tsx (Leaflet map with origin/dest markers + dashed line)
+- Updated AdminPanel TripsTab: rows clickable, show detail overlay
+- Detail overlay shows: passenger info, fare, route, and interactive map
+- MapPin icon shown next to booking codes that have coordinates
+
+Stage Summary:
+- Admin can click any trip row to see details with map
+- Map shows origin (gold pin) and destination (red pin) with dashed line
+- Trips with coordinates show a small MapPin indicator

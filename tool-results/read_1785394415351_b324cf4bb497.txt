@@ -1,0 +1,1082 @@
+    55→type SelectionStep = 'origin' | 'destination' | 'ready';
+    56→
+    57→// ─── Custom Marker Icons ──────────────────────────────────────────────────────
+    58→
+    59→function createOriginIcon(): L.DivIcon {
+    60→  return L.divIcon({
+    61→    className: '',
+    62→    html: `
+    63→      <div style="position:relative;width:36px;height:60px;">
+    64→        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="48" viewBox="0 0 36 48" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+    65→          <defs>
+    66→            <linearGradient id="originPinGrad" x1="0" y1="0" x2="0" y2="1">
+    67→              <stop offset="0%" stop-color="#E5C76B"/>
+    68→              <stop offset="100%" stop-color="#B8941F"/>
+    69→            </linearGradient>
+    70→          </defs>
+    71→          <path d="M18 48C18 48 0 30 0 18C0 8 8 0 18 0S36 8 36 18C36 30 18 48 18 48Z" fill="url(#originPinGrad)" stroke="#A07A15" stroke-width="1"/>
+    72→          <circle cx="18" cy="18" r="7" fill="white"/>
+    73→        </svg>
+    74→        <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:24px;height:24px;border-radius:50%;background:rgba(229,199,107,0.35);animation:markerPulseGold 2s ease-out infinite;"></div>
+    75→      </div>
+    76→    `,
+    77→    iconSize: [36, 48],
+    78→    iconAnchor: [18, 48],
+    79→    tooltipAnchor: [0, -48],
+    80→  });
+    81→}
+    82→
+    83→function createDestIcon(): L.DivIcon {
+    84→  return L.divIcon({
+    85→    className: '',
+    86→    html: `
+    87→      <div style="position:relative;width:36px;height:60px;">
+    88→        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="48" viewBox="0 0 36 48" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+    89→          <defs>
+    90→            <linearGradient id="destPinGrad" x1="0" y1="0" x2="0" y2="1">
+    91→              <stop offset="0%" stop-color="#F87171"/>
+    92→              <stop offset="100%" stop-color="#DC2626"/>
+    93→            </linearGradient>
+    94→          </defs>
+    95→          <path d="M18 48C18 48 0 30 0 18C0 8 8 0 18 0S36 8 36 18C36 30 18 48 18 48Z" fill="url(#destPinGrad)" stroke="#B91C1C" stroke-width="1"/>
+    96→          <circle cx="18" cy="18" r="7" fill="white"/>
+    97→        </svg>
+    98→        <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:24px;height:24px;border-radius:50%;background:rgba(248,113,113,0.35);animation:markerPulseRed 2s ease-out infinite;"></div>
+    99→      </div>
+   100→    `,
+   101→    iconSize: [36, 48],
+   102→    iconAnchor: [18, 48],
+   103→    tooltipAnchor: [0, -48],
+   104→  });
+   105→}
+   106→
+   107→const originIcon = createOriginIcon();
+   108→const destIcon = createDestIcon();
+   109→
+   110→// ─── Route Colors ─────────────────────────────────────────────────────────────
+   111→
+   112→const ROUTE_COLORS = [
+   113→  '#3B82F6',  // Blue - main road
+   114→  '#9CA3AF',  // Light gray - alternative 1
+   115→  '#D1D5DB',  // Lighter gray - alternative 2
+   116→  '#E5E7EB',  // Very light gray - alternative 3
+   117→];
+   118→
+   119→const ROUTE_LABELS = ['مسیر اصلی', 'مسیر جایگزین ۱', 'مسیر جایگزین ۲', 'مسیر جایگزین ۳'];
+   120→
+   121→// ─── Click Handler Component ─────────────────────────────────────────────────
+   122→
+   123→function MapClickHandler({
+   124→  onSelectPoint,
+   125→}: {
+   126→  onSelectPoint: (lat: number, lng: number) => void;
+   127→}) {
+   128→  useMapEvents({
+   129→    click(e) {
+   130→      onSelectPoint(e.latlng.lat, e.latlng.lng);
+   131→    },
+   132→  });
+   133→  return null;
+   134→}
+   135→
+   136→// ─── Fly to Bounds ───────────────────────────────────────────────────────────
+   137→
+   138→// ─── Invalidate Map Size Handler ─────────────────────────────────────────────
+   139→
+   140→function MapInvalidator() {
+   141→  const map = useMap();
+   142→
+   143→  useEffect(() => {
+   144→    // Force Leaflet to recalculate its size after the container is fully rendered
+   145→    const timer = setTimeout(() => {
+   146→      map.invalidateSize();
+   147→    }, 200);
+   148→    return () => clearTimeout(timer);
+   149→  }, [map]);
+   150→
+   151→  // Also listen for scroll/resize events that might change the container
+   152→  useEffect(() => {
+   153→    let frameId: number;
+   154→    const handleUpdate = () => {
+   155→      if (frameId) cancelAnimationFrame(frameId);
+   156→      frameId = requestAnimationFrame(() => {
+   157→        map.invalidateSize({ animate: false });
+   158→      });
+   159→    };
+   160→
+   161→    window.addEventListener('resize', handleUpdate);
+   162→    const observer = new IntersectionObserver((entries) => {
+   163→      for (const entry of entries) {
+   164→        if (entry.isIntersecting) {
+   165→          setTimeout(() => map.invalidateSize({ animate: false }), 100);
+   166→        }
+   167→      }
+   168→    }, { threshold: 0.1 });
+   169→
+   170→    const container = map.getContainer();
+   171→    if (container) observer.observe(container);
+   172→
+   173→    return () => {
+   174→      window.removeEventListener('resize', handleUpdate);
+   175→      observer.disconnect();
+   176→      if (frameId) cancelAnimationFrame(frameId);
+   177→    };
+   178→  }, [map]);
+   179→
+   180→  return null;
+   181→}
+   182→
+   183→// ─── Fit to Bounds Handler ──────────────────────────────────────────────────
+   184→
+   185→function FitBoundsHandler({
+   186→  points,
+   187→  routeData,
+   188→}: {
+   189→  points: { origin: MapPoint | null; destination: MapPoint | null };
+   190→  routeData: RouteResponse | null;
+   191→}) {
+   192→  const map = useMap();
+   193→
+   194→  useEffect(() => {
+   195→    if (routeData && routeData.routes.length > 0 && routeData.routes[0].path.length > 0) {
+   196→      const polyline = L.polyline(routeData.routes[0].path);
+   197→      const bounds = polyline.getBounds().pad(0.15);
+   198→      map.flyToBounds(bounds, { duration: 1.2 });
+   199→    } else if (points.origin && points.destination) {
+   200→      const bounds = L.latLngBounds(
+   201→        [points.origin.lat, points.origin.lng],
+   202→        [points.destination.lat, points.destination.lng]
+   203→      ).pad(0.3);
+   204→      map.flyToBounds(bounds, { duration: 1 });
+   205→    } else if (points.origin) {
+   206→      map.flyTo([points.origin.lat, points.origin.lng], 12, { duration: 1 });
+   207→    }
+   208→  }, [points, routeData, map]);
+   209→
+   210→  return null;
+   211→}
+   212→
+   213→// ─── Search Results Dropdown ───────────────────────────────────────────────────
+   214→
+   215→function SearchResults({
+   216→  results,
+   217→  onSelect,
+   218→  label,
+   219→  visible,
+   220→}: {
+   221→  results: { display_name: string; lat: string; lon: string }[];
+   222→  onSelect: (lat: number, lng: number, name: string) => void;
+   223→  label: string;
+   224→  visible: boolean;
+   225→}) {
+   226→  if (!visible || results.length === 0) return null;
+   227→
+   228→  return (
+   229→    <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl z-[1100] max-h-60 overflow-y-auto">
+   230→      <div className="px-3 py-2 border-b border-[#333]">
+   231→        <span className="text-[#a1a1aa] text-xs">نتایج جستجو برای {label}</span>
+   232→      </div>
+   233→      {results.map((r, i) => {
+   234→        const shortName = r.display_name.split(',').slice(0, 3).join('، ');
+   235→        return (
+   236→          <button
+   237→            key={i}
+   238→            type="button"
+   239→            onClick={() => {
+   240→              onSelect(parseFloat(r.lat), parseFloat(r.lon), shortName);
+   241→            }}
+   242→            className="w-full px-4 py-3 text-right hover:bg-[#D4AF37]/10 transition-colors border-b border-[#333]/50 last:border-b-0"
+   243→          >
+   244→            <div className="flex items-center gap-2">
+   245→              <MapPin className="h-3.5 w-3.5 text-[#D4AF37] flex-shrink-0" />
+   246→              <span className="text-[#fafafa] text-sm leading-relaxed">{shortName}</span>
+   247→            </div>
+   248→          </button>
+   249→        );
+   250→      })}
+   251→    </div>
+   252→  );
+   253→}
+   254→
+   255→// ─── Route Detail Card ─────────────────────────────────────────────────────────
+   256→
+   257→function RouteDetailCard({
+   258→  route,
+   259→  color,
+   260→  label,
+   261→  isActive,
+   262→  onClick,
+   263→}: {
+   264→  route: RouteData;
+   265→  color: string;
+   266→  label: string;
+   267→  isActive: boolean;
+   268→  onClick: () => void;
+   269→}) {
+   270→  return (
+   271→    <Card
+   272→      className="bg-[#0a0a0a]/80 border cursor-pointer transition-all"
+   273→      style={{
+   274→        borderColor: isActive ? color : '#333',
+   275→        boxShadow: isActive ? `0 0 15px ${color}20` : 'none',
+   276→      }}
+   277→      onClick={onClick}
+   278→    >
+   279→      <CardContent className="p-3 sm:p-4">
+   280→        <div className="flex items-center justify-between mb-2">
+   281→          <div className="flex items-center gap-2">
+   282→            <div
+   283→              className="w-3 h-3 rounded-full"
+   284→              style={{ backgroundColor: color }}
+   285→            />
+   286→            <span className="text-[#fafafa] text-sm font-medium">{label}</span>
+   287→          </div>
+   288→          <Badge
+   289→            className="text-xs"
+   290→            style={{
+   291→              backgroundColor: `${color}20`,
+   292→              color,
+   293→              borderColor: `${color}40`,
+   294→            }}
+   295→          >
+   296→            {route.distanceKm} km
+   297→          </Badge>
+   298→        </div>
+   299→        <div className="flex items-center gap-3 text-xs text-[#a1a1aa]">
+   300→          <span className="flex items-center gap-1">
+   301→            <Clock className="h-3 w-3" />
+   302→            {route.durationFormatted}
+   303→          </span>
+   304→          <span className="flex items-center gap-1">
+   305→            <Waypoints className="h-3 w-3" />
+   306→            {route.steps.length > 0 ? route.steps.length : '-'} مرحله
+   307→          </span>
+   308→        </div>
+   309→        {isActive && route.steps.length > 0 && (
+   310→          <div className="mt-2 pt-2 border-t border-[#333] space-y-1">
+   311→            {route.steps.slice(0, 4).map((step, i) => (
+   312→              <div key={i} className="flex items-start gap-2 text-xs text-[#a1a1aa]">
+   313→                <div
+   314→                  className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0"
+   315→                  style={{ backgroundColor: color }}
+   316→                />
+   317→                <span>{step.instruction}</span>
+   318→              </div>
+   319→            ))}
+   320→            {route.steps.length > 4 && (
+   321→              <span className="text-xs text-[#666]">
+   322→                + {route.steps.length - 4} مرحله دیگر
+   323→              </span>
+   324→            )}
+   325→          </div>
+   326→        )}
+   327→      </CardContent>
+   328→    </Card>
+   329→  );
+   330→}
+   331→
+   332→// ─── Ride Request Buttons ─────────────────────────────────────────────────────
+   333→
+   334→function RideRequestButtons({
+   335→  origin,
+   336→  destination,
+   337→  routeData,
+   338→}: {
+   339→  origin: MapPoint | null;
+   340→  destination: MapPoint | null;
+   341→  routeData: RouteResponse;
+   342→}) {
+   343→  const { updateBookingForm, setBookingStep, openAuth, openDriverRegister, auth } = useAppStore();
+   344→  const [bookingLoading, setBookingLoading] = useState(false);
+   345→
+   346→  const handleBookRide = () => {
+   347→    // Pre-fill booking form with map data
+   348→    // Extract city name from the place name (last part after comma)
+   349→    const originName = routeData.origin?.name || origin?.name || '';
+   350→    const destName = routeData.destination?.name || destination?.name || '';
+   351→    const originCityName = originName.split('،').pop()?.trim() || originName.split(',').pop()?.trim() || originName;
+   352→    const destCityName = destName.split('،').pop()?.trim() || destName.split(',').pop()?.trim() || destName;
+   353→
+   354→    updateBookingForm({
+   355→      origin: originName,
+   356→      destination: destName,
+   357→      originCity: { province: '', city: originCityName },
+   358→      destCity: { province: '', city: destCityName },
+   359→      originLat: origin?.lat,
+   360→      originLng: origin?.lng,
+   361→      destLat: destination?.lat,
+   362→      destLng: destination?.lng,
+   363→      distanceKm: routeData.routes[0]?.distanceKm || null,
+   364→      durationMin: routeData.routes[0]?.durationMin || null,
+   365→      fullName: auth.user?.fullName || '',
+   366→      phone: auth.user?.username?.startsWith('driver_') ? '' : auth.phone || '',
+   367→    });
+   368→
+   369→    setBookingLoading(true);
+   370→    // Open booking modal - skip step 0 (route already selected on map), start at step 1 (time)
+   371→    setTimeout(() => {
+   372→      setBookingStep(1);
+   373→      setBookingLoading(false);
+   374→    }, 200);
+   375→  };
+   376→
+   377→  const handleCallRequest = () => {
+   378→    // Open site phone numbers for calling
+   379→    window.open('tel:+989109419743');
+   380→  };
+   381→
+   382→  const handleRegisterDriver = () => {
+   383→    openDriverRegister();
+   384→  };
+   385→
+   386→  return (
+   387→    <div className="flex flex-col sm:flex-row gap-3">
+   388→      {/* Book ride button - primary */}
+   389→      <Button
+   390→        onClick={handleBookRide}
+   391→        disabled={bookingLoading}
+   392→        className="flex-1 bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-bold text-base rounded-xl transition-all hover:shadow-lg hover:shadow-[#D4AF37]/20"
+   393→      >
+   394→        {bookingLoading ? (
+   395→          <Loader2 className="h-5 w-5 animate-spin" />
+   396→        ) : (
+   397→          <>
+   398→            <Car className="h-5 w-5 ml-2" />
+   399→            ثبت درخواست سفر
+   400→          </>
+   401→        )}
+   402→      </Button>
+   403→
+   404→      {/* Call for ride button */}
+   405→      <Button
+   406→        onClick={handleCallRequest}
+   407→        variant="outline"
+   408→        className="flex-1 border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10 h-12 font-medium text-base rounded-xl transition-all"
+   409→      >
+   410→        <Phone className="h-5 w-5 ml-2" />
+   411→        تماس برای درخواست
+   412→      </Button>
+   413→
+   414→      {/* Register as driver - subtle link */}
+   415→      <button
+   416→        type="button"
+   417→        onClick={handleRegisterDriver}
+   418→        className="self-center text-xs text-[#a1a1aa] hover:text-[#D4AF37] transition-colors flex items-center gap-1"
+   419→      >
+   420→        <UserPlus className="h-3.5 w-3.5" />
+   421→        ثبت‌نام راننده
+   422→      </button>
+   423→    </div>
+   424→  );
+   425→}
+   426→
+   427→// ─── Main InteractiveMap Component ────────────────────────────────────────────
+   428→
+   429→export default function InteractiveMapInner() {
+   430→  const [origin, setOrigin] = useState<MapPoint | null>(null);
+   431→  const [destination, setDestination] = useState<MapPoint | null>(null);
+   432→  const [selectionStep, setSelectionStep] = useState<SelectionStep>('origin');
+   433→  const [routeData, setRouteData] = useState<RouteResponse | null>(null);
+   434→  const [routeLoading, setRouteLoading] = useState(false);
+   435→  const [routeError, setRouteError] = useState('');
+   436→  const [activeRoute, setActiveRoute] = useState(0);
+   437→
+   438→  // Search state
+   439→  const [originSearch, setOriginSearch] = useState('');
+   440→  const [destSearch, setDestSearch] = useState('');
+   441→  const [originResults, setOriginResults] = useState<
+   442→    { display_name: string; lat: string; lon: string }[]
+   443→  >([]);
+   444→  const [destResults, setDestResults] = useState<
+   445→    { display_name: string; lat: string; lon: string }[]
+   446→  >([]);
+   447→  const [searchLoading, setSearchLoading] = useState<'origin' | 'dest' | null>(null);
+   448→  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+   449→  const [identifyingPlace, setIdentifyingPlace] = useState<'origin' | 'dest' | null>(null);
+   450→
+   451→  // Identify place name using VLM when clicking on map
+   452→  const identifyPlace = useCallback(async (lat: number, lng: number, type: 'origin' | 'dest') => {
+   453→    setIdentifyingPlace(type);
+   454→    try {
+   455→      const res = await fetch(`/api/map/identify-place?lat=${lat}&lng=${lng}`);
+   456→      if (res.ok) {
+   457→        const data = await res.json();
+   458→        const name = data.name || '';
+   459→        if (name) {
+   460→          if (type === 'origin') {
+   461→            setOriginSearch(name);
+   462→            setOrigin(prev => prev ? { ...prev, name } : null);
+   463→          } else {
+   464→            setDestSearch(name);
+   465→            setDestination(prev => prev ? { ...prev, name } : null);
+   466→          }
+   467→        }
+   468→      }
+   469→    } catch {
+   470→      // Silently fail - the route API will also try to get place names
+   471→    } finally {
+   472→      setIdentifyingPlace(null);
+   473→    }
+   474→  }, []);
+   475→
+   476→  // Handle map click
+   477→  const handleSelectPoint = useCallback(
+   478→    (lat: number, lng: number) => {
+   479→      if (selectionStep === 'origin') {
+   480→        setOrigin({ lat, lng });
+   481→        setRouteData(null);
+   482→        setActiveRoute(0);
+   483→        setSelectionStep('destination');
+   484→        identifyPlace(lat, lng, 'origin');
+   485→      } else if (selectionStep === 'destination') {
+   486→        if (origin && Math.abs(origin.lat - lat) < 0.001 && Math.abs(origin.lng - lng) < 0.001) {
+   487→          return;
+   488→        }
+   489→        setDestination({ lat, lng });
+   490→        setSelectionStep('ready');
+   491→        identifyPlace(lat, lng, 'destination');
+   492→      } else {
+   493→        clearSelection();
+   494→      }
+   495→    },
+   496→    [selectionStep, origin, identifyPlace]
+   497→  );
+   498→
+   499→  // Search function
+   500→  const handleSearch = useCallback(
+   501→    (query: string, type: 'origin' | 'dest') => {
+   502→      if (searchTimer.current) clearTimeout(searchTimer.current);
+   503→
+   504→      if (!query || query.length < 2) {
+   505→        if (type === 'origin') setOriginResults([]);
+   506→        else setDestResults([]);
+   507→        return;
+   508→      }
+   509→
+   510→      setSearchLoading(type);
+   511→
+   512→      searchTimer.current = setTimeout(async () => {
+   513→        try {
+   514→          const encoded = encodeURIComponent(query + ', ایران');
+   515→          const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=5&accept-language=fa&addressdetails=1`;
+   516→
+   517→          const res = await fetch(url, {
+   518→            headers: {
+   519→              'User-Agent': 'SivanVIPTaxi/1.0',
+   520→            },
+   521→          });
+   522→
+   523→          if (!res.ok) return;
+   524→
+   525→          const data = await res.json();
+   526→          if (type === 'origin') {
+   527→            setOriginResults(data || []);
+   528→          } else {
+   529→            setDestResults(data || []);
+   530→          }
+   531→        } catch {
+   532→          // ignore search errors
+   533→        } finally {
+   534→          setSearchLoading(null);
+   535→        }
+   536→      }, 800);
+   537→    },
+   538→    []
+   539→  );
+   540→
+   541→  // Handle search select
+   542→  const handleSearchSelect = useCallback(
+   543→    (lat: number, lng: number, name: string, type: 'origin' | 'dest') => {
+   544→      if (type === 'origin') {
+   545→        setOrigin({ lat, lng, name });
+   546→        setOriginSearch(name);
+   547→        setOriginResults([]);
+   548→        if (!destination) {
+   549→          setSelectionStep('destination');
+   550→        } else {
+   551→          setSelectionStep('ready');
+   552→        }
+   553→      } else {
+   554→        setDestination({ lat, lng, name });
+   555→        setDestSearch(name);
+   556→        setDestResults([]);
+   557→        if (origin) {
+   558→          setSelectionStep('ready');
+   559→        } else {
+   560→          setSelectionStep('origin');
+   561→        }
+   562→      }
+   563→    },
+   564→    [origin, destination]
+   565→  );
+   566→
+   567→  // Fetch route when both points selected
+   568→  useEffect(() => {
+   569→    if (origin && destination) {
+   570→      setRouteLoading(true);
+   571→      setRouteError('');
+   572→
+   573→      const timer = setTimeout(async () => {
+   574→        try {
+   575→          const res = await fetch(
+   576→            `/api/map/route?originLat=${origin.lat}&originLng=${origin.lng}&destLat=${destination.lat}&destLng=${destination.lng}`
+   577→          );
+   578→
+   579→          if (!res.ok) {
+   580→            const err = await res.json().catch(() => ({ error: 'خطا در محاسبه مسیر' }));
+   581→            throw new Error(err.error || 'خطا');
+   582→          }
+   583→
+   584→          const data = await res.json();
+   585→          setRouteData(data);
+   586→
+   587→          // Always update names from route API (may be more accurate)
+   588→          if (data.origin?.name) {
+   589→            setOrigin((prev) => prev ? { ...prev, name: data.origin.name } : prev);
+   590→            setOriginSearch(data.origin.name);
+   591→          }
+   592→          if (data.destination?.name) {
+   593→            setDestination((prev) => prev ? { ...prev, name: data.destination.name } : prev);
+   594→            setDestSearch(data.destination.name);
+   595→          }
+   596→        } catch (err) {
+   597→          // Don't show error anymore - direct distance is always available
+   598→          console.error('Route fetch warning:', err);
+   599→          setRouteData(null);
+   600→        } finally {
+   601→          setRouteLoading(false);
+   602→        }
+   603→      }, 500);
+   604→
+   605→      return () => clearTimeout(timer);
+   606→    }
+   607→  }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng]);
+   608→
+   609→  const clearSelection = () => {
+   610→    setOrigin(null);
+   611→    setDestination(null);
+   612→    setRouteData(null);
+   613→    setRouteError('');
+   614→    setActiveRoute(0);
+   615→    setOriginSearch('');
+   616→    setDestSearch('');
+   617→    setOriginResults([]);
+   618→    setDestResults([]);
+   619→    setSelectionStep('origin');
+   620→  };
+   621→
+   622→  const swapPoints = () => {
+   623→    if (!origin || !destination) return;
+   624→    const tmpOrigin = origin;
+   625→    const tmpOriginSearch = originSearch;
+   626→    setOrigin(destination);
+   627→    setDestination(tmpOrigin);
+   628→    setOriginSearch(destSearch);
+   629→    setDestSearch(tmpOriginSearch);
+   630→    setRouteData(null);
+   631→    setActiveRoute(0);
+   632→  };
+   633→
+   634→  // Build polylines with explicit type casting and memoization
+   635→  const routePolylines = useMemo(() => {
+   636→    if (!routeData?.routes?.length) return [];
+   637→    return routeData.routes.map((route) => {
+   638→      // Ensure each coordinate is a valid [number, number] tuple (lat, lng)
+   639→      const typedPath: L.LatLngExpression[] = route.path
+   640→        .filter((coord) => Array.isArray(coord) && coord.length >= 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number')
+   641→        .map((coord) => [coord[0], coord[1]] as L.LatLngTuple);
+   642→      return typedPath;
+   643→    });
+   644→  }, [routeData]);
+   645→
+   646→  return (
+   647→    <section id="map" className="py-20 sm:py-24 bg-[#0a0a0a] relative isolate">
+   648→      {/* Decorative */}
+   649→      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-gradient-to-l from-transparent via-[#D4AF37] to-transparent rounded-full" />
+   650→
+   651→      <div className="container mx-auto px-4 sm:px-6">
+   652→        {/* Section Header */}
+   653→        <motion.div
+   654→          initial={{ opacity: 0, y: 20 }}
+   655→          whileInView={{ opacity: 1, y: 0 }}
+   656→          viewport={{ once: true, margin: '-100px' }}
+   657→          transition={{ duration: 0.6 }}
+   658→          className="text-center mb-10 sm:mb-14"
+   659→        >
+   660→          <Badge className="bg-[#D4AF37]/15 text-[#D4AF37] border-[#D4AF37]/30 mb-4 px-4 py-1.5">
+   661→            <Navigation className="h-3.5 w-3.5 ml-1.5" />
+   662→            نقشه تعاملی
+   663→          </Badge>
+   664→          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#fafafa] mb-4">
+   665→            مسیر خود را روی <span className="text-gold-gradient">نقشه</span> انتخاب کنید
+   666→          </h2>
+   667→          <p className="text-[#a1a1aa] max-w-2xl mx-auto">
+   668→            با کلیک روی نقشه مبدا و مقصد خود را مشخص کنید. مسیر حرکت، فاصله و مسیرهای جایگزین نمایش داده می‌شود
+   669→          </p>
+   670→        </motion.div>
+   671→
+   672→        <motion.div
+   673→          initial={{ opacity: 0, y: 30 }}
+   674→          whileInView={{ opacity: 1, y: 0 }}
+   675→          viewport={{ once: true, margin: '-100px' }}
+   676→          transition={{ duration: 0.7 }}
+   677→          className="flex flex-col gap-6"
+   678→        >
+   679→          {/* Search & Controls Bar */}
+   680→          <div className="relative z-10 bg-[#1a1a1a]/90 backdrop-blur-xl rounded-2xl border border-[#D4AF37]/20 p-4 sm:p-6">
+   681→            {/* Selection Step Indicator */}
+   682→            <div className="flex items-center gap-3 mb-4">
+   683→              <div className="flex items-center gap-2">
+   684→                <div
+   685→                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+   686→                    selectionStep === 'origin'
+   687→                      ? 'bg-[#D4AF37] text-[#0a0a0a] shadow-lg shadow-[#D4AF37]/30'
+   688→                      : origin
+   689→                      ? 'bg-[#D4AF37]/20 text-[#D4AF37]'
+   690→                      : 'bg-[#2d2d2d] text-[#666]'
+   691→                  }`}
+   692→                >
+   693→                  ۱
+   694→                </div>
+   695→                <span
+   696→                  className={`text-sm font-medium ${
+   697→                    selectionStep === 'origin' ? 'text-[#fafafa]' : origin ? 'text-[#a1a1aa]' : 'text-[#666]'
+   698→                  }`}
+   699→                >
+   700→                  مبدا
+   701→                </span>
+   702→              </div>
+   703→
+   704→              <div className="flex-1 h-px bg-[#333]" />
+   705→
+   706→              <div className="flex items-center gap-2">
+   707→                <div
+   708→                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+   709→                    selectionStep === 'destination'
+   710→                      ? 'bg-[#EF4444] text-white shadow-lg shadow-red-500/30'
+   711→                      : destination
+   712→                      ? 'bg-[#EF4444]/20 text-[#EF4444]'
+   713→                      : 'bg-[#2d2d2d] text-[#666]'
+   714→                  }`}
+   715→                >
+   716→                  ۲
+   717→                </div>
+   718→                <span
+   719→                  className={`text-sm font-medium ${
+   720→                    selectionStep === 'destination'
+   721→                      ? 'text-[#fafafa]'
+   722→                      : destination
+   723→                      ? 'text-[#a1a1aa]'
+   724→                      : 'text-[#666]'
+   725→                  }`}
+   726→                >
+   727→                  مقصد
+   728→                </span>
+   729→              </div>
+   730→
+   731→              <div className="flex-1 h-px bg-[#333]" />
+   732→
+   733→              <div className="flex items-center gap-2">
+   734→                <div
+   735→                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+   736→                    selectionStep === 'ready'
+   737→                      ? 'bg-[#10B981] text-white shadow-lg shadow-emerald-500/30'
+   738→                      : 'bg-[#2d2d2d] text-[#666]'
+   739→                  }`}
+   740→                >
+   741→                  ۳
+   742→                </div>
+   743→                <span className={`text-sm font-medium ${selectionStep === 'ready' ? 'text-[#fafafa]' : 'text-[#666]'}`}>
+   744→                  مسیر
+   745→                </span>
+   746→              </div>
+   747→            </div>
+   748→
+   749→            {/* Search Inputs */}
+   750→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   751→              {/* Origin Search */}
+   752→              <div className="relative">
+   753→                <div className="flex items-center gap-2 mb-1.5">
+   754→                  <div className="w-3 h-3 rounded-full bg-[#D4AF37]" />
+   755→                  <label className="text-[#a1a1aa] text-xs">مبدا</label>
+   756→                </div>
+   757→                <div className="relative">
+   758→                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a1a1aa]" />
+   759→                  <Input
+   760→                    value={originSearch}
+   761→                    onChange={(e) => {
+   762→                      setOriginSearch(e.target.value);
+   763→                      handleSearch(e.target.value, 'origin');
+   764→                    }}
+   765→                    placeholder={identifyingPlace === 'origin' ? 'در حال شناسایی مکان...' : 'جستجوی نام محل مبدا...'}
+   766→                    className="pr-9 bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#666] h-11 focus:border-[#D4AF37]/50 rounded-xl"
+   767→                  />
+   768→                  {originSearch && (
+   769→                    <button
+   770→                      type="button"
+   771→                      onClick={() => {
+   772→                        setOriginSearch('');
+   773→                        setOrigin(null);
+   774→                        setOriginResults([]);
+   775→                        if (!destination) setSelectionStep('origin');
+   776→                      }}
+   777→                      className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1aa] hover:text-[#fafafa]"
+   778→                    >
+   779→                      <X className="h-3.5 w-3.5" />
+   780→                    </button>
+   781→                  )}
+   782→                  {identifyingPlace === 'origin' && (
+   783→                    <Loader2 className="absolute left-10 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#D4AF37] animate-spin" />
+   784→                  )}
+   785→                  {searchLoading === 'origin' && !identifyingPlace && (
+   786→                    <Loader2 className="absolute left-10 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#D4AF37] animate-spin" />
+   787→                  )}
+   788→                </div>
+   789→                <SearchResults
+   790→                  results={originResults}
+   791→                  onSelect={(lat, lng, name) => handleSearchSelect(lat, lng, name, 'origin')}
+   792→                  label="مبدا"
+   793→                  visible={originResults.length > 0}
+   794→                />
+   795→              </div>
+   796→
+   797→              {/* Destination Search */}
+   798→              <div className="relative">
+   799→                <div className="flex items-center gap-2 mb-1.5">
+   800→                  <div className="w-3 h-3 rounded-full bg-[#EF4444]" />
+   801→                  <label className="text-[#a1a1aa] text-xs">مقصد</label>
+   802→                </div>
+   803→                <div className="relative">
+   804→                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a1a1aa]" />
+   805→                  <Input
+   806→                    value={destSearch}
+   807→                    onChange={(e) => {
+   808→                      setDestSearch(e.target.value);
+   809→                      handleSearch(e.target.value, 'dest');
+   810→                    }}
+   811→                    placeholder={identifyingPlace === 'dest' ? 'در حال شناسایی مکان...' : 'جستجوی نام محل مقصد...'}
+   812→                    className="pr-9 bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#666] h-11 focus:border-[#EF4444]/50 rounded-xl"
+   813→                  />
+   814→                  {destSearch && (
+   815→                    <button
+   816→                      type="button"
+   817→                      onClick={() => {
+   818→                        setDestSearch('');
+   819→                        setDestination(null);
+   820→                        setDestResults([]);
+   821→                        if (!origin) setSelectionStep('origin');
+   822→                        else setSelectionStep('destination');
+   823→                      }}
+   824→                      className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1aa] hover:text-[#fafafa]"
+   825→                    >
+   826→                      <X className="h-3.5 w-3.5" />
+   827→                    </button>
+   828→                  )}
+   829→                  {identifyingPlace === 'dest' && (
+   830→                    <Loader2 className="absolute left-10 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#EF4444] animate-spin" />
+   831→                  )}
+   832→                  {searchLoading === 'dest' && !identifyingPlace && (
+   833→                    <Loader2 className="absolute left-10 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#D4AF37] animate-spin" />
+   834→                  )}
+   835→                </div>
+   836→                <SearchResults
+   837→                  results={destResults}
+   838→                  onSelect={(lat, lng, name) => handleSearchSelect(lat, lng, name, 'dest')}
+   839→                  label="مقصد"
+   840→                  visible={destResults.length > 0}
+   841→                />
+   842→              </div>
+   843→            </div>
+   844→
+   845→            {/* Action Buttons */}
+   846→            <div className="flex items-center gap-2 mt-4">
+   847→              <Button
+   848→                variant="ghost"
+   849→                size="sm"
+   850→                onClick={swapPoints}
+   851→                disabled={!origin || !destination}
+   852→                className="text-[#a1a1aa] hover:text-[#D4AF37] hover:bg-[#D4AF37]/10 disabled:opacity-30"
+   853→              >
+   854→                <ArrowUpDown className="h-4 w-4 ml-1" />
+   855→                جابجایی
+   856→              </Button>
+   857→              <Button
+   858→                variant="ghost"
+   859→                size="sm"
+   860→                onClick={clearSelection}
+   861→                className="text-[#a1a1aa] hover:text-red-400 hover:bg-red-400/10"
+   862→              >
+   863→                <RotateCcw className="h-4 w-4 ml-1" />
+   864→                پاک‌سازی
+   865→              </Button>
+   866→
+   867→              <div className="flex-1 text-left">
+   868→                <AnimatePresence mode="wait">
+   869→                  <motion.div
+   870→                    key={selectionStep}
+   871→                    initial={{ opacity: 0, x: -10 }}
+   872→                    animate={{ opacity: 1, x: 0 }}
+   873→                    exit={{ opacity: 0, x: 10 }}
+   874→                    className="flex items-center justify-end gap-1.5 text-xs"
+   875→                  >
+   876→                    {selectionStep === 'origin' && (
+   877→                      <>
+   878→                        <MapPin className="h-3 w-3 text-[#D4AF37]" />
+   879→                        <span className="text-[#D4AF37]">روی نقشه کلیک کنید تا مبدا انتخاب شود</span>
+   880→                      </>
+   881→                    )}
+   882→                    {selectionStep === 'destination' && (
+   883→                      <>
+   884→                        <Navigation className="h-3 w-3 text-[#EF4444]" />
+   885→                        <span className="text-[#EF4444]">اکنون مقصد را انتخاب کنید</span>
+   886→                      </>
+   887→                    )}
+   888→                    {selectionStep === 'ready' && (
+   889→                      <>
+   890→                        <Route className="h-3 w-3 text-[#10B981]" />
+   891→                        <span className="text-[#10B981]">کلیک کنید تا دوباره انتخاب کنید</span>
+   892→                      </>
+   893→                    )}
+   894→                  </motion.div>
+   895→                </AnimatePresence>
+   896→              </div>
+   897→            </div>
+   898→          </div>
+   899→
+   900→          {/* Map Container */}
+   901→          <div className="relative rounded-2xl overflow-hidden border border-[#333] shadow-2xl shadow-black/40">
+   902→            <MapContainer
+   903→              center={[32.65, 51.67]}
+   904→              zoom={6}
+   905→              className="w-full h-[500px] sm:h-[600px] lg:h-[650px]"
+   906→              zoomControl={true}
+   907→              attributionControl={false}
+   908→              whenReady={(mapInstance) => {
+   909→                // Force recalculate size once map is ready
+   910→                setTimeout(() => {
+   911→                  mapInstance.target.invalidateSize();
+   912→                }, 100);
+   913→              }}
+   914→            >
+   915→              <TileLayer
+   916→                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+   917→                url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+   918→              />
+   919→
+   920→              <MapClickHandler onSelectPoint={handleSelectPoint} />
+   921→              <MapInvalidator />
+   922→              <FitBoundsHandler points={{ origin, destination }} routeData={routeData} />
+   923→
+   924→              {/* Origin Marker */}
+   925→              {origin && (
+   926→                <Marker position={[origin.lat, origin.lng]} icon={originIcon}>
+   927→                  <Tooltip direction="top" offset={[0, -20]} permanent={false}>
+   928→                    <span className="text-[#fafafa]">{origin.name || 'مبدا'}</span>
+   929→                  </Tooltip>
+   930→                </Marker>
+   931→              )}
+   932→
+   933→              {/* Destination Marker */}
+   934→              {destination && (
+   935→                <Marker position={[destination.lat, destination.lng]} icon={destIcon}>
+   936→                  <Tooltip direction="top" offset={[0, -40]} permanent={false}>
+   937→                    <span className="text-[#fafafa]">{destination.name || 'مقصد'}</span>
+   938→                  </Tooltip>
+   939→                </Marker>
+   940→              )}
+   941→
+   942→              {/* Route Polylines */}
+   943→              {routePolylines.map((path, index) => (
+   944→                <Polyline
+   945→                  key={`route-${index}-${path.length}`}
+   946→                  positions={path as L.LatLngExpression[]}
+   947→                  pane="overlayPane"
+   948→                  pathOptions={{
+   949→                    color: ROUTE_COLORS[index] || '#666',
+   950→                    weight: index === 0 ? 5 : (index === activeRoute ? 4 : 3),
+   951→                    opacity: index === 0 ? 1 : (index === activeRoute ? 0.8 : 0.45),
+   952→                    dashArray: index === 0 ? undefined : '8, 8',
+   953→                    lineCap: 'round',
+   954→                    lineJoin: 'round',
+   955→                    className: 'sivan-route-polyline',
+   956→                  }}
+   957→                />
+   958→              ))}
+   959→            </MapContainer>
+   960→
+   961→            {/* Loading Overlay */}
+   962→            <AnimatePresence>
+   963→              {routeLoading && (
+   964→                <motion.div
+   965→                  initial={{ opacity: 0 }}
+   966→                  animate={{ opacity: 1 }}
+   967→                  exit={{ opacity: 0 }}
+   968→                  className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[1000]"
+   969→                >
+   970→                  <div className="bg-[#1a1a1a] border border-[#D4AF37]/30 rounded-2xl px-6 py-4 flex items-center gap-3 shadow-xl">
+   971→                    <Loader2 className="h-6 w-6 text-[#D4AF37] animate-spin" />
+   972→                    <span className="text-[#fafafa] text-sm">در حال محاسبه مسیر...</span>
+   973→                  </div>
+   974→                </motion.div>
+   975→              )}
+   976→            </AnimatePresence>
+   977→
+   978→            {/* Error Overlay */}
+   979→            <AnimatePresence>
+   980→              {routeError && !routeLoading && (
+   981→                <motion.div
+   982→                  initial={{ opacity: 0, y: 20 }}
+   983→                  animate={{ opacity: 1, y: 0 }}
+   984→                  exit={{ opacity: 0, y: 20 }}
+   985→                  className="absolute bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 z-[1000]"
+   986→                >
+   987→                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center gap-2">
+   988→                    <Info className="h-4 w-4 text-red-400 flex-shrink-0" />
+   989→                    <span className="text-red-300 text-sm">{routeError}</span>
+   990→                  </div>
+   991→                </motion.div>
+   992→              )}
+   993→            </AnimatePresence>
+   994→
+   995→            {/* Map Legend */}
+   996→            {routeData && routeData.routes.length > 1 && (
+   997→              <div className="absolute top-4 left-4 bg-[#1a1a1a]/90 backdrop-blur-xl border border-[#333] rounded-xl p-3 z-[1000]">
+   998→                <span className="text-[#a1a1aa] text-xs block mb-2">راهنمای مسیرها</span>
+   999→                <div className="space-y-1.5">
+  1000→                  {routeData.routes.map((_, i) => (
+  1001→                    <div key={i} className="flex items-center gap-2">
+  1002→                      <div
+  1003→                        className="w-6 h-0.5 rounded-full"
+  1004→                        style={{ backgroundColor: ROUTE_COLORS[i] }}
+  1005→                      />
+  1006→                      <span className="text-[#fafafa] text-xs">{ROUTE_LABELS[i]}</span>
+  1007→                    </div>
+  1008→                  ))}
+  1009→                </div>
+  1010→              </div>
+  1011→            )}
+  1012→          </div>
+  1013→
+  1014→          {/* Route Info Panel */}
+  1015→          <AnimatePresence>
+  1016→            {routeData && routeData.routes.length > 0 && (
+  1017→              <motion.div
+  1018→                initial={{ opacity: 0, y: 20 }}
+  1019→                animate={{ opacity: 1, y: 0 }}
+  1020→                exit={{ opacity: 0, y: 20 }}
+  1021→                transition={{ duration: 0.4 }}
+  1022→              >
+  1023→                <div className="bg-[#1a1a1a]/90 backdrop-blur-xl rounded-2xl border border-[#D4AF37]/20 p-4 sm:p-6">
+  1024→                  <div className="flex items-center justify-between mb-4">
+  1025→                    <h3 className="text-[#fafafa] font-bold text-lg flex items-center gap-2">
+  1026→                      <Route className="h-5 w-5 text-[#D4AF37]" />
+  1027→                      اطلاعات مسیر
+  1028→                    </h3>
+  1029→                    {routeData.distanceSource === 'direct' && (
+  1030→                      <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs">
+  1031→                        فاصله مستقیم (تخمینی)
+  1032→                      </Badge>
+  1033→                    )}
+  1034→                    {routeData.distanceSource === 'road' && (
+  1035→                      <Badge className="bg-[#D4AF37]/15 text-[#D4AF37] border-[#D4AF37]/30">
+  1036→                        {routeData.totalRoutes} مسیر یافت شد
+  1037→                      </Badge>
+  1038→                    )}
+  1039→                  </div>
+  1040→
+  1041→                  {/* Route Summary Bar */}
+  1042→                  <div className="flex items-center gap-4 mb-4 p-3 bg-[#0a0a0a] rounded-xl border border-[#333]">
+  1043→                    <div className="flex-1 text-center">
+  1044→                      <div className="text-xs text-[#a1a1aa] mb-1">فاصله</div>
+  1045→                      <div className="text-[#D4AF37] font-bold text-lg">
+  1046→                        {new Intl.NumberFormat('fa-IR').format(routeData.routes[activeRoute].distanceKm)}{' '}
+  1047→                        <span className="text-xs text-[#a1a1aa]">کیلومتر</span>
+  1048→                      </div>
+  1049→                    </div>
+  1050→                    <div className="w-px h-10 bg-[#333]" />
+  1051→                    <div className="flex-1 text-center">
+  1052→                      <div className="text-xs text-[#a1a1aa] mb-1">زمان تخمینی</div>
+  1053→                      <div className="text-[#D4AF37] font-bold text-lg">
+  1054→                        {routeData.routes[activeRoute].durationFormatted}
+  1055→                      </div>
+  1056→                    </div>
+  1057→                  </div>
+  1058→
+  1059→                  {/* Pricing by Trip Type */}
+  1060→                  {routeData.pricing && (
+  1061→                    <div className="mb-4">
+  1062→                      <div className="text-xs text-[#a1a1aa] mb-2 flex items-center gap-1">
+  1063→                        <span>💰</span>
+  1064→                        تعرفه کرایه بر اساس نوع سفر
+  1065→                      </div>
+  1066→                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+  1067→                        {Object.entries(routeData.pricing).map(([type, info]) => (
+  1068→                          <div
+  1069→                            key={type}
+  1070→                            className={`p-2.5 rounded-xl border text-center transition-all ${
+  1071→                              type === 'vip'
+  1072→                                ? 'bg-[#D4AF37]/10 border-[#D4AF37]/30'
+  1073→                                : 'bg-[#0a0a0a] border-[#333] hover:border-[#555]'
+  1074→                            }`}
+  1075→                          >
+  1076→                            <div className="text-[10px] text-[#a1a1aa] mb-1">
+  1077→                              {TRIP_TYPE_LABELS[type] || type}
+  1078→                            </div>
+  1079→                            <div className={`font-bold text-sm ${
+  1080→                              type === 'vip' ? 'text-[#D4AF37]' : 'text-[#fafafa]'
+  1081→                            }`}>
+  1082→                              {new Intl.NumberFormat('fa-IR').format(info.price)}
+  1083→                            </div>
+  1084→                            <div className="text-[9px] text-[#666]">تومان</div>
+  1085→                          </div>
+  1086→                        ))}
+  1087→                      </div>
+  1088→                    </div>
+  1089→                  )}
+  1090→
+  1091→                  {/* Route Cards (only if multiple routes) */}
+  1092→                  {routeData.routes.length > 1 && routeData.distanceSource === 'road' && (
+  1093→                    <div className="mb-4">
+  1094→                      <div className="text-xs text-[#a1a1aa] mb-2">مسیرهای موجود</div>
+  1095→                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  1096→                        {routeData.routes.map((route, i) => (
+  1097→                          <RouteDetailCard
+  1098→                            key={i}
+  1099→                            route={route}
+  1100→                            color={ROUTE_COLORS[i]}
+  1101→                            label={ROUTE_LABELS[i]}
+  1102→                            isActive={activeRoute === i}
+  1103→                            onClick={() => setActiveRoute(i)}
+  1104→                          />
+  1105→                        ))}
+  1106→                      </div>
+  1107→                    </div>
+  1108→                  )}
+  1109→
+  1110→                  {/* Origin-Destination Names */}
+  1111→                  <div className="mt-3 mb-4 flex items-center gap-3 text-sm">
+  1112→                    <span className="text-[#D4AF37] font-medium truncate">
+  1113→                      {routeData.origin?.name || 'مبدا'}
+  1114→                    </span>
+  1115→                    <ArrowLeft className="h-4 w-4 text-[#a1a1aa] flex-shrink-0 rotate-180" />
+  1116→                    <span className="text-[#EF4444] font-medium truncate">
+  1117→                      {routeData.destination?.name || 'مقصد'}
+  1118→                    </span>
+  1119→                  </div>
+  1120→
+  1121→                  {/* Ride Request Actions */}
+  1122→                  <RideRequestButtons
+  1123→                    origin={origin}
+  1124→                    destination={destination}
+  1125→                    routeData={routeData}
+  1126→                  />
+  1127→                </div>
+  1128→              </motion.div>
+  1129→            )}
+  1130→          </AnimatePresence>
+  1131→        </motion.div>
+  1132→      </div>
+  1133→    </section>
+  1134→  );
+  1135→}
+  1136→

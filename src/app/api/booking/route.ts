@@ -31,6 +31,10 @@ const bookingSchema = z.object({
   notes: z.string().optional().default(''),
   paymentMethod: z.enum(['cash', 'online', 'wallet']).default('cash'),
   totalAmount: z.number().optional(),
+  originLat: z.number().optional(),
+  originLng: z.number().optional(),
+  destLat: z.number().optional(),
+  destLng: z.number().optional(),
 });
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -169,11 +173,11 @@ export async function POST(request: NextRequest) {
         passengerName: data.fullName,
         passengerPhone: data.phone,
         originAddress: data.originAddress,
-        originLat: null,
-        originLng: null,
+        originLat: data.originLat ?? null,
+        originLng: data.originLng ?? null,
         destAddress: data.destAddress,
-        destLat: null,
-        destLng: null,
+        destLat: data.destLat ?? null,
+        destLng: data.destLng ?? null,
         tripType: data.tripType,
         passengerCount: data.passengerCount,
         scheduledFor: data.date ? new Date(data.date) : null,

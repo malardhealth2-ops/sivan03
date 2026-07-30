@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAppStore } from '@/lib/store';
 import { formatJalaaliDate, getTehranTimeString, getTehranTime, toPersianDigits } from '@/lib/jalaali';
 import { toast } from 'sonner';
+import { TripDetailMap } from './TripDetailMap';
 
 type TabId = 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'emails' | 'notifications' | 'settings';
 type BlogPostForm = {
@@ -294,12 +295,15 @@ function TripsTab() {
   const [trips, setTrips] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedTrip, setSelectedTrip] = useState<any>(null);
 
   useEffect(() => {
     fetch('/api/booking').then(r => r.json()).then(data => { setTrips(Array.isArray(data) ? data : []); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   const filtered = statusFilter === 'all' ? trips : trips.filter((t: any) => t.status === statusFilter);
+
+  const hasMapCoords = (t: any) => t.originLat && t.originLng && t.destLat && t.destLng;
 
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" /></div>;
 
@@ -323,8 +327,8 @@ function TripsTab() {
             <TableBody>
               {filtered.length === 0 && <TableRow className="border-[#333]"><TableCell colSpan={5} className="text-center text-[#a1a1aa] py-8">سفری ثبت نشده است</TableCell></TableRow>}
               {filtered.map((trip: any) => (
-                <TableRow key={trip.id} className="border-[#333] hover:bg-[#2d2d2d]/50">
-                  <TableCell className="text-[#fafafa] font-mono text-xs" dir="ltr">{trip.bookingCode}</TableCell>
+                <TableRow key={trip.id} className="border-[#333] hover:bg-[#2d2d2d]/50 cursor-pointer" onClick={() => setSelectedTrip(trip)}>
+                  <TableCell className="text-[#fafafa] font-mono text-xs" dir="ltr">{trip.bookingCode}{hasMapCoords(trip) && <MapPin className="inline h-3 w-3 text-[#D4AF37] mr-1" />}</TableCell>
                   <TableCell className="text-[#fafafa] text-sm">{trip.originAddress} → {trip.destAddress}</TableCell>
                   <TableCell>{getStatusBadge(trip.status)}</TableCell>
                   <TableCell className="text-[#fafafa] text-sm" dir="ltr">{new Intl.NumberFormat('fa-IR').format(trip.totalFare || 0)} تومان</TableCell>
@@ -335,6 +339,97 @@ function TripsTab() {
           </Table>
         </div>
       </Card>
+
+      {/* Trip Detail Overlay with Map */}
+      <AnimatePresence>
+        {selectedTrip && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4"
+            onClick={() => setSelectedTrip(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.95 }}
+              className="relative bg-[#1a1a1a] border border-[#333] rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button onClick={() => setSelectedTrip(null)} className="absolute top-4 left-4 p-2 rounded-lg hover:bg-[#2d2d2d] text-[#a1a1aa] hover:text-[#fafafa] transition-colors z-10">
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="p-6">
+                <h3 className="text-[#fafafa] font-bold text-lg mb-1 flex items-center gap-2">
+                  <Car className="h-5 w-5 text-[#D4AF37]" />
+                  جزئیات سفر
+                </h3>
+                <p className="text-[#a1a1aa] text-sm font-mono mb-4" dir="ltr">{selectedTrip.bookingCode}</p>
+
+                <div className="mb-4">{getStatusBadge(selectedTrip.status)}</div>
+
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-[#0a0a0a] rounded-xl p-3 border border-[#333]">
+                    <div className="text-[10px] text-[#a1a1aa] mb-1">مسافر</div>
+                    <div className="text-[#fafafa] text-sm font-medium">{selectedTrip.passengerName || '-'}</div>
+                  </div>
+                  <div className="bg-[#0a0a0a] rounded-xl p-3 border border-[#333]">
+                    <div className="text-[10px] text-[#a1a1aa] mb-1">تلفن</div>
+                    <div className="text-[#fafafa] text-sm font-medium" dir="ltr">{selectedTrip.passengerPhone || '-'}</div>
+                  </div>
+                  <div className="bg-[#0a0a0a] rounded-xl p-3 border border-[#333]">
+                    <div className="text-[10px] text-[#a1a1aa] mb-1">مبلغ</div>
+                    <div className="text-[#D4AF37] text-sm font-bold">{new Intl.NumberFormat('fa-IR').format(selectedTrip.totalFare || 0)} تومان</div>
+                  </div>
+                  <div className="bg-[#0a0a0a] rounded-xl p-3 border border-[#333]">
+                    <div className="text-[10px] text-[#a1a1aa] mb-1">فاصله</div>
+                    <div className="text-[#fafafa] text-sm font-medium">{selectedTrip.distanceKm ? new Intl.NumberFormat('fa-IR').format(selectedTrip.distanceKm) + ' km' : '-'}</div>
+                  </div>
+                </div>
+
+                <div className="bg-[#0a0a0a] rounded-xl p-3 border border-[#333] mb-4">
+                  <div className="text-[10px] text-[#a1a1aa] mb-2">مسیر سفر</div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#D4AF37] flex-shrink-0" />
+                    <span className="text-[#fafafa]">{selectedTrip.originAddress}</span>
+                  </div>
+                  <div className="mr-1 my-1 border-r border-[#333] h-3" />
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#EF4444] flex-shrink-0" />
+                    <span className="text-[#fafafa]">{selectedTrip.destAddress}</span>
+                  </div>
+                </div>
+
+                {hasMapCoords(selectedTrip) && (
+                  <div className="mb-4">
+                    <div className="text-[10px] text-[#a1a1aa] mb-2 flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      نقشه مبدا و مقصد
+                    </div>
+                    <TripDetailMap
+                      originLat={selectedTrip.originLat}
+                      originLng={selectedTrip.originLng}
+                      originName={selectedTrip.originAddress}
+                      destLat={selectedTrip.destLat}
+                      destLng={selectedTrip.destLng}
+                      destName={selectedTrip.destAddress}
+                    />
+                  </div>
+                )}
+
+                {selectedTrip.notes && (
+                  <div className="bg-[#0a0a0a] rounded-xl p-3 border border-[#333]">
+                    <div className="text-[10px] text-[#a1a1aa] mb-1">توضیحات</div>
+                    <div className="text-[#fafafa] text-sm">{selectedTrip.notes}</div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

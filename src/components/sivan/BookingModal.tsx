@@ -218,6 +218,10 @@ export function BookingModal() {
           notes: booking.formData.notes,
           paymentMethod: booking.formData.paymentMethod,
           totalAmount: price,
+          originLat: booking.formData.originLat || null,
+          originLng: booking.formData.originLng || null,
+          destLat: booking.formData.destLat || null,
+          destLng: booking.formData.destLng || null,
         }),
       });
 
