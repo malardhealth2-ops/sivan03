@@ -1475,3 +1475,30 @@ Stage Summary:
 - Admin can click any trip row to see details with map
 - Map shows origin (gold pin) and destination (red pin) with dashed line
 - Trips with coordinates show a small MapPin indicator
+
+---
+Task ID: 14
+Agent: main
+Task: Fix OSRM route display - show road routes instead of straight lines, display alternative routes
+
+Work Log:
+- Investigated why routes displayed as straight blue lines instead of following roads
+- Tested OSRM API connectivity: confirmed `router.project-osrm.org` and `routing.openstreetmap.de` both return valid GeoJSON routes with 2000+ path points
+- Identified root cause: second OSRM server URL had doubled `/route/v1` path:
+  - BEFORE: `https://routing.openstreetmap.de/routed-car/route/v1` → resulted in `/route/v1/route/v1/driving/...`
+  - AFTER: `https://routing.openstreetmap.de/routed-car` → correctly becomes `/route/v1/driving/...`
+- Fixed OSRM_SERVERS array in `/src/app/api/map/route/route.ts`
+- Increased fetch timeout from 12s to 15s for reliability
+- Decreased retry base delay from 600ms to 400ms for faster failover
+- Added comprehensive console logging for OSRM attempts, successes, and failures
+- Verified fix with direct API tests: routes now return 2400+ path coordinates with `distanceSource: road`
+- Verified via agent-browser: VLM analysis confirms blue line follows actual roads/curves, NOT straight
+- Confirmed route colors: main route = #3B82F6 (blue), alternatives = #9CA3AF/#D1D5DB (gray)
+- Confirmed Polyline rendering with proper stroke-width (5 for main, 3-4 for alternatives)
+- Confirmed alternative routes render with dashed lines (`dashArray: 8,8`)
+
+Stage Summary:
+- Root cause: Malformed second OSRM server URL caused all requests to fail when primary server was unavailable, triggering direct-distance 2-point fallback
+- Fix: Corrected the URL from `routing.openstreetmap.de/routed-car/route/v1` to `routing.openstreetmap.de/routed-car`
+- Result: Road routes now reliably display on the map following actual roads/curves
+- Alternative routes render in gray with dashed lines when OSRM returns multiple routes

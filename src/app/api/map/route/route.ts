@@ -112,10 +112,10 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   }
 }
 
-// OSRM server list for redundancy
+// OSRM server list for redundancy (base URLs – /route/v1/driving/ is appended)
 const OSRM_SERVERS = [
   'https://router.project-osrm.org',
-  'https://routing.openstreetmap.de/routed-car/route/v1',
+  'https://routing.openstreetmap.de/routed-car',
 ];
 
 // Fetch route from OSRM with retry across multiple servers
@@ -126,15 +126,16 @@ async function fetchOSRMRoute(
   destLng: number
 ): Promise<Response | null> {
   const maxRetries = 2;
-  const baseDelay = 600;
+  const baseDelay = 400;
 
   for (const server of OSRM_SERVERS) {
     // Try with alternatives first
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         const urlWithAlts = `${server}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson&alternatives=true`;
+        console.log(`[Route] OSRM attempt: ${server} (try ${attempt + 1})`);
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12000);
+        const timeout = setTimeout(() => controller.abort(), 15000);
         const res = await fetch(urlWithAlts, {
           signal: controller.signal,
           headers: {
@@ -142,22 +143,28 @@ async function fetchOSRMRoute(
             'Accept-Encoding': 'gzip, deflate',
           },
         }).finally(() => clearTimeout(timeout));
-        if (res.ok) return res;
+        if (res.ok) {
+          console.log(`[Route] OSRM success from ${server}`);
+          return res;
+        }
+        console.log(`[Route] OSRM ${server} returned ${res.status}`);
         if (attempt < maxRetries - 1) {
           await wait(baseDelay * (attempt + 1));
         }
-      } catch {
+      } catch (err) {
+        console.log(`[Route] OSRM ${server} error:`, err instanceof Error ? err.message : err);
         if (attempt < maxRetries - 1) {
           await wait(baseDelay * (attempt + 1));
         }
       }
     }
 
-    // Try without alternatives
+    // Try without alternatives (some servers don't support it)
     try {
       const urlNoAlts = `${server}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+      console.log(`[Route] OSRM no-alts attempt: ${server}`);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
+      const timeout = setTimeout(() => controller.abort(), 15000);
       const res = await fetch(urlNoAlts, {
         signal: controller.signal,
         headers: {
@@ -165,7 +172,10 @@ async function fetchOSRMRoute(
           'Accept-Encoding': 'gzip, deflate',
         },
       }).finally(() => clearTimeout(timeout));
-      if (res.ok) return res;
+      if (res.ok) {
+        console.log(`[Route] OSRM no-alts success from ${server}`);
+        return res;
+      }
     } catch {
       // Try next server
     }
