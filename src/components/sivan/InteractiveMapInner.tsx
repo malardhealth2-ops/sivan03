@@ -642,7 +642,7 @@ export default function InteractiveMapInner() {
   }, [routeData]);
 
   return (
-    <section id="map" className="py-20 sm:py-24 bg-[#0a0a0a] relative">
+    <section id="map" className="py-20 sm:py-24 bg-[#0a0a0a] relative isolate">
       {/* Decorative */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-gradient-to-l from-transparent via-[#D4AF37] to-transparent rounded-full" />
 

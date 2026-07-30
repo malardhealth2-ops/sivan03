@@ -1386,3 +1386,20 @@ Stage Summary:
 - Separate DriverRegisterModal.tsx file kept for reference but no longer imported
 - Navbar no longer has separate driver registration button
 - All Shahkar verification and driver submission APIs reused from existing endpoints
+---
+Task ID: 1
+Agent: Main
+Task: Fix map z-index issue - map scrolls over top menu and floating request window
+
+Work Log:
+- Diagnosed that Leaflet panes use z-index 200-999, competing with Navbar (z-50) and Dialog (z-50)
+- Added `isolate` class to map section in InteractiveMapInner.tsx to create isolated stacking context
+- Updated Dialog overlay/content z-index from z-50 to z-[9999] in dialog.tsx
+- Updated Sheet overlay/content z-index from z-50 to z-[9999] in sheet.tsx  
+- Updated Drawer overlay/content z-index from z-50 to z-[9999] in drawer.tsx
+- Verified fix with agent-browser: header confirmed on top at overlap point
+
+Stage Summary:
+- Map no longer overlaps navbar when scrolling (verified via elementFromPoint)
+- All modal/overlay components (Dialog, Sheet, Drawer) now use z-[9999] for guaranteed top layer
+- Key CSS: `isolation: isolate` on `#map` section contains all Leaflet z-indices
