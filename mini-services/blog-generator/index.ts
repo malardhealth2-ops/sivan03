@@ -1,26 +1,29 @@
 /**
- * Sivan AI Blog Generator (v3 — diversified topics)
- * ================================================
+ * Sivan AI Blog Generator (v4 — persistent state)
+ * ==================================================
  *
  * Automatically generates and publishes a new SEO-optimized blog article (with
  * an AI-generated cover image and justified Persian HTML text) every 6 hours
  * using the z-ai-web-dev-sdk (LLM chat completions + image generation).
  *
- * Topics are diversified across 5 categories so the blog isn't only about
- * travel safety — it also covers Iranian tourism & scenic destinations, luxury
- * cars & their features, luxury-vs-economy car comparisons, city travel guides,
- * and a smaller set of travel-safety pieces.
+ * **v4 key change**: Generation state (cycleIndex, categoryTopicIndex,
+ * lastAutoGenAt) is persisted in the BlogGeneratorState DB table so that
+ * restarts / deploys do NOT break the scheduling. On startup the service
+ * restores where it left off and schedules the next generation based on
+ * how much time has elapsed since the last auto-generation.
+ *
+ * Topics are diversified across 7 categories so the blog has a balanced mix.
  *
  * Cover images are category-aware: tourist destinations get landscape/scenery
  * prompts, luxury-car articles get interior/detail shots, etc.
  *
- * Runs as a Bun mini-service on port 3005. The Next.js app can trigger an
- * on-demand generation via the gateway: POST /generate?XTransformPort=3005
+ * Runs as a Bun mini-service on port 3005.
  *
  * Endpoints:
- *   GET  /health    -> { ok, service, port, lastGeneratedAt, totalPosts }
+ *   GET  /health    -> { ok, service, port, lastGeneratedAt, totalPosts, nextGenInMs }
  *   POST /generate  -> triggers generateArticle() immediately (fire-and-forget)
- *   GET  /status    -> { running, lastGeneratedAt, lastError, totalPosts }
+ *   GET  /status    -> { running, lastGeneratedAt, lastError, totalPosts, nextGenInMs }
+ *   POST /generate-custom -> generate from admin-supplied topic (fire-and-forget)
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -41,20 +44,12 @@ let zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
 let isGenerating = false;
 let lastGeneratedAt: string | null = null;
 let lastError: string | null = null;
+let nextGenAt: Date | null = null; // when the next scheduled generation will fire
 
 // Diversified topic pool. Each topic carries:
 //   - title:   the article's working title (LLM may refine it)
 //   - keyword: the SEO focus keyword the LLM must weave in
 //   - category: drives which cover-image scene pool is used
-//
-// Categories & weights (so the blog isn't dominated by one theme):
-//   tourism          -> Iranian scenic destinations, travel seasons, hidden gems
-//   luxury-cars      -> features & benefits of luxury vehicles (interior, ride quality, options)
-//   luxury-vs-economy-> direct comparisons: why a luxury car beats an economy car on long trips
-//   travel-guide     -> city-to-city route guides (Tehran→Mashhad, etc.)
-//   travel-tips      -> packing, comfort, fatigue, booking — practical traveller advice
-//   safety           -> a SMALL set of travel-safety pieces (kept, but no longer the majority)
-//   sivan-brand      -> why Sivan VIP taxi is the smart choice (conversion-focused)
 type TopicCategory =
   | 'tourism'
   | 'luxury-cars'
@@ -134,8 +129,6 @@ const TOPICS: Topic[] = [
 ];
 
 // Weighted category rotation so the blog has a balanced mix.
-// Each cycle picks the next category from this weighted list, then picks the
-// next unused topic within that category. This avoids topic-clumping.
 const CATEGORY_ORDER: TopicCategory[] = [
   'tourism',
   'luxury-cars',
@@ -149,8 +142,10 @@ const CATEGORY_ORDER: TopicCategory[] = [
   'luxury-cars',
   'sivan-brand',
   'travel-guide',
-  'safety', // intentionally rare: ~1 in 13
+  'safety',
 ];
+
+// ---- Persistent state management ----
 let cycleIndex = 0;
 const categoryTopicIndex: Record<TopicCategory, number> = {
   tourism: 0,
@@ -162,6 +157,55 @@ const categoryTopicIndex: Record<TopicCategory, number> = {
   'sivan-brand': 0,
 };
 
+/** Restore generation state from the DB (called once on startup). */
+async function restoreState(): Promise<void> {
+  try {
+    let state = await db.blogGeneratorState.findUnique({ where: { id: 'main' } });
+    if (!state) {
+      // First run ever — create the row with defaults.
+      state = await db.blogGeneratorState.create({ data: { id: 'main' } });
+      console.log('[blog-generator] created initial DB state row');
+    }
+    cycleIndex = state.cycleIndex;
+    const parsed = JSON.parse(state.categoryTopicIndex || '{}');
+    for (const cat of Object.keys(categoryTopicIndex) as TopicCategory[]) {
+      if (typeof parsed[cat] === 'number') {
+        categoryTopicIndex[cat] = parsed[cat];
+      }
+    }
+    if (state.lastAutoGenAt) {
+      lastGeneratedAt = state.lastAutoGenAt.toISOString();
+    }
+    console.log(`[blog-generator] state restored: cycleIndex=${cycleIndex}, categoryTopicIndex=${JSON.stringify(categoryTopicIndex)}, lastAutoGenAt=${lastGeneratedAt || 'never'}, totalAutoGenerated=${state.totalAutoGenerated}`);
+  } catch (err) {
+    console.error('[blog-generator] failed to restore state from DB, starting fresh:', err);
+  }
+}
+
+/** Persist current generation state to the DB (called after each auto-generation). */
+async function saveState(): Promise<void> {
+  try {
+    await db.blogGeneratorState.upsert({
+      where: { id: 'main' },
+      update: {
+        cycleIndex,
+        categoryTopicIndex: JSON.stringify(categoryTopicIndex),
+        lastAutoGenAt: lastGeneratedAt ? new Date(lastGeneratedAt) : null,
+        totalAutoGenerated: { increment: 1 },
+      },
+      create: {
+        id: 'main',
+        cycleIndex,
+        categoryTopicIndex: JSON.stringify(categoryTopicIndex),
+        lastAutoGenAt: lastGeneratedAt ? new Date(lastGeneratedAt) : null,
+      },
+    });
+    console.log('[blog-generator] state saved to DB');
+  } catch (err) {
+    console.error('[blog-generator] failed to save state to DB:', err);
+  }
+}
+
 function pickTopic(): Topic {
   const category = CATEGORY_ORDER[cycleIndex % CATEGORY_ORDER.length];
   cycleIndex++;
@@ -172,8 +216,6 @@ function pickTopic(): Topic {
 }
 
 function makeSlug(title: string): string {
-  // Persian-safe slug: keep Persian letters/digits, replace spaces with dashes,
-  // strip punctuation, append a short unique suffix.
   const base = title
     .replace(/[«»"'!?.,:;()\[\]{}]/g, '')
     .replace(/\s+/g, '-')
@@ -221,11 +263,9 @@ function parseArticle(raw: string): {
     }
   }
 
-  // Reconstruct content HTML.
   let html = htmlLines.join('\n').trim();
   if (!html) return null;
 
-  // If the model didn't use HTML tags, wrap lines in <p>.
   if (!/<[a-z][\s\S]*>/i.test(html)) {
     html = html
       .split(/\n{2,}/)
@@ -251,9 +291,7 @@ function parseArticle(raw: string): {
   return { title, excerpt, html, tags, metaDescription };
 }
 
-// Category-aware cover-image scene pools. All prompts are kept purely English
-// (no Persian) to avoid the image API's content filter. Each category has its
-// own visual identity so a tourism article doesn't get a car-only cover, etc.
+// Category-aware cover-image scene pools.
 const COVER_SCENES: Record<TopicCategory, string[]> = {
   tourism: [
     'a breathtaking aerial view of an Iranian tourist destination at golden hour, mountains and traditional Persian architecture, warm cinematic light, professional travel photography, no text, no watermark',
@@ -294,15 +332,8 @@ const COVER_SCENES: Record<TopicCategory, string[]> = {
   ],
 };
 
-// Ask the LLM to produce ONE specific, English-language image prompt that
-// visually represents the article's ACTUAL subject (not just its category).
-// This makes every cover image topically relevant — e.g. an article about
-// Hormuz Island gets a Hormuz-specific cover (red soil, rainbow mountains),
-// an article about a Mercedes E-Class gets a Mercedes-specific cover, etc.
-// Falls back to null on any failure so the caller uses the category scene pool.
 async function generateImagePrompt(title: string, topic: Topic): Promise<string | null> {
   if (!zai) return null;
-  // A category-specific style hint so the model keeps the right "look".
   const styleHint =
     topic.category === 'luxury-cars' || topic.category === 'luxury-vs-economy'
       ? 'professional automotive photography, moody cinematic lighting'
@@ -339,7 +370,6 @@ Write the one-sentence English image prompt now:`,
     });
     const raw = (completion?.choices?.[0]?.message?.content || '').trim();
     if (!raw) return null;
-    // Clean up any wrapping the model might add despite instructions.
     const cleaned = raw
       .replace(/^```[a-z]*\n?/i, '')
       .replace(/\n?```$/i, '')
@@ -348,7 +378,6 @@ Write the one-sentence English image prompt now:`,
       .replace(/\s+/g, ' ')
       .trim();
     if (cleaned.length < 15 || cleaned.length > 600) return null;
-    // Guarantee the quality/no-text suffix is present.
     if (!/no text/i.test(cleaned)) {
       return `${cleaned}, ${styleHint}, high quality, no text, no watermark`;
     }
@@ -365,13 +394,10 @@ async function generateCoverImage(
   topic: Topic
 ): Promise<string | null> {
   if (!zai) return null;
-  // First, ask the LLM for a topic-specific image prompt so the cover actually
-  // matches the article's subject (not just its broad category).
   let prompt = await generateImagePrompt(title, topic);
   if (prompt) {
     console.log(`[blog-generator] topic-specific image prompt: "${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}"`);
   } else {
-    // Fallback: pick a generic scene from the category-aware pool.
     const scenes = COVER_SCENES[topic.category] || COVER_SCENES['travel-guide'];
     prompt = scenes[Math.floor(Math.random() * scenes.length)];
     console.log(`[blog-generator] LLM prompt failed; using fallback ${topic.category} scene`);
@@ -390,14 +416,10 @@ async function generateCoverImage(
     return `/images/blog/${filename}`;
   } catch (err) {
     console.error('[blog-generator] image generation failed:', err);
-    // Fallback to an existing default car image so the post isn't imageless.
     return '/images/luxury-car.png';
   }
 }
 
-// Derive a keyword from a free-form custom topic: take the most meaningful
-// words (skip very common Persian stopwords), join with space. Falls back to
-// the whole topic if filtering removes everything.
 function deriveKeyword(topic: string): string {
   const stopwords = new Set([
     'در', 'از', 'به', 'با', 'و', 'یا', 'را', 'است', 'نیست', 'برای', 'تا', 'که',
@@ -414,9 +436,6 @@ function deriveKeyword(topic: string): string {
   return kw || topic.slice(0, 40);
 }
 
-// Heuristically classify a free-form custom topic into one of the cover-image
-// categories, so the generated cover matches the article's theme. Falls back to
-// 'travel-guide' which has generic scenic-highway scenes.
 function classifyTopic(topic: string): TopicCategory {
   const t = topic.toLowerCase();
   if (/(گردشگري|گردشگری|جاذبه|ديدني|دیدنی|طبيعت|طبیعت|تاريخي|تاریخی|معبد|مسجد|كليسا|کلیسا|موزه|بازار|روستا|جزيره|جزیره|ساحل|دريا|دریا|كوه|کوه|جنگل|كوير|کویر|شمال|جنوب|كیش|کیش|قشم|مشهد|شيراز|شیراز|اصفهان|تبريز|تبریز|يزد|رشت|نوشهر|چالوس|كرمان|کرمان|ماسوله)/.test(t)) {
@@ -450,10 +469,6 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
   isGenerating = true;
   lastError = null;
 
-  // For custom-topic generations we build a Topic from the admin's input and
-  // do NOT call pickTopic() — this keeps the 6-hour auto-rotation untouched
-  // (cycleIndex / categoryTopicIndex are only advanced by scheduled/on-demand
-  // auto-pick generations, never by custom ones).
   const isCustom = !!customTopic && customTopic.trim().length > 0;
   const topic: Topic = isCustom
     ? {
@@ -553,6 +568,16 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
     });
     lastGeneratedAt = new Date().toISOString();
     console.log(`[blog-generator] ✓ published${isCustom ? ' (CUSTOM)' : ''}: "${post.title}" (slug: ${post.slug}, image: ${featuredImageUrl || 'none'})`);
+
+    // Persist state for auto-generations only (not custom ones, so the cycle
+    // tracking stays accurate for the scheduled rotation).
+    if (!isCustom) {
+      await saveState();
+      // Schedule the next generation
+      nextGenAt = new Date(Date.now() + GENERATION_INTERVAL_MS);
+      console.log(`[blog-generator] next auto-generation scheduled in ${GENERATION_INTERVAL_MS / 3600000}h`);
+    }
+
     isGenerating = false;
     return { ok: true, title: post.title, slug: post.slug, custom: isCustom };
   } catch (err) {
@@ -563,31 +588,64 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
   }
 }
 
-async function maybeGenerateOnStartup() {
+/**
+ * On startup, decide when the next generation should happen.
+ *
+ * Strategy:
+ * 1. Restore persisted state (cycleIndex, categoryTopicIndex, lastAutoGenAt)
+ * 2. If fewer than MIN_POSTS_FOR_IMMEDIATE_SKIP published posts exist → generate now (after 5s delay)
+ * 3. If lastAutoGenAt is recorded in DB and it's been >= 6h since then → generate now
+ * 4. If lastAutoGenAt is recorded but it's been < 6h → schedule the remaining time
+ * 5. If no lastAutoGenAt but enough posts exist → start a fresh 6h interval
+ */
+async function scheduleGenerationOnStartup() {
   try {
     const count = await db.blogPost.count({ where: { status: 'published' } });
+    console.log(`[blog-generator] current published posts: ${count}`);
+
     if (count < MIN_POSTS_FOR_IMMEDIATE_SKIP) {
-      console.log(`[blog-generator] only ${count} published posts; generating one now...`);
+      console.log(`[blog-generator] only ${count} published posts; generating one now (5s delay)...`);
       setTimeout(() => generateArticle().catch((e) => console.error(e)), 5000);
       return;
     }
-    // If the most recent post is older than 6h, generate one now.
-    const latest = await db.blogPost.findFirst({
-      where: { status: 'published' },
-      orderBy: { publishedAt: 'desc' },
-      select: { publishedAt: true },
-    });
-    if (latest?.publishedAt) {
-      const ageMs = Date.now() - new Date(latest.publishedAt).getTime();
-      if (ageMs > GENERATION_INTERVAL_MS) {
-        console.log(`[blog-generator] last post is ${Math.round(ageMs / 3600000)}h old; generating one now...`);
+
+    // Check persisted lastAutoGenAt from DB (restored into lastGeneratedAt)
+    if (lastGeneratedAt) {
+      const elapsed = Date.now() - new Date(lastGeneratedAt).getTime();
+      console.log(`[blog-generator] last auto-gen was ${Math.round(elapsed / 60000)}min ago`);
+      if (elapsed >= GENERATION_INTERVAL_MS) {
+        // Overdue — generate now
+        console.log('[blog-generator] overdue — generating now (5s delay)...');
         setTimeout(() => generateArticle().catch((e) => console.error(e)), 5000);
-      } else {
-        console.log(`[blog-generator] last post is recent; next auto-generation in 6h.`);
+        return;
       }
+      // Not yet due — wait the remaining time
+      const remaining = GENERATION_INTERVAL_MS - elapsed;
+      console.log(`[blog-generator] next generation in ${Math.round(remaining / 60000)}min (remaining from last auto-gen)`);
+      nextGenAt = new Date(Date.now() + remaining);
+      setTimeout(() => {
+        generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
+        // After this first (delayed) generation, set up the recurring interval
+        setInterval(() => {
+          generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
+        }, GENERATION_INTERVAL_MS);
+      }, remaining);
+      return;
     }
+
+    // No lastAutoGenAt recorded but we have enough posts (edge case: posts
+    // were seeded or created manually, or DB state was lost). Start fresh.
+    console.log(`[blog-generator] no previous auto-gen recorded; starting fresh ${GENERATION_INTERVAL_MS / 3600000}h interval`);
+    nextGenAt = new Date(Date.now() + GENERATION_INTERVAL_MS);
+    setInterval(() => {
+      generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
+    }, GENERATION_INTERVAL_MS);
   } catch (err) {
-    console.error('[blog-generator] startup check failed:', err);
+    console.error('[blog-generator] startup scheduling failed:', err);
+    // Fallback: just start a fresh interval
+    setInterval(() => {
+      generateArticle().catch((e) => console.error('[blog-generator] fallback scheduled error:', e));
+    }, GENERATION_INTERVAL_MS);
   }
 }
 
@@ -599,13 +657,18 @@ async function getTotalPosts(): Promise<number> {
   }
 }
 
+function getNextGenInMs(): number {
+  if (!nextGenAt) return GENERATION_INTERVAL_MS;
+  const remaining = nextGenAt.getTime() - Date.now();
+  return remaining > 0 ? remaining : 0;
+}
+
 // ---- HTTP server (Bun.serve) ----
 const server = Bun.serve({
   port: PORT,
   async fetch(req) {
     const url = new URL(req.url);
 
-    // CORS preflight for cross-origin admin requests through the gateway
     if (req.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
@@ -634,14 +697,12 @@ const server = Bun.serve({
           lastGeneratedAt,
           lastError,
           totalPosts,
-          nextScheduledInMs: GENERATION_INTERVAL_MS,
+          nextGenInMs: getNextGenInMs(),
         },
         { headers: corsHeaders }
       );
     }
     if (req.method === 'POST' && url.pathname === '/generate') {
-      // Fire-and-forget; return immediately so the caller isn't blocked by the
-      // (slow) LLM + image generation. Admin UI can poll /status afterwards.
       if (isGenerating) {
         return Response.json({ started: false, message: 'Generation already in progress' }, { headers: corsHeaders });
       }
@@ -649,10 +710,6 @@ const server = Bun.serve({
       return Response.json({ started: true }, { headers: corsHeaders });
     }
     if (req.method === 'POST' && url.pathname === '/generate-custom') {
-      // Custom-topic generation. Reads { topic: string } from the JSON body.
-      // This does NOT advance the 6-hour auto-rotation — generateArticle()
-      // skips pickTopic() when a customTopic is supplied, so the scheduled
-      // setInterval cycle continues with its next topic as if nothing happened.
       if (isGenerating) {
         return Response.json({ started: false, message: 'تولید دیگری در حال انجام است؛ لطفاً صبر کنید' }, { headers: corsHeaders });
       }
@@ -688,17 +745,13 @@ console.log(`[blog-generator] listening on http://localhost:${PORT}`);
     console.error('[blog-generator] ZAI SDK init failed:', err);
   }
 
-  // Schedule recurring generation every 6 hours.
-  setInterval(() => {
-    generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
-  }, GENERATION_INTERVAL_MS);
-  console.log(`[blog-generator] scheduled auto-generation every ${GENERATION_INTERVAL_MS / 3600000}h`);
+  // 1. Restore persisted state from DB
+  await restoreState();
 
-  // Decide whether to generate one shortly after startup.
-  maybeGenerateOnStartup();
+  // 2. Schedule generation based on restored state
+  await scheduleGenerationOnStartup();
 })();
 
-// Keep the process alive and handle shutdown.
 process.on('SIGINT', async () => {
   console.log('[blog-generator] shutting down...');
   await db.$disconnect();

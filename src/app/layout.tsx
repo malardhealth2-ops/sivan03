@@ -5,6 +5,8 @@ import "@/styles/leaflet.css";
 import { Toaster } from "@/components/ui/sonner";
 import { PWARegister } from "@/components/sivan/PWARegister";
 
+const ICON_VERSION = 'v2';
+
 export const metadata: Metadata = {
   title: "تاکسی ویژه سیوان | Sivan VIP Taxi",
   description: "رزرو آنلاین تاکسی بین شهری VIP - سفری لوکس، راحت و ایمن با سیوان",
@@ -22,11 +24,11 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: `/favicon-32.png?v=${ICON_VERSION}`, sizes: "32x32", type: "image/png" },
+      { url: `/icon-192.png?v=${ICON_VERSION}`, sizes: "192x192", type: "image/png" },
+      { url: `/icon-512.png?v=${ICON_VERSION}`, sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: `/apple-touch-icon.png?v=${ICON_VERSION}`, sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     title: "تاکسی ویژه سیوان | Sivan VIP Taxi",
