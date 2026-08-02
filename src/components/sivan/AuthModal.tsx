@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User,
@@ -10,6 +10,8 @@ import {
   Eye,
   EyeOff,
   Phone,
+  Check,
+  X,
 } from 'lucide-react';
 import {
   Dialog,
@@ -23,6 +25,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAppStore } from '@/lib/store';
 import { toast } from 'sonner';
+
+type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
 
 export function AuthModal() {
   const {
@@ -46,6 +50,44 @@ export function AuthModal() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
 
+  // Real-time username check
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
+  const checkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const checkUsername = useCallback(async (value: string) => {
+    if (value.length < 3 || !/^[a-zA-Z0-9_.-]+$/.test(value)) {
+      if (value.length > 0) setUsernameStatus('invalid');
+      else setUsernameStatus('idle');
+      return;
+    }
+    setUsernameStatus('checking');
+    try {
+      const res = await fetch(`/api/auth/check-username?username=${encodeURIComponent(value)}`);
+      const data = await res.json();
+      setUsernameStatus(data.available ? 'available' : 'taken');
+    } catch {
+      setUsernameStatus('idle');
+    }
+  }, []);
+
+  // Debounced username check on change (register mode only)
+  useEffect(() => {
+    if (isLogin) {
+      setUsernameStatus('idle');
+      return;
+    }
+    if (checkTimerRef.current) clearTimeout(checkTimerRef.current);
+    const val = username.trim();
+    if (val.length === 0) {
+      setUsernameStatus('idle');
+      return;
+    }
+    checkTimerRef.current = setTimeout(() => checkUsername(val), 400);
+    return () => {
+      if (checkTimerRef.current) clearTimeout(checkTimerRef.current);
+    };
+  }, [username, isLogin, checkUsername]);
+
   const resetForm = () => {
     setUsername('');
     setFullName('');
@@ -55,6 +97,7 @@ export function AuthModal() {
     setError('');
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setUsernameStatus('idle');
   };
 
   const switchMode = (mode: 'login' | 'register') => {
@@ -87,7 +130,6 @@ export function AuthModal() {
         return;
       }
 
-      // Check if admin
       if (data.user.role === 'admin') {
         closeAuth();
         toast.success('خوش آمدید، مدیر سیستم');
@@ -122,6 +164,10 @@ export function AuthModal() {
     }
     if (!/^[a-zA-Z0-9_.-]+$/.test(username.trim())) {
       setError('نام کاربری فقط می‌تواند شامل حروف انگلیسی، اعداد و _ . - باشد');
+      return;
+    }
+    if (usernameStatus === 'taken') {
+      setError('این نام کاربری قبلاً گرفته شده است');
       return;
     }
     if (!fullName.trim()) {
@@ -190,6 +236,21 @@ export function AuthModal() {
     else handleRegister();
   };
 
+  const getUsernameBorderColor = () => {
+    if (isLogin || usernameStatus === 'idle' || usernameStatus === 'checking') return 'border-[#333]';
+    if (usernameStatus === 'available') return 'border-green-500/60';
+    return 'border-red-500/60';
+  };
+
+  const getUsernameHint = () => {
+    if (isLogin || usernameStatus === 'idle') return null;
+    if (usernameStatus === 'checking') return { icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, text: 'در حال بررسی...', color: 'text-[#a1a1aa]' };
+    if (usernameStatus === 'available') return { icon: <Check className="h-3.5 w-3.5" />, text: 'نام کاربری آزاد است', color: 'text-green-400' };
+    if (usernameStatus === 'taken') return { icon: <X className="h-3.5 w-3.5" />, text: 'این نام کاربری قبلاً گرفته شده', color: 'text-red-400' };
+    if (usernameStatus === 'invalid') return { icon: <X className="h-3.5 w-3.5" />, text: 'فقط حروف انگلیسی، اعداد و _ . -', color: 'text-red-400' };
+    return null;
+  };
+
   return (
     <Dialog open={auth.isOpen} onOpenChange={(open) => { if (!open) { resetForm(); closeAuth(); } }}>
       <DialogContent className="sm:max-w-md bg-[#1a1a1a] border-[#D4AF37]/30 text-[#fafafa] p-0 overflow-hidden">
@@ -227,7 +288,7 @@ export function AuthModal() {
           >
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Username */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label className="text-[#a1a1aa] text-sm">نام کاربری</Label>
                 <div className="relative">
                   <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#666]" />
@@ -235,12 +296,31 @@ export function AuthModal() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="مثال: ali123"
-                    className="pr-10 bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#555] h-11 focus:border-[#D4AF37]/50 rounded-xl"
+                    className={`pr-10 bg-[#0a0a0a] ${getUsernameBorderColor()} text-[#fafafa] placeholder:text-[#555] h-11 focus:border-[#D4AF37]/50 rounded-xl transition-colors`}
                     dir="ltr"
                     autoComplete="username"
                     disabled={loading}
                   />
+                  {/* Status indicator inside input */}
+                  {usernameStatus !== 'idle' && !isLogin && (
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                      {usernameStatus === 'checking' ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-[#a1a1aa]" />
+                      ) : usernameStatus === 'available' ? (
+                        <Check className="h-4 w-4 text-green-400" />
+                      ) : (usernameStatus === 'taken' || usernameStatus === 'invalid') ? (
+                        <X className="h-4 w-4 text-red-400" />
+                      ) : null}
+                    </div>
+                  )}
                 </div>
+                {/* Hint text below input */}
+                {getUsernameHint() && (
+                  <div className={`flex items-center gap-1.5 text-xs ${getUsernameHint()!.color}`}>
+                    {getUsernameHint()!.icon}
+                    {getUsernameHint()!.text}
+                  </div>
+                )}
               </div>
 
               {/* Full Name (register only) */}
@@ -347,8 +427,8 @@ export function AuthModal() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                disabled={loading}
-                className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-bold text-base rounded-xl transition-all hover:shadow-lg hover:shadow-[#D4AF37]/20"
+                disabled={loading || (!isLogin && usernameStatus === 'taken')}
+                className="w-full bg-[#D4AF37] text-[#0a0a0a] hover:bg-[#E5C76B] h-12 font-bold text-base rounded-xl transition-all hover:shadow-lg hover:shadow-[#D4AF37]/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
