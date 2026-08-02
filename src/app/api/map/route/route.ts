@@ -134,7 +134,7 @@ async function fetchOSRMRoute(
     // Try with alternatives first (longer timeout since it's more compute-intensive)
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        const urlWithAlts = `${server}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson&alternatives=true&number=3`;
+        const urlWithAlts = `${server}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson&alternatives=true`;
         console.log(`[Route] OSRM attempt: ${server} (try ${attempt + 1})`);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), ALTS_TIMEOUT);
