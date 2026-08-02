@@ -4,7 +4,7 @@
   "description": "AI blog auto-generator for Sivan VIP Taxi — publishes a new article + cover image every 6 hours using z-ai-web-dev-sdk. @prisma/client and z-ai-web-dev-sdk resolve from the parent project's node_modules.",
   "type": "module",
   "scripts": {
-    "dev": "bun --hot index.ts"
+    "dev": "bun index.ts"
   },
   "dependencies": {}
 }

@@ -1738,3 +1738,25 @@ Stage Summary:
 - Files modified: `src/lib/store.ts`, `src/app/page.tsx`
 - Admin session now persists across page refreshes via localStorage
 - Same pattern as user auth persistence (already implemented earlier)
+
+---
+Task ID: blog-v5-upgrade
+Agent: main
+Task: Upgrade blog-generator to v5 with real images, enhanced SEO, and robust persistence
+
+Work Log:
+- Replaced AI-generated cover images with real photographs using `z-ai image-search` CLI
+- Added per-topic English search queries for tourism cities (Isfahan, Shiraz, Mashhad, etc.) and luxury car models
+- LLM generates smart English search query based on article title, falls back to predefined queries
+- Downloads image from OSS URL, validates size (5KB-5MB), saves locally to public/images/blog/
+- Enhanced SEO prompt with 8 specific rules: heading hierarchy (no H1, H2+H3), keyword density 1-2.5%, meta description 150-160 chars, internal linking to Sivan homepage, rich content elements (lists, blockquotes, strong tags)
+- Article word count increased to 800-1200 words
+- Added robust persistence: consecutive failure tracking, 30min recovery interval after 5 failures, clean interval management
+- Updated package.json dev script from `bun --hot` to `bun` for stability
+- Verified end-to-end: real image of Shiraz (1024x786 JPEG, 213KB) downloaded and article published
+- Article SEO audit: 4 H2, 3 H3, 10 P, 4 strong, 1 internal link, 1 blockquote, 1 UL
+
+Stage Summary:
+- Blog generator v5 is running on port 3005 with real image search mode
+- All 3 requirements met: real images, persistent generation, enhanced SEO
+- Test article: "شیراز؛ جاذبه‌های گردشگری شهر گل و شعر" with real photo from web

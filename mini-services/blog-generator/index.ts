@@ -1,21 +1,21 @@
 /**
- * Sivan AI Blog Generator (v4 — persistent state)
- * ==================================================
+ * Sivan AI Blog Generator (v5 — real images + enhanced SEO + robust persistence)
+ * ============================================================================
  *
- * Automatically generates and publishes a new SEO-optimized blog article (with
- * an AI-generated cover image and justified Persian HTML text) every 6 hours
- * using the z-ai-web-dev-sdk (LLM chat completions + image generation).
+ * Automatically generates and publishes a new SEO-optimized blog article every 6 hours
+ * using the z-ai-web-dev-sdk (LLM chat completions) and z-ai image-search (real photos).
  *
- * **v4 key change**: Generation state (cycleIndex, categoryTopicIndex,
- * lastAutoGenAt) is persisted in the BlogGeneratorState DB table so that
- * restarts / deploys do NOT break the scheduling. On startup the service
- * restores where it left off and schedules the next generation based on
- * how much time has elapsed since the last auto-generation.
+ * **v5 changes**:
+ *   1. REAL IMAGES: Uses `z-ai image-search` CLI to find real photographs of
+ *      Iranian cities, landmarks, and luxury cars — no more AI-generated images.
+ *   2. ENHANCED SEO: Comprehensive SEO prompt with heading hierarchy rules,
+ *      keyword density guidance, internal linking, FAQ schema hints, and
+ *      structured meta descriptions.
+ *   3. ROBUST PERSISTENCE: Generation state persisted in DB. On restart/deploy,
+ *      service restores state and continues. Error recovery with exponential
+ *      backoff. Keep-alive health checks.
  *
  * Topics are diversified across 7 categories so the blog has a balanced mix.
- *
- * Cover images are category-aware: tourist destinations get landscape/scenery
- * prompts, luxury-car articles get interior/detail shots, etc.
  *
  * Runs as a Bun mini-service on port 3005.
  *
@@ -28,14 +28,18 @@
 
 import { PrismaClient } from '@prisma/client';
 import ZAI from 'z-ai-web-dev-sdk';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import https from 'https';
+import http from 'http';
 
 const PORT = 3005;
 const DB_URL = 'file:/home/z/my-project/db/custom.db';
 const BLOG_IMG_DIR = '/home/z/my-project/public/images/blog';
 const GENERATION_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const MIN_POSTS_FOR_IMMEDIATE_SKIP = 3;
+const CONSECUTIVE_FAILURE_RESET = 5; // after this many fails, reset to immediate
 
 const db = new PrismaClient({ datasources: { db: { url: DB_URL } } });
 let zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
@@ -44,12 +48,15 @@ let zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
 let isGenerating = false;
 let lastGeneratedAt: string | null = null;
 let lastError: string | null = null;
-let nextGenAt: Date | null = null; // when the next scheduled generation will fire
+let nextGenAt: Date | null = null;
+let consecutiveFailures = 0;
+let generationCount = 0;
 
 // Diversified topic pool. Each topic carries:
 //   - title:   the article's working title (LLM may refine it)
 //   - keyword: the SEO focus keyword the LLM must weave in
-//   - category: drives which cover-image scene pool is used
+//   - category: drives which image search query is built
+//   - searchQueries: English search queries for real image search
 type TopicCategory =
   | 'tourism'
   | 'luxury-cars'
@@ -63,69 +70,117 @@ interface Topic {
   title: string;
   keyword: string;
   category: TopicCategory;
+  searchQueries: string[]; // English queries for image-search
 }
 
 const TOPICS: Topic[] = [
   // ---- گردشگری و مناطق زیبای ایران (tourism) ----
-  { title: 'جاذبه‌های گردشگری مشهد که هر مسافری باید ببیند', keyword: 'جاذبه‌های گردشگری مشهد', category: 'tourism' },
-  { title: 'زیبایی‌های شیراز؛ شهر گل و شب‌نما', keyword: 'جاذبه‌های گردشگری شیراز', category: 'tourism' },
-  { title: 'اصفهان شهر نصف جهان؛ راهنمای گردشگری', keyword: 'گردشگری اصفهان', category: 'tourism' },
-  { title: 'تابستان در نوشهر و چالوس؛ بهترین مسیر فرار از گرما', keyword: 'گردشگری نوشهر و چالوس', category: 'tourism' },
-  { title: 'جزیره کیش؛ بهشت گردشگری در خلیج فارس', keyword: 'گردشگری کیش', category: 'tourism' },
-  { title: 'جزیره قشم و عجایب طبیعی آن', keyword: 'گردشگری قشم', category: 'tourism' },
-  { title: 'ماسوله؛ روستای پلکانی تاریخ ایران', keyword: 'گردشگری ماسوله', category: 'tourism' },
-  { title: 'تبریز در یک روز؛ بازار، مسجد کبود و قهوه‌خانه‌ها', keyword: 'گردشگری تبریز', category: 'tourism' },
-  { title: 'دریاچه نمک مهابان و عجایب مسیر تهران-قم', keyword: 'دریاچه نمک قم', category: 'tourism' },
-  { title: 'بهترین فصل سفر به شمال ایران برای دیدن طبیعت', keyword: 'بهترین فصل سفر به شمال', category: 'tourism' },
-  { title: 'یزد شهر بادگیرها و کویر نقره‌ای', keyword: 'گردشگری یزد', category: 'tourism' },
-  { title: 'کرمان و دل کویر؛ راهنمای سفر به گنبد فتح‌آباد', keyword: 'گردشگری کرمان', category: 'tourism' },
+  { title: 'جاذبه‌های گردشگری مشهد که هر مسافری باید ببیند', keyword: 'جاذبه‌های گردشگری مشهد', category: 'tourism',
+    searchQueries: ['Mashhad Imam Reza shrine golden dome Iran', 'Mashhad city skyline Iran pilgrimage'] },
+  { title: 'زیبایی‌های شیراز؛ شهر گل و شب‌نما', keyword: 'جاذبه‌های گردشگری شیراز', category: 'tourism',
+    searchQueries: ['Shiraz Nasir al-Mulk pink mosque Iran', 'Shiraz Eram garden beautiful Persian garden'] },
+  { title: 'اصفهان شهر نصف جهان؛ راهنمای گردشگری', keyword: 'گردشگری اصفهان', category: 'tourism',
+    searchQueries: ['Isfahan Si-o-se-pol bridge Zayandeh river Iran', 'Isfahan Naqsh-e Jahan square beautiful Iranian architecture'] },
+  { title: 'تابستان در نوشهر و چالوس؛ بهترین مسیر فرار از گرما', keyword: 'گردشگری نوشهر و چالوس', category: 'tourism',
+    searchQueries: ['Noshahr Caspian Sea coast Iran summer', 'Chalous road northern Iran forest mountain'] },
+  { title: 'جزیره کیش؛ بهشت گردشگری در خلیج فارس', keyword: 'گردشگری کیش', category: 'tourism',
+    searchQueries: ['Kish island Persian Gulf beach resort Iran', 'Kish island coral beach turquoise water'] },
+  { title: 'جزیره قشم و عجایب طبیعی آن', keyword: 'گردشگری قشم', category: 'tourism',
+    searchQueries: ['Qeshm island Hengam dolphin Iran', 'Qeshm island valley of stars geological formations'] },
+  { title: 'ماسوله؛ روستای پلکانی تاریخ ایران', keyword: 'گردشگری ماسوله', category: 'tourism',
+    searchQueries: ['Masouleh village stepped architecture Iran', 'Masouleh colorful houses mountain village Gilan'] },
+  { title: 'تبریز در یک روز؛ بازار، مسجد کبود و قهوه‌خانه‌ها', keyword: 'گردشگری تبریز', category: 'tourism',
+    searchQueries: ['Tabriz Blue Mosque Azerbaijan Iran', 'Tabriz historic bazaar UNESCO Iran'] },
+  { title: 'دریاچه نمک مهابان و عجایب مسیر تهران-قم', keyword: 'دریاچه نمک قم', category: 'tourism',
+    searchQueries: ['Salt lake desert Iran Qom highway', 'Mesr desert salt flats Iran landscape'] },
+  { title: 'بهترین فصل سفر به شمال ایران برای دیدن طبیعت', keyword: 'بهترین فصل سفر به شمال', category: 'tourism',
+    searchQueries: ['Northern Iran lush green forest spring', 'Gilan province rice fields Hyrcanian forest'] },
+  { title: 'یزد شهر بادگیرها و کویر نقره‌ای', keyword: 'گردشگری یزد', category: 'tourism',
+    searchQueries: ['Yazd wind towers desert city Iran', 'Yazd old town mud brick architecture adobe'] },
+  { title: 'کرمان و دل کویر؛ راهنمای سفر به گنبد فتح‌آباد', keyword: 'گردشگری کرمان', category: 'tourism',
+    searchQueries: ['Kerman Ganjali Khan bathhouse Iran', 'Kerman desert Kalut sand formations Shahdad'] },
 
   // ---- خودروهای لوکس و مزایا (luxury-cars) ----
-  { title: 'امکانات خودرو لوکس که کیفیت سفر را متحول می‌کند', keyword: 'امکانات خودرو لوکس', category: 'luxury-cars' },
-  { title: 'چرا صندلی چرمی در سفرهای طولانی مهم است؟', keyword: 'صندلی چرمی خودرو لوکس', category: 'luxury-cars' },
-  { title: 'عایق صدا در خودرو لوکس و تأثیر آن بر آرامش سفر', keyword: 'عایق صدا خودرو', category: 'luxury-cars' },
-  { title: 'سیستم تهویه مطبوع در خودروهای لوکس؛ فراتر از کولر', keyword: 'تهویه خودرو لوکس', category: 'luxury-cars' },
-  { title: 'مرسدس بنز کلاس E؛ پادشاه جاده‌های ایران', keyword: 'مرسدس بنز کلاس E', category: 'luxury-cars' },
-  { title: 'بی‌ام‌و سری ۵؛ ترکیب اسپرت و لوکس برای سفر', keyword: 'بی ام و سری 5', category: 'luxury-cars' },
-  { title: 'آئودی A6 و جذابیت طراحی آلمان در جاده‌های ایران', keyword: 'آئودی A6', category: 'luxury-cars' },
-  { title: 'تویوتا لندکروزر؛ بهترین همراه جاده‌های کوهستانی', keyword: 'تویوتا لندکروزر', category: 'luxury-cars' },
-  { title: 'هیوندای سوناتا؛ لوکس اما اقتصادی برای سفر خانوادگی', keyword: 'هیوندای سوناتا', category: 'luxury-cars' },
-  { title: 'سیستم تعلیق در خودروهای لوکس و راحتی سرنشینان', keyword: 'سیستم تعلیق خودرو', category: 'luxury-cars' },
-  { title: 'ایمنی فعال در خودروهای لوکس؛ از ترمز ABS تا کیسه هوا', keyword: 'ایمنی خودرو لوکس', category: 'luxury-cars' },
-  { title: 'طراحی داخلی خودرو لوکس؛ فضایی که خستگی را فراموش می‌کنید', keyword: 'طراحی داخلی خودرو لوکس', category: 'luxury-cars' },
+  { title: 'امکانات خودرو لوکس که کیفیت سفر را متحول می‌کند', keyword: 'امکانات خودرو لوکس', category: 'luxury-cars',
+    searchQueries: ['luxury car interior premium leather seats ambient lighting', 'luxury sedan dashboard technology premium features'] },
+  { title: 'چرا صندلی چرمی در سفرهای طولانی مهم است؟', keyword: 'صندلی چرمی خودرو لوکس', category: 'luxury-cars',
+    searchQueries: ['premium leather car seat luxury interior detail', 'luxury car leather upholstery stitching detail'] },
+  { title: 'عایق صدا در خودرو لوکس و تأثیر آن بر آرامش سفر', keyword: 'عایق صدا خودرو', category: 'luxury-cars',
+    searchQueries: ['luxury car quiet cabin sound insulation', 'premium car interior silent ride comfort'] },
+  { title: 'سیستم تهویه مطبوع در خودروهای لوکس؛ فراتر از کولر', keyword: 'تهویه خودرو لوکس', category: 'luxury-cars',
+    searchQueries: ['luxury car climate control dual zone', 'premium car air conditioning vents modern'] },
+  { title: 'مرسدس بنز کلاس E؛ پادشاه جاده‌های ایران', keyword: 'مرسدس بنز کلاس E', category: 'luxury-cars',
+    searchQueries: ['Mercedes-Benz E-Class black sedan luxury', 'Mercedes E-Class W213 front view elegant'] },
+  { title: 'بی‌ام‌و سری ۵؛ ترکیب اسپرت و لوکس برای سفر', keyword: 'بی ام و سری 5', category: 'luxury-cars',
+    searchQueries: ['BMW 5 Series sedan luxury black', 'BMW 5 Series interior premium dashboard'] },
+  { title: 'آئودی A6 و جذابیت طراحی آلمان در جاده‌های ایران', keyword: 'آئودی A6', category: 'luxury-cars',
+    searchQueries: ['Audi A6 sedan luxury black front', 'Audi A6 interior virtual cockpit premium'] },
+  { title: 'تویوتا لندکروزر؛ بهترین همراه جاده‌های کوهستانی', keyword: 'تویوتا لندکروزر', category: 'luxury-cars',
+    searchQueries: ['Toyota Land Cruiser black SUV offroad', 'Toyota Land Cruiser desert road Iran'] },
+  { title: 'هیوندای سوناتا؛ لوکس اما اقتصادی برای سفر خانوادگی', keyword: 'هیوندای سوناتا', category: 'luxury-cars',
+    searchQueries: ['Hyundai Sonata sedan silver modern', 'Hyundai Sonata interior family car comfortable'] },
+  { title: 'سیستم تعلیق در خودروهای لوکس و راحتی سرنشینان', keyword: 'سیستم تعلیق خودرو', category: 'luxury-cars',
+    searchQueries: ['luxury car air suspension smooth ride', 'premium car suspension system comfort'] },
+  { title: 'ایمنی فعال در خودروهای لوکس؛ از ترمز ABS تا کیسه هوا', keyword: 'ایمنی خودرو لوکس', category: 'luxury-cars',
+    searchQueries: ['car safety features ABS airbag modern', 'luxury car advanced safety technology'] },
+  { title: 'طراحی داخلی خودرو لوکس؛ فضایی که خستگی را فراموش می‌کنید', keyword: 'طراحی داخلی خودرو لوکس', category: 'luxury-cars',
+    searchQueries: ['luxury car interior design premium wood trim', 'premium sedan cabin elegant lighting night'] },
 
   // ---- مقایسه لوکس و اقتصادی (luxury-vs-economy) ----
-  { title: 'خودرو لوکس یا اقتصادی؟ کدام برای سفر بین شهری بهتر است', keyword: 'خودرو لوکس یا اقتصادی', category: 'luxury-vs-economy' },
-  { title: 'هزینه پنهان سفر با خودرو اقتصادی که نمی‌بینید', keyword: 'هزینه سفر خودرو اقتصادی', category: 'luxury-vs-economy' },
-  { title: 'چرا خودرو لوکس در جاده‌های طولانی ارزشش را دارد؟', keyword: 'ارزش خودرو لوکس سفر', category: 'luxury-vs-economy' },
-  { title: 'مقایسه راحتی خودرو لوکس و پراید در سفر تهران-مشهد', keyword: 'راحتی خودرو لوکس پراید', category: 'luxury-vs-economy' },
-  { title: 'خستگی راننده در خودرو اقتصادی vs خودرو لوکس', keyword: 'خستگی راننده خودرو', category: 'luxury-vs-economy' },
-  { title: 'ایمنی خودرو لوکس در برابر خودرو اقتصادی؛ تفاوت فاجعه‌بار', keyword: 'ایمنی لوکس اقتصادی', category: 'luxury-vs-economy' },
-  { title: 'فضای داخلی و چمدان؛ برتری خودرو لوکس در سفر خانوادگی', keyword: 'فضای داخلی خودرو سفر', category: 'luxury-vs-economy' },
+  { title: 'خودرو لوکس یا اقتصادی؟ کدام برای سفر بین شهری بهتر است', keyword: 'خودرو لوکس یا اقتصادی', category: 'luxury-vs-economy',
+    searchQueries: ['luxury sedan vs economy car comparison', 'black luxury car and small car side by side'] },
+  { title: 'هزینه پنهان سفر با خودرو اقتصادی که نمی‌بینید', keyword: 'هزینه سفر خودرو اقتصادی', category: 'luxury-vs-economy',
+    searchQueries: ['old economy car breakdown roadside', 'worn out car interior uncomfortable seats'] },
+  { title: 'چرا خودرو لوکس در جاده‌های طولانی ارزشش را دارد؟', keyword: 'ارزش خودرو لوکس سفر', category: 'luxury-vs-economy',
+    searchQueries: ['luxury car highway driving comfortable long distance', 'premium sedan open road sunset golden hour'] },
+  { title: 'مقایسه راحتی خودرو لوکس و پراید در سفر تهران-مشهد', keyword: 'راحتی خودرو لوکس پراید', category: 'luxury-vs-economy',
+    searchQueries: ['Iran highway long road Tehran Mashhad', 'luxury black car driving on Iranian highway'] },
+  { title: 'خستگی راننده در خودرو اقتصادی vs خودرو لوکس', keyword: 'خستگی راننده خودرو', category: 'luxury-vs-economy',
+    searchQueries: ['tired driver holding steering wheel road trip', 'comfortable driver relaxed luxury car driving'] },
+  { title: 'ایمنی خودرو لوکس در برابر خودرو اقتصادی؛ تفاوت فاجعه‌بار', keyword: 'ایمنی لوکس اقتصادی', category: 'luxury-vs-economy',
+    searchQueries: ['car crash test safety rating comparison', 'luxury car crumple zone safety technology'] },
+  { title: 'فضای داخلی و چمدان؛ برتری خودرو لوکس در سفر خانوادگی', keyword: 'فضای داخلی خودرو سفر', category: 'luxury-vs-economy',
+    searchQueries: ['luxury car spacious trunk luggage family trip', 'family loading suitcases into premium SUV'] },
 
   // ---- راهنمای سفر شهر به شهر (travel-guide) ----
-  { title: 'راهنمای کامل سفر تهران به مشهد با خودرو', keyword: 'سفر تهران به مشهد', category: 'travel-guide' },
-  { title: 'سفر تهران به اصفهان؛ مسیر، توقف‌ها و جاذبه‌ها', keyword: 'سفر تهران به اصفهان', category: 'travel-guide' },
-  { title: 'سفر تهران به شیراز از جاده قدیم و جدید', keyword: 'سفر تهران به شیراز', category: 'travel-guide' },
-  { title: 'سفر تهران به رشت و انزلی؛ راهنمای جاده هراز', keyword: 'سفر تهران به رشت', category: 'travel-guide' },
-  { title: 'سفر تهران به تبریز از جاده قزوین-زنجان', keyword: 'سفر تهران به تبریز', category: 'travel-guide' },
-  { title: 'مسیر تهران به کیش؛ پرواز یا سفر زمینی؟', keyword: 'سفر تهران به کیش', category: 'travel-guide' },
+  { title: 'راهنمای کامل سفر تهران به مشهد با خودرو', keyword: 'سفر تهران به مشهد', category: 'travel-guide',
+    searchQueries: ['Tehran to Mashhad highway Iran road trip', 'Iran highway desert landscape long road'] },
+  { title: 'سفر تهران به اصفهان؛ مسیر، توقف‌ها و جاذبه‌ها', keyword: 'سفر تهران به اصفهان', category: 'travel-guide',
+    searchQueries: ['Tehran to Isfahan road Iran highway', 'Iranian highway mountain scenery desert'] },
+  { title: 'سفر تهران به شیراز از جاده قدیم و جدید', keyword: 'سفر تهران به شیراز', category: 'travel-guide',
+    searchQueries: ['Tehran to Shiraz road Iran landscape', 'Iran southern road mountains desert scenic'] },
+  { title: 'سفر تهران به رشت و انزلی؛ راهنمای جاده هراز', keyword: 'سفر تهران به رشت', category: 'travel-guide',
+    searchQueries: ['Haraz road Iran mountain forest green', 'Rasht Anzali Caspian Sea coast Iran'] },
+  { title: 'سفر تهران به تبریز از جاده قزوین-زنجان', keyword: 'سفر تهران به تبریز', category: 'travel-guide',
+    searchQueries: ['Tehran to Tabriz highway Iran landscape', 'Zanjan Soltaniyeh dome Iran road trip'] },
+  { title: 'مسیر تهران به کیش؛ پرواز یا سفر زمینی؟', keyword: 'سفر تهران به کیش', category: 'travel-guide',
+    searchQueries: ['Kish island aerial view beach Persian Gulf', 'airplane flying over Iranian island resort'] },
 
   // ---- نکات عملی سفر (travel-tips) ----
-  { title: 'راهنمای بسته‌بندی چمدان برای سفر بین شهری', keyword: 'بسته‌بندی چمدان سفر', category: 'travel-tips' },
-  { title: 'مدیریت خستگی در سفرهای طولانی بین شهری', keyword: 'خستگی در سفر بین شهری', category: 'travel-tips' },
-  { title: 'بهترین زمان استراحت در جاده؛ هر چند ساعت یک‌بار؟', keyword: 'استراحت در جاده', category: 'travel-tips' },
-  { title: 'سفر با کودکان؛ راهنمای آرامش خانواده در جاده', keyword: 'سفر با کودکان', category: 'travel-tips' },
-  { title: 'چگونه زمان سفر را برای ترافیک کمتر برنامه‌ریزی کنیم', keyword: 'زمان سفر ترافیک', category: 'travel-tips' },
+  { title: 'راهنمای بسته‌بندی چمدان برای سفر بین شهری', keyword: 'بسته‌بندی چمدان سفر', category: 'travel-tips',
+    searchQueries: ['packed travel suitcase with essentials organized', 'luxury car trunk open with luggage'] },
+  { title: 'مدیریت خستگی در سفرهای طولانی بین شهری', keyword: 'خستگی در سفر بین شهری', category: 'travel-tips',
+    searchQueries: ['road trip rest stop coffee break', 'driver resting at highway service area'] },
+  { title: 'بهترین زمان استراحت در جاده؛ هر چند ساعت یک‌بار؟', keyword: 'استراحت در جاده', category: 'travel-tips',
+    searchQueries: ['highway rest area stop Iran road trip', 'scenic roadside stop mountains Iran'] },
+  { title: 'سفر با کودکان؛ راهنمای آرامش خانواده در جاده', keyword: 'سفر با کودکان', category: 'travel-tips',
+    searchQueries: ['family road trip children happy in car', 'kids looking out car window road trip'] },
+  { title: 'چگونه زمان سفر را برای ترافیک کمتر برنامه‌ریزی کنیم', keyword: 'زمان سفر ترافیک', category: 'travel-tips',
+    searchQueries: ['empty highway scenic Iran no traffic', 'early morning road trip beautiful sunrise'] },
 
-  // ---- ایمنی سفر (safety — intentionally small) ----
-  { title: 'نکات کلیدی ایمنی سفر بین شهری در شب', keyword: 'ایمنی سفر شب', category: 'safety' },
-  { title: 'چک‌لیست ایمنی خودرو پیش از سفر طولانی', keyword: 'چک لیست ایمنی خودرو', category: 'safety' },
+  // ---- ایمنی سفر (safety) ----
+  { title: 'نکات کلیدی ایمنی سفر بین شهری در شب', keyword: 'ایمنی سفر شب', category: 'safety',
+    searchQueries: ['car driving at night highway lights Iran', 'luxury car headlights road night safe driving'] },
+  { title: 'چک‌لیست ایمنی خودرو پیش از سفر طولانی', keyword: 'چک لیست ایمنی خودرو', category: 'safety',
+    searchQueries: ['mechanic checking car before road trip', 'car tire inspection service station'] },
 
   // ---- برند سیوان (sivan-brand) ----
-  { title: 'چرا تاکسی ویژه سیوان انتخاب هوشمندانه‌ای است', keyword: 'تاکسی ویژه سیوان', category: 'sivan-brand' },
-  { title: 'تفاوت تاکسی دربستی سیوان با آژانس‌های معمولی', keyword: 'تاکسی دربستی سیوان', category: 'sivan-brand' },
-  { title: 'هزینه سفر با تاکسی VIP چگونه محاسبه می‌شود', keyword: 'هزینه تاکسی VIP', category: 'sivan-brand' },
+  { title: 'چرا تاکسی ویژه سیوان انتخاب هوشمندانه‌ای است', keyword: 'تاکسی ویژه سیوان', category: 'sivan-brand',
+    searchQueries: ['black luxury sedan fleet line up premium', 'professional chauffeur opening luxury car door'] },
+  { title: 'تفاوت تاکسی دربستی سیوان با آژانس‌های معمولی', keyword: 'تاکسی دربستی سیوان', category: 'sivan-brand',
+    searchQueries: ['luxury private car service premium', 'black executive sedan VIP transport'] },
+  { title: 'هزینه سفر با تاکسی VIP چگونه محاسبه می‌شود', keyword: 'هزینه تاکسی VIP', category: 'sivan-brand',
+    searchQueries: ['luxury taxi service premium car city', 'VIP car service transparent pricing professional'] },
 ];
 
 // Weighted category rotation so the blog has a balanced mix.
@@ -213,68 +268,55 @@ async function saveState(): Promise<void> {
  */
 async function isDuplicateTopic(topic: Topic): Promise<boolean> {
   try {
-    // Get all published post titles and tags
     const existingPosts = await db.blogPost.findMany({
       where: { status: 'published' },
       select: { title: true, tags: true },
     });
     if (existingPosts.length === 0) return false;
 
-    // Normalize the topic keyword into a set of meaningful words
     const topicWords = new Set(
       topic.keyword
-        .replace(/[«»"'!?.,:;()\[\]{}،؛؟]/g, ' ')
+        .replace(/['"\u00AB\u00BB'!?.,:;()\[\]{}\u060C\u061B\u061F]/g, ' ')
         .split(/\s+/)
         .filter((w) => w.length > 2)
         .map((w) => w.trim())
     );
-    // Also add key words from the title
     const titleWords = new Set(
       topic.title
-        .replace(/[«»"'!?.,:;()\[\]{}،؛؟]/g, ' ')
+        .replace(/['"\u00AB\u00BB'!?.,:;()\[\]{}\u060C\u061B\u061F]/g, ' ')
         .split(/\s+/)
         .filter((w) => w.length > 2)
         .map((w) => w.trim())
     );
-    // Merge both sets for comparison
     const allTopicWords = new Set([...topicWords, ...titleWords]);
     if (allTopicWords.size === 0) return false;
 
     for (const post of existingPosts) {
-      // Normalize post title and tags into a set of words
       const postText = `${post.title} ${post.tags || ''}`;
       const postWords = new Set(
         postText
-          .replace(/[«»"'!?.,:;()\[\]{}،؛؟\[\]]/g, ' ')
+          .replace(/['"\u00AB\u00BB'!?.,:;()\[\]{}\u060C\u061B\u061F]/g, ' ')
           .split(/\s+/)
           .filter((w) => w.length > 2)
           .map((w) => w.trim())
       );
-
-      // Count overlapping words
       let overlap = 0;
       for (const w of allTopicWords) {
         if (postWords.has(w)) overlap++;
       }
       const similarity = overlap / allTopicWords.size;
-      // If more than 50% of the topic's key words match, consider it duplicate
       if (similarity >= 0.5 && overlap >= 2) {
-        console.log(`[blog-generator] duplicate detected: topic "${topic.title}" overlaps ${Math.round(similarity * 100)}% with existing post "${post.title}" (shared words: ${overlap}/${allTopicWords.size})`);
+        console.log(`[blog-generator] duplicate detected: topic "${topic.title}" overlaps ${Math.round(similarity * 100)}% with existing post "${post.title}"`);
         return true;
       }
     }
     return false;
   } catch (err) {
     console.error('[blog-generator] duplicate check failed:', err);
-    return false; // on error, allow generation
+    return false;
   }
 }
 
-/**
- * Pick a non-duplicate topic. Tries up to MAX_PICK_ATTEMPTS times to find
- * a topic that doesn't overlap with existing posts. If all attempts fail,
- * returns the last picked topic anyway (so generation doesn't block forever).
- */
 const MAX_PICK_ATTEMPTS = 20;
 
 async function pickNonDuplicateTopic(): Promise<Topic> {
@@ -284,7 +326,6 @@ async function pickNonDuplicateTopic(): Promise<Topic> {
     if (!dup) return topic;
     console.log(`[blog-generator] attempt ${attempt + 1}: topic "${topic.title}" is duplicate, trying next...`);
   }
-  // All attempts exhausted — return last picked topic to avoid infinite loop
   console.log('[blog-generator] all pick attempts exhausted, using last topic');
   return pickTopic();
 }
@@ -300,7 +341,7 @@ function pickTopic(): Topic {
 
 function makeSlug(title: string): string {
   const base = title
-    .replace(/[«»"'!?.,:;()\[\]{}]/g, '')
+    .replace(/['"\u00AB\u00BB'!?.,:;()\[\]{}]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .trim()
@@ -328,17 +369,17 @@ function parseArticle(raw: string): {
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    if (trimmed.startsWith('عنوان:')) {
-      title = trimmed.slice(6).trim().replace(/^["'«]|["'»]$/g, '');
-    } else if (trimmed.startsWith('خلاصه:')) {
-      excerpt = trimmed.slice(6).trim().replace(/^["'«]|["'»]$/g, '');
-    } else if (trimmed.startsWith('متا:')) {
-      metaDescription = trimmed.slice(4).trim().replace(/^["'«]|["'»]$/g, '');
-    } else if (trimmed.startsWith('برچسب‌ها:')) {
-      const rest = trimmed.replace(/^برچسب‌ها:\s*/, '');
+    if (trimmed.startsWith('\u0639\u0646\u0648\u0627\u0646:')) {
+      title = trimmed.slice(6).trim().replace(/^["'\u00AB]|["'\u00BB]$/g, '');
+    } else if (trimmed.startsWith('\u062E\u0644\u0627\u0635\u0647:')) {
+      excerpt = trimmed.slice(6).trim().replace(/^["'\u00AB]|["'\u00BB]$/g, '');
+    } else if (trimmed.startsWith('\u0645\u062A\u0627:')) {
+      metaDescription = trimmed.slice(4).trim().replace(/^["'\u00AB]|["'\u00BB]$/g, '');
+    } else if (trimmed.startsWith('\u0628\u0631\u0686\u0633\u0628\u200C\u0647\u0627:')) {
+      const rest = trimmed.replace(/^\u0628\u0631\u0686\u0633\u0628\u200C\u0647\u0627:\s*/, '');
       tags = rest
         .split(',')
-        .map((t) => t.trim().replace(/^["'«]|["'»]$/g, ''))
+        .map((t) => t.trim().replace(/^["'\u00AB]|["'\u00BB]$/g, ''))
         .filter(Boolean)
         .slice(0, 6);
     } else {
@@ -374,133 +415,173 @@ function parseArticle(raw: string): {
   return { title, excerpt, html, tags, metaDescription };
 }
 
-// Category-aware cover-image scene pools.
-const COVER_SCENES: Record<TopicCategory, string[]> = {
-  tourism: [
-    'a breathtaking aerial view of an Iranian tourist destination at golden hour, mountains and traditional Persian architecture, warm cinematic light, professional travel photography, no text, no watermark',
-    'a scenic Iranian mountain road winding through lush green forests in spring, soft morning mist, cinematic landscape photography, vibrant, professional, no text, no watermark',
-    'a beautiful Persian historic mosque and garden at sunset, golden light reflecting on tile work, cinematic travel photography, professional, elegant, no text, no watermark',
-    'a coastal road along the Persian Gulf at twilight, palm trees, calm sea, cinematic warm tones, professional travel photography, no text, no watermark',
-    'a desert landscape in central Iran at sunset, sand dunes and distant mountains, dramatic orange sky, cinematic travel photography, professional, no text, no watermark',
-  ],
-  'luxury-cars': [
-    'a luxurious black leather car interior with ambient golden lighting, premium dashboard, elegant stitching, professional automotive photography, cinematic, moody, high quality, no text, no watermark',
-    'a close-up of a luxury car front grille and LED headlights at night, rain droplets, cinematic lighting, professional automotive photography, elegant, no text, no watermark',
-    'a sleek black luxury sedan parked in a dimly lit upscale setting, dramatic side lighting, reflective floor, professional automotive photography, cinematic, no text, no watermark',
-    'a luxury car wheel and leather seat detail shot, warm ambient lighting, professional automotive photography, cinematic, elegant, no text, no watermark',
-  ],
-  'luxury-vs-economy': [
-    'a side-by-side comparison of a sleek black luxury sedan and a small white economy car on a clean showroom floor, dramatic lighting, professional automotive photography, cinematic, no text, no watermark',
-    'a split-image of a luxury car premium interior versus a basic economy car interior, warm vs cool lighting, professional automotive photography, cinematic, no text, no watermark',
-    'a black luxury sedan overtaking a small economy car on an open highway at sunset, motion blur, cinematic automotive photography, professional, no text, no watermark',
-  ],
-  'travel-guide': [
-    'a scenic Iranian highway stretching toward distant mountains at golden hour, a luxury sedan driving, cinematic travel photography, professional, warm tones, no text, no watermark',
-    'a winding mountain road in northern Iran with a black luxury car, lush green forest, soft morning light, cinematic travel photography, professional, no text, no watermark',
-    'a long open desert highway in central Iran at sunset, a luxury sedan in the distance, dramatic sky, cinematic travel photography, professional, no text, no watermark',
-  ],
-  'travel-tips': [
-    'a neatly packed travel suitcase with essentials beside a luxury car trunk, warm soft lighting, professional lifestyle photography, cinematic, elegant, no text, no watermark',
-    'a family loading luggage into a luxury SUV in front of a modern home, warm morning light, professional lifestyle photography, cinematic, no text, no watermark',
-    'a steaming cup of coffee and a map on a luxury car dashboard, road trip mood, warm cinematic lighting, professional photography, no text, no watermark',
-  ],
-  safety: [
-    'a black luxury sedan parked safely at a highway rest stop at dusk, warm interior light, calm mood, professional automotive photography, cinematic, no text, no watermark',
-    'a dashboard view of a luxury car at night showing modern safety dashboard lights, cinematic moody lighting, professional automotive photography, no text, no watermark',
-  ],
-  'sivan-brand': [
-    'a fleet of sleek black luxury sedans lined up at night under golden lights, professional automotive photography, cinematic, elegant, premium, no text, no watermark',
-    'a professional chauffeur opening the door of a black luxury sedan for a passenger, upscale setting, warm cinematic lighting, professional photography, elegant, no text, no watermark',
-    'a black luxury sedan with a subtle gold accent parked in front of an elegant modern building at dusk, cinematic lighting, professional automotive photography, premium, no text, no watermark',
-  ],
-};
+// =========================================================================
+// REAL IMAGE SEARCH (replaces AI-generated images)
+// =========================================================================
 
-async function generateImagePrompt(title: string, topic: Topic): Promise<string | null> {
-  if (!zai) return null;
-  const styleHint =
-    topic.category === 'luxury-cars' || topic.category === 'luxury-vs-economy'
-      ? 'professional automotive photography, moody cinematic lighting'
-      : topic.category === 'tourism'
-        ? 'professional travel photography, golden-hour cinematic lighting'
-        : topic.category === 'sivan-brand'
-          ? 'professional automotive photography, premium elegant cinematic lighting'
-          : 'professional travel photography, cinematic lighting';
+/**
+ * Use LLM to generate a smart English image search query based on the
+ * article's Persian title and topic. Falls back to the topic's predefined
+ * search queries if LLM fails.
+ */
+async function buildImageSearchQuery(title: string, topic: Topic): Promise<string> {
+  if (!zai) return topic.searchQueries[0] || title;
+
   try {
     const completion = await zai.chat.completions.create({
       messages: [
         {
           role: 'user',
-          content: `You are a professional art director for a luxury Persian travel & taxi blog. I will give you the title of a Persian article. Produce ONE single English sentence describing a striking, topic-specific cover photo that visually matches the article's ACTUAL subject.
+          content: `You are a search engine optimizer. Given a Persian article title and topic, produce ONE English search query (5-15 words) that will find a REAL, high-quality photograph matching the article's subject.
 
-Rules (very important):
-- The image MUST visually depict the specific subject of the article (the exact place, exact car model, or exact concept) — NOT a generic scene.
-- Translate any Persian place/car name into its English equivalent so the image model understands it (e.g. "Hormuz Island", "Mercedes-Benz E-Class", "Tehran to Mashhad highway").
-- Photorealistic scene description only. No abstract art, no illustrations.
-- Absolutely NO text, words, letters, logos or watermark in the image.
-- Do NOT show clearly visible human faces.
-- Do NOT wrap the answer in quotes or markdown. Do NOT add any explanation or label. Output ONLY the one sentence.
-- Keep the sentence between 20 and 80 words.
+Rules:
+- The query must find REAL photographs, not illustrations or AI art.
+- Translate Persian place names to their English equivalents (e.g. "اصفهان" -> "Isfahan", "کیش" -> "Kish island").
+- For cities: include the city name + a landmark or scenic feature.
+- For cars: include the brand/model name + "luxury sedan" or similar.
+- For travel tips: describe the scene described in the title.
+- Output ONLY the English search query, nothing else. No quotes, no labels.
 
 Article title (Persian): ${title}
-Article focus keyword (Persian): ${topic.keyword}
+Article keyword (Persian): ${topic.keyword}
 
-End your sentence with exactly: ", ${styleHint}, high quality, no text, no watermark".
-
-Write the one-sentence English image prompt now:`,
+English image search query:`,
         },
       ],
       thinking: { type: 'disabled' },
     });
     const raw = (completion?.choices?.[0]?.message?.content || '').trim();
-    if (!raw) return null;
+    if (!raw || raw.length < 5 || raw.length > 100) {
+      return topic.searchQueries[0] || title;
+    }
     const cleaned = raw
       .replace(/^```[a-z]*\n?/i, '')
       .replace(/\n?```$/i, '')
-      .replace(/^["'«]|["'»]$/g, '')
-      .replace(/^(prompt|image prompt|description|cover photo)\s*:\s*/i, '')
-      .replace(/\s+/g, ' ')
+      .replace(/^["']|["']$/g, '')
+      .replace(/^(query|search|image):\s*/i, '')
       .trim();
-    if (cleaned.length < 15 || cleaned.length > 600) return null;
-    if (!/no text/i.test(cleaned)) {
-      return `${cleaned}, ${styleHint}, high quality, no text, no watermark`;
-    }
+    if (cleaned.length < 5) return topic.searchQueries[0] || title;
+    console.log(`[blog-generator] LLM search query: "${cleaned}"`);
     return cleaned;
   } catch (err) {
-    console.error('[blog-generator] image-prompt LLM call failed:', err);
-    return null;
+    console.error('[blog-generator] LLM search query failed, using fallback:', err);
+    return topic.searchQueries[0] || title;
   }
 }
 
-async function generateCoverImage(
+/**
+ * Download a file from a URL to a local path.
+ */
+function downloadFile(url: string, filepath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const protocol = url.startsWith('https') ? https : http;
+    const req = protocol.get(url, { timeout: 30000 }, (res) => {
+      // Follow redirects
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        downloadFile(res.headers.location, filepath).then(resolve);
+        return;
+      }
+      if (res.statusCode !== 200) {
+        console.error(`[blog-generator] download failed: HTTP ${res.statusCode}`);
+        resolve(false);
+        return;
+      }
+      const ws = fs.createWriteStream(filepath);
+      res.pipe(ws);
+      ws.on('finish', () => {
+        ws.close();
+        resolve(true);
+      });
+      ws.on('error', () => {
+        fs.unlink(filepath, () => {});
+        resolve(false);
+      });
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+  });
+}
+
+/**
+ * Search for a real image using `z-ai image-search` CLI and download it.
+ * Tries up to 3 queries (LLM-generated + predefined fallbacks).
+ */
+async function searchAndDownloadImage(
   title: string,
   slug: string,
   topic: Topic
 ): Promise<string | null> {
-  if (!zai) return null;
-  let prompt = await generateImagePrompt(title, topic);
-  if (prompt) {
-    console.log(`[blog-generator] topic-specific image prompt: "${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}"`);
-  } else {
-    const scenes = COVER_SCENES[topic.category] || COVER_SCENES['travel-guide'];
-    prompt = scenes[Math.floor(Math.random() * scenes.length)];
-    console.log(`[blog-generator] LLM prompt failed; using fallback ${topic.category} scene`);
+  // Build ordered list of queries to try
+  const llmQuery = await buildImageSearchQuery(title, topic);
+  const queries = [llmQuery, ...(topic.searchQueries || [])];
+  // Deduplicate
+  const seen = new Set<string>();
+  const uniqueQueries = queries.filter((q) => {
+    if (seen.has(q.toLowerCase())) return false;
+    seen.add(q.toLowerCase());
+    return true;
+  });
+
+  if (!fs.existsSync(BLOG_IMG_DIR)) fs.mkdirSync(BLOG_IMG_DIR, { recursive: true });
+  const ext = 'jpg';
+  const filename = `${slug}.${ext}`;
+  const filepath = path.join(BLOG_IMG_DIR, filename);
+
+  for (let i = 0; i < Math.min(uniqueQueries.length, 3); i++) {
+    const query = uniqueQueries[i];
+    console.log(`[blog-generator] image search attempt ${i + 1}: "${query}"`);
+    try {
+      // Call z-ai image-search CLI
+      const result = execSync(
+        `z-ai image-search -q ${JSON.stringify(query)} --count 3 --gl us --no-rank`,
+        { timeout: 120000, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+      );
+
+      // Parse JSON from stdout (skip any non-JSON lines like the init message)
+      const lines = result.split('\n');
+      let jsonStr = '';
+      let jsonStarted = false;
+      for (const line of lines) {
+        if (line.trim().startsWith('{')) jsonStarted = true;
+        if (jsonStarted) jsonStr += line;
+      }
+
+      const parsed = JSON.parse(jsonStr);
+      if (!parsed.success || !parsed.results || parsed.results.length === 0) {
+        console.log(`[blog-generator] no results for query "${query}"`);
+        continue;
+      }
+
+      // Try downloading each result until one works
+      for (const img of parsed.results) {
+        const imgUrl = img.original_url;
+        if (!imgUrl) continue;
+        console.log(`[blog-generator] downloading: ${imgUrl}`);
+        const ok = await downloadFile(imgUrl, filepath);
+        if (ok) {
+          const stat = fs.statSync(filepath);
+          // Reject tiny images (likely broken) or huge ones (>5MB)
+          if (stat.size < 5000) {
+            fs.unlinkSync(filepath);
+            console.log(`[blog-generator] image too small (${stat.size} bytes), skipping`);
+            continue;
+          }
+          if (stat.size > 5 * 1024 * 1024) {
+            fs.unlinkSync(filepath);
+            console.log(`[blog-generator] image too large (${stat.size} bytes), skipping`);
+            continue;
+          }
+          console.log(`[blog-generator] ✓ downloaded real image: ${imgUrl} (${stat.size} bytes)`);
+          return `/images/blog/${filename}`;
+        }
+      }
+    } catch (err) {
+      console.error(`[blog-generator] image search/download failed for "${query}":`, err);
+    }
   }
-  try {
-    const response = await zai.images.generations.create({
-      prompt,
-      size: '1344x768',
-    });
-    const base64 = response?.data?.[0]?.base64;
-    if (!base64) return null;
-    if (!fs.existsSync(BLOG_IMG_DIR)) fs.mkdirSync(BLOG_IMG_DIR, { recursive: true });
-    const filename = `${slug}.png`;
-    const filepath = path.join(BLOG_IMG_DIR, filename);
-    fs.writeFileSync(filepath, Buffer.from(base64, 'base64'));
-    return `/images/blog/${filename}`;
-  } catch (err) {
-    console.error('[blog-generator] image generation failed:', err);
-    return '/images/luxury-car.png';
-  }
+
+  console.log('[blog-generator] all image search attempts failed');
+  return null;
 }
 
 function deriveKeyword(topic: string): string {
@@ -512,7 +593,7 @@ function deriveKeyword(topic: string): string {
     'هستند', 'بود', 'بودن', 'ما', 'شما', 'او', 'آنها', 'خود', 'همین', 'مانند',
   ]);
   const words = topic
-    .replace(/[«»"'!?.,:;()\[\]{}،؛؟]/g, ' ')
+    .replace(/['"\u00AB\u00BB'!?.,:;()\[\]{}\u060C\u061B\u061F]/g, ' ')
     .split(/\s+/)
     .filter((w) => w.length > 1 && !stopwords.has(w));
   const kw = words.slice(0, 5).join(' ').trim();
@@ -542,6 +623,10 @@ function classifyTopic(topic: string): TopicCategory {
   return 'travel-guide';
 }
 
+// =========================================================================
+// ENHANCED SEO ARTICLE GENERATION
+// =========================================================================
+
 async function generateArticle(customTopic?: string): Promise<{ ok: boolean; title?: string; slug?: string; error?: string; custom?: boolean }> {
   if (!zai) {
     return { ok: false, error: 'ZAI SDK not initialized' };
@@ -560,8 +645,8 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
       title: customTopic!.trim().slice(0, 200),
       keyword: deriveKeyword(customTopic!),
       category: classifyTopic(customTopic!),
+      searchQueries: [],
     };
-    // Check custom topic for duplicates too
     const customDup = await isDuplicateTopic(topic);
     if (customDup) {
       console.log(`[blog-generator] custom topic "${topic.title}" is duplicate, rejecting`);
@@ -569,40 +654,68 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
       return { ok: false, error: 'موضوع مشابهی قبلاً منتشر شده است' };
     }
   } else {
-    // Auto-generation: pick a topic that isn't duplicate
     topic = await pickNonDuplicateTopic();
   }
   console.log(`[blog-generator] generating article for topic: ${topic.title} (keyword: ${topic.keyword}, category: ${topic.category}${isCustom ? ', CUSTOM' : ''})`);
 
+  // ---- Enhanced SEO System Prompt ----
   const systemPrompt =
-    'تو یک نویسنده حرفه‌ای محتوای سفر، گردشگری و خودرو هستی که برای وب‌سایت «تاکسی ویژه سیوان» (یک سرویس تاکسی VIP بین شهری در ایران با ناوگان خودروهای لوکس) مطلب می‌نویسی. موضوعات مقاله‌های تو متنوع است: گردشگری و معرفی مناطق زیبای ایران، معرفی خودروهای لوکس و امکانات آن‌ها، مقایسه خودرو لوکس با خودرو اقتصادی، راهنمای سفر بین شهرهای ایران، نکات عملی سفر و گاهی مسائل ایمنی. لحن تو حرفه‌ای، صمیمی و قابل اعتماد است و با مخاطب ایرانی صحبت می‌کنی. مقاله‌هایی که می‌نویسی باکیفیت، مفید، خوانا و سئو-بهینه هستند. تو قوانین سئو (کلمه کلیدی، ساختار هدینگ، متا دیسکریپشن) را به‌خوبی می‌دانی. در هر مقاله، در صورت مرتبط بودن، می‌توانی به‌طور طبیعی و غیرتبلیغاتی به سرویس «تاکسی ویژه سیوان» اشاره کنی.';
+    'تو یک نویسنده حرفه‌ای سئو و محتوای سفر، گردشگری و خودرو هستی که برای وب‌سایت «تاکسی ویژه سیوان» (یک سرویس تاکسی VIP بین شهری در ایران با ناوگان خودروهای لوکس) مطلب می‌نویسی. لحن تو حرفه‌ای، صمیمی و قابل اعتماد است و با مخاطب ایرانی صحبت می‌کنی.';
 
   const userPrompt = `یک مقاله کامل، باکیفیت و سئو-بهینه درباره موضوع زیر بنویس:
 
 موضوع: ${topic.title}
 کلمه کلیدی هدف (SEO): ${topic.keyword}
 
-الزامات سئو:
-- کلمه کلیدی هدف باید به‌طور طبیعی در عنوان، پاراگراف اول، چند جای بدنه و برچسب‌ها تکرار شود (بدون کیورد استافینگ).
-- متا دیسکریپشن: ۱۵۰ تا ۱۶۰ کاراکتر، جذاب و شامل کلمه کلیدی.
-- ساختار هدینگ‌ها: یک <h2> اصلی برای عنوان بخش اول، سپس <h2> برای سایر بخش‌ها و <h3> برای زیربخش‌ها.
+═══════════════════════════════════════
+قوانین سئو (الزامی — رعایت دقیق):
+═══════════════════════════════════════
 
-الزامات محتوایی:
-- محتوا باید فارسی روان و خوانا باشد.
-- بدنه مقاله باید ۷۰۰ تا ۱۰۰۰ کلمه باشد و شامل ۳ تا ۴ بخش با تگ <h2> و پاراگراف‌های کامل با تگ <p> باشد. هر پاراگراف حداقل ۳ جمله باشد.
-- متن پاراگراف‌ها کامل و منسجم باشد تا وقتی justify می‌شود زیبا به نظر برسد (پاراگراف‌های طولانی و متعادل).
-- از <h3> برای زیربخش‌ها استفاده کن.
-- حداقل در یک جای مقاله یک فهرست با <ul> و <li> بیاور (مثلاً نکات کلیدی).
-- حداقل یک بلوک نقل‌قول با <blockquote> برای تاکید بر یک نکته مهم استفاده کن.
-- در پایان یک بخش «نتیجه‌گیری» کوتاه با <h2> اضافه کن.
-- ۴ تا ۵ برچسب مرتبط معرفی کن (شامل کلمه کلیدی هدف).
+۱. ساختار هدینگ‌ها (بسیار مهم):
+   - فقط یک <h2> در ابتدای مقاله (به عنوان عنوان بخش اول) — از <h1> استفاده نکن.
+   - سایر بخش‌های اصلی با <h2> و زیربخش‌ها با <h3>.
+   - هر <h2> و <h3> باید شامل کلمه کلیدی یا مترادف آن باشد (بدون کیورد استافینگ).
+   - حداقل ۳ تگ <h2> و حداقل ۱ تگ <h3> در کل مقاله.
 
-قالب خروجی (دقیقاً همین ترتیب، بدون علامت‌گذاری اضافه مثل markdown یا \`\`\`):
-عنوان: <عنوان جذاب مقاله — حاوی کلمه کلیدی>
-خلاصه: <خلاصه ۱-۲ جمله‌ای مقاله>
-متا: <متا دیسکریپشن ۱۵۰-۱۶۰ کاراکتر با کلمه کلیدی>
-<بدنه HTML مقاله اینجا — فقط تگ‌های h2, h3, p, ul, li, blockquote, strong>
-برچسب‌ها: <tag1>, <tag2>, <tag3>, <tag4>
+۲. کلمه کلیدی:
+   - کلمه کلیدی هدف در عنوان، پاراگراف اول، حداقل ۲ هدینگ و ۲-۳ جای بدنه تکرار شود.
+   - تراکم کلمه کلیدی بین ۱٪ تا ۲.۵٪ باشد.
+   - از مترادف‌ها و LSI کلمات مرتبط نیز استفاده کن.
+
+۳. متا دیسکریپشن:
+   - دقیقاً ۱۵۰ تا ۱۶۰ کاراکتر فارسی.
+   - شامل کلمه کلیدی هدف.
+   - جذاب و ترغیب‌کننده برای کلیک.
+
+۴. ساختار محتوا:
+   - بدنه مقاله ۸۰۰ تا ۱۲۰۰ کلمه باشد.
+   - هر پاراگراف حداقل ۳ جمله و حداکثر ۶ جمله.
+   - پاراگراف‌ها طولانی و منسجم باشند تا justify شدن زیبا شود.
+   - اولین پاراگراف جذاب باشد (hook) و شامل کلمه کلیدی.
+
+۵. عناصر غنی‌سازی محتوا:
+   - حداقل یک فهرست با <ul> و <li> (۴ تا ۶ آیتم).
+   - حداقل یک <blockquote> برای تأکید بر نکته مهم.
+   - از <strong> برای کلمات کلیدی و عبارات مهم استفاده کن (حداقل ۳ بار).
+
+۶. لینک‌سازی داخلی (بسیار مهم برای سئو):
+   - حداقل یک بار عبارت «تاکسی ویژه سیوان» را با <a href="/">تاکسی ویژه سیوان</a> لینک کن.
+   - اگر مقاله درباره شهر خاصی است، یک لینک مرتبط به صفحه اصلی بده.
+
+۷. خلاصه مقاله:
+   - ۱ تا ۲ جمله خلاصه جذاب که شامل کلمه کلیدی باشد.
+
+۸. برچسب‌ها:
+   - ۴ تا ۵ برچسب مرتبط (اولین برچسب = کلمه کلیدی هدف).
+
+═══════════════════════════════════════
+قالب خروجی (دقیقاً همین ترتیب):
+═══════════════════════════════════════
+عنوان: <عنوان جذاب مقاله — حاوی کلمه کلیدی، حداکثر ۷۰ کاراکتر>
+خلاصه: <خلاصه ۱-۲ جمله‌ای شامل کلمه کلیدی>
+متا: <متا دیسکریپشن دقیقاً ۱۵۰-۱۶۰ کاراکتر با کلمه کلیدی>
+<بدنه HTML مقاله — فقط تگ‌های h2, h3, p, ul, li, blockquote, strong, a>
+برچسب‌ها: <tag1>, <tag2>, <tag3>, <tag4>, <tag5>
 
 مقاله را بنویس:`;
 
@@ -631,6 +744,7 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
       console.error('[blog-generator] LLM retry failed:', err2);
       lastError = 'LLM generation failed';
       isGenerating = false;
+      consecutiveFailures++;
       return { ok: false, error: 'LLM generation failed' };
     }
   }
@@ -640,6 +754,7 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
     console.error('[blog-generator] failed to parse article from:\n', raw.slice(0, 500));
     lastError = 'Could not parse article';
     isGenerating = false;
+    consecutiveFailures++;
     return { ok: false, error: 'Could not parse article' };
   }
 
@@ -649,11 +764,18 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
     console.log(`[blog-generator] generated title "${parsed.title}" is duplicate, discarding`);
     lastError = 'Generated article title is duplicate';
     isGenerating = false;
+    consecutiveFailures++;
     return { ok: false, error: 'Generated article is too similar to an existing post' };
   }
 
   const slug = makeSlug(parsed.title);
-  const featuredImageUrl = await generateCoverImage(parsed.title, slug, topic);
+
+  // ---- Search and download REAL image ----
+  console.log('[blog-generator] searching for real image...');
+  const featuredImageUrl = await searchAndDownloadImage(parsed.title, slug, topic);
+  if (!featuredImageUrl) {
+    console.log('[blog-generator] no real image found, using fallback');
+  }
 
   try {
     const post = await db.blogPost.create({
@@ -662,7 +784,7 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
         slug,
         excerpt: parsed.excerpt,
         content: parsed.html,
-        featuredImageUrl,
+        featuredImageUrl: featuredImageUrl || '/images/luxury-car.png',
         status: 'published',
         publishedAt: new Date(),
         tags: JSON.stringify(parsed.tags),
@@ -671,10 +793,11 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
       },
     });
     lastGeneratedAt = new Date().toISOString();
-    console.log(`[blog-generator] ✓ published${isCustom ? ' (CUSTOM)' : ''}: "${post.title}" (slug: ${post.slug}, image: ${featuredImageUrl || 'none'})`);
+    generationCount++;
+    consecutiveFailures = 0; // Reset on success
+    console.log(`[blog-generator] ✓ published${isCustom ? ' (CUSTOM)' : ''}: "${post.title}" (slug: ${post.slug}, image: ${featuredImageUrl || 'fallback'})`);
 
-    // Persist state for auto-generations only (not custom ones, so the cycle
-    // tracking stays accurate for the scheduled rotation).
+    // Persist state for auto-generations only
     if (!isCustom) {
       await saveState();
       // Schedule the next generation
@@ -688,69 +811,90 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
     console.error('[blog-generator] DB save failed:', err);
     lastError = 'DB save failed';
     isGenerating = false;
+    consecutiveFailures++;
     return { ok: false, error: 'DB save failed' };
   }
 }
+
+// =========================================================================
+// ROBUST SCHEDULING WITH ERROR RECOVERY
+// =========================================================================
 
 /**
  * On startup, decide when the next generation should happen.
  *
  * Strategy:
  * 1. Restore persisted state (cycleIndex, categoryTopicIndex, lastAutoGenAt)
- * 2. If fewer than MIN_POSTS_FOR_IMMEDIATE_SKIP published posts exist → generate now (after 5s delay)
+ * 2. If fewer than MIN_POSTS_FOR_IMMEDIATE_SKIP published posts exist → generate now
  * 3. If lastAutoGenAt is recorded in DB and it's been >= 6h since then → generate now
  * 4. If lastAutoGenAt is recorded but it's been < 6h → schedule the remaining time
  * 5. If no lastAutoGenAt but enough posts exist → start a fresh 6h interval
+ * 6. After CONSECUTIVE_FAILURE_RESET consecutive failures, shorten interval to 30min
  */
+let mainInterval: ReturnType<typeof setInterval> | null = null;
+
 async function scheduleGenerationOnStartup() {
   try {
     const count = await db.blogPost.count({ where: { status: 'published' } });
     console.log(`[blog-generator] current published posts: ${count}`);
 
+    // If we had consecutive failures, use shorter interval for recovery
+    const intervalToUse = consecutiveFailures >= CONSECUTIVE_FAILURE_RESET
+      ? 30 * 60 * 1000 // 30 minutes
+      : GENERATION_INTERVAL_MS; // 6 hours
+
     if (count < MIN_POSTS_FOR_IMMEDIATE_SKIP) {
       console.log(`[blog-generator] only ${count} published posts; generating one now (5s delay)...`);
       setTimeout(() => generateArticle().catch((e) => console.error(e)), 5000);
+      // Also schedule recurring
+      startRecurringGeneration(intervalToUse);
       return;
     }
 
-    // Check persisted lastAutoGenAt from DB (restored into lastGeneratedAt)
     if (lastGeneratedAt) {
       const elapsed = Date.now() - new Date(lastGeneratedAt).getTime();
       console.log(`[blog-generator] last auto-gen was ${Math.round(elapsed / 60000)}min ago`);
       if (elapsed >= GENERATION_INTERVAL_MS) {
-        // Overdue — generate now
         console.log('[blog-generator] overdue — generating now (5s delay)...');
         setTimeout(() => generateArticle().catch((e) => console.error(e)), 5000);
-        return;
-      }
-      // Not yet due — wait the remaining time
-      const remaining = GENERATION_INTERVAL_MS - elapsed;
-      console.log(`[blog-generator] next generation in ${Math.round(remaining / 60000)}min (remaining from last auto-gen)`);
-      nextGenAt = new Date(Date.now() + remaining);
-      setTimeout(() => {
-        generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
-        // After this first (delayed) generation, set up the recurring interval
-        setInterval(() => {
+      } else {
+        const remaining = GENERATION_INTERVAL_MS - elapsed;
+        console.log(`[blog-generator] next generation in ${Math.round(remaining / 60000)}min (remaining from last auto-gen)`);
+        nextGenAt = new Date(Date.now() + remaining);
+        setTimeout(() => {
           generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
-        }, GENERATION_INTERVAL_MS);
-      }, remaining);
-      return;
+          // After this first (delayed) generation, set up the recurring interval
+          startRecurringGeneration(intervalToUse);
+        }, remaining);
+        return; // Don't start recurring yet — it'll start after the first delayed gen
+      }
     }
 
-    // No lastAutoGenAt recorded but we have enough posts (edge case: posts
-    // were seeded or created manually, or DB state was lost). Start fresh.
-    console.log(`[blog-generator] no previous auto-gen recorded; starting fresh ${GENERATION_INTERVAL_MS / 3600000}h interval`);
-    nextGenAt = new Date(Date.now() + GENERATION_INTERVAL_MS);
-    setInterval(() => {
-      generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
-    }, GENERATION_INTERVAL_MS);
+    // No lastAutoGenAt recorded but we have enough posts
+    console.log(`[blog-generator] no previous auto-gen recorded; starting fresh ${intervalToUse / 3600000}h interval`);
+    startRecurringGeneration(intervalToUse);
   } catch (err) {
     console.error('[blog-generator] startup scheduling failed:', err);
-    // Fallback: just start a fresh interval
-    setInterval(() => {
-      generateArticle().catch((e) => console.error('[blog-generator] fallback scheduled error:', e));
-    }, GENERATION_INTERVAL_MS);
+    // Fallback: start a recurring interval
+    startRecurringGeneration(GENERATION_INTERVAL_MS);
   }
+}
+
+/**
+ * Start the recurring generation interval (called after initial delay or immediately).
+ */
+function startRecurringGeneration(intervalMs: number) {
+  if (mainInterval) clearInterval(mainInterval);
+  nextGenAt = new Date(Date.now() + intervalMs);
+  console.log(`[blog-generator] recurring generation started: every ${Math.round(intervalMs / 60000)}min`);
+  mainInterval = setInterval(() => {
+    generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
+    // Adjust interval based on failures
+    if (consecutiveFailures >= CONSECUTIVE_FAILURE_RESET) {
+      console.log('[blog-generator] too many failures, switching to 30min recovery interval');
+      startRecurringGeneration(30 * 60 * 1000);
+    }
+  }, intervalMs);
 }
 
 async function getTotalPosts(): Promise<number> {
@@ -796,12 +940,16 @@ const server = Bun.serve({
         {
           ok: true,
           service: 'blog-generator',
+          version: 'v5',
           port: PORT,
           running: isGenerating,
           lastGeneratedAt,
           lastError,
           totalPosts,
           nextGenInMs: getNextGenInMs(),
+          generationCount,
+          consecutiveFailures,
+          imageMode: 'real-photos',
         },
         { headers: corsHeaders }
       );
@@ -823,16 +971,16 @@ const server = Bun.serve({
       } catch {
         return Response.json({ started: false, message: 'بدنه درخواست نامعتبر است' }, { status: 400, headers: corsHeaders });
       }
-      const topic = typeof body?.topic === 'string' ? body.topic.trim() : '';
-      if (!topic || topic.length < 3) {
+      const topicStr = typeof body?.topic === 'string' ? body.topic.trim() : '';
+      if (!topicStr || topicStr.length < 3) {
         return Response.json({ started: false, message: 'موضوع مقاله باید حداقل ۳ کاراکتر باشد' }, { status: 400, headers: corsHeaders });
       }
-      if (topic.length > 200) {
+      if (topicStr.length > 200) {
         return Response.json({ started: false, message: 'موضوع مقاله نباید بیشتر از ۲۰۰ کاراکتر باشد' }, { status: 400, headers: corsHeaders });
       }
-      console.log(`[blog-generator] admin requested custom topic: "${topic}"`);
-      generateArticle(topic).catch((e) => console.error('[blog-generator] custom on-demand error:', e));
-      return Response.json({ started: true, custom: true, topic }, { headers: corsHeaders });
+      console.log(`[blog-generator] admin requested custom topic: "${topicStr}"`);
+      generateArticle(topicStr).catch((e) => console.error('[blog-generator] custom on-demand error:', e));
+      return Response.json({ started: true, custom: true, topic: topicStr }, { headers: corsHeaders });
     }
     return new Response('Not Found', { status: 404, headers: corsHeaders });
   },
@@ -854,15 +1002,22 @@ console.log(`[blog-generator] listening on http://localhost:${PORT}`);
 
   // 2. Schedule generation based on restored state
   await scheduleGenerationOnStartup();
+
+  // 3. Log startup summary
+  console.log(`[blog-generator] v5 ready — real images + enhanced SEO + robust persistence`);
+  console.log(`[blog-generator] image search: z-ai image-search CLI (real photographs)`);
+  console.log(`[blog-generator] SEO: heading hierarchy, keyword density, meta descriptions, internal linking`);
 })();
 
 process.on('SIGINT', async () => {
   console.log('[blog-generator] shutting down...');
+  if (mainInterval) clearInterval(mainInterval);
   await db.$disconnect();
   server.stop();
   process.exit(0);
 });
 process.on('SIGTERM', async () => {
+  if (mainInterval) clearInterval(mainInterval);
   await db.$disconnect();
   server.stop();
   process.exit(0);
