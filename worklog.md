@@ -1697,3 +1697,25 @@ Stage Summary:
 - Files modified: `src/lib/store.ts`, `src/components/sivan/HeroSection.tsx`, `src/components/sivan/InteractiveMapInner.tsx`
 - The `/api/distance` endpoint already returns coordinates (`origin.lat/lng`, `destination.lat/lng`), which are now shared with the map via Zustand store
 - Auto-scroll ensures user sees the map after selecting cities in quick booking
+
+---
+Task ID: 13
+Agent: main
+Task: Unify pricing between quick booking (hero) and map section
+
+Work Log:
+- Investigated root cause: HeroSection calculated price client-side with hardcoded fallbacks (BASE_FARE=500,000, RATES with old values), while map API used server-side `calculateFare()` from DB config (baseFare=50,000, actual per-km rates)
+- Added `calculateFare` pricing to `/api/distance` response (same function as map route API)
+- Removed local pricing calculation from HeroSection (deleted RATES, BASE_FARE, pricingConfig state, pricing useEffect)
+- HeroSection now reads pricing from `/api/distance` API response
+- Extended `HeroRouteSelection` store type with `mapPricing`, `mapDistanceKm`, `activeRouteIndex`
+- InteractiveMapInner pushes accurate OSRM-based pricing back to store after route fetch
+- HeroSection prefers map pricing (accurate OSRM road distance) over distance API pricing (may use haversine estimate)
+- Created `handleSetActiveRoute` wrapper that syncs active route index to store
+- All `setActiveRoute` calls replaced with `handleSetActiveRoute` for store sync
+- Verified: قم→اصفهان VIP shows ۹٬۱۴۹٬۰۰۰ تومان in BOTH hero and map; switching to economy shows ۳٬۹۹۲٬۹۰۰ in both
+
+Stage Summary:
+- Files modified: `src/app/api/distance/route.ts`, `src/lib/store.ts`, `src/components/sivan/HeroSection.tsx`, `src/components/sivan/InteractiveMapInner.tsx`
+- Both pricing displays now use the same `calculateFare` function from `@/lib/pricing`
+- Map's more accurate OSRM distance overrides distance API's estimate via store bridge

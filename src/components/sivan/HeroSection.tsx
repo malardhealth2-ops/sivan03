@@ -38,15 +38,6 @@ const trustBadges = [
   { icon: Star, label: 'امتیاز ۴.۹' },
 ];
 
-const RATES: Record<string, number> = {
-  economy: 2000,
-  vip: 3000,
-  luxury: 5000,
-  van: 2500,
-  electric: 3500,
-};
-const BASE_FARE = 500000;
-
 function formatPrice(price: number): string {
   return new Intl.NumberFormat('fa-IR').format(price);
 }
@@ -65,6 +56,7 @@ export function HeroSection() {
     setBookingStep,
     setEstimatedPrice,
     setHeroRouteSelection,
+    heroRouteSelection,
   } = useAppStore();
 
   const [heroOrigin, setHeroOrigin] = useState({ province: '', city: '' });
@@ -75,31 +67,14 @@ export function HeroSection() {
   const [distanceData, setDistanceData] = useState<{ distanceKm: number; durationMin: number; durationFormatted: string } | null>(null);
   const [distanceError, setDistanceError] = useState('');
   const [price, setPrice] = useState<number | null>(null);
-  const [pricingConfig, setPricingConfig] = useState<{ baseFare: number; rates: Record<string, number> } | null>(null);
-
-  // Fetch admin-configured pricing (fallback to hardcoded defaults)
-  useEffect(() => {
-    fetch('/api/admin/pricing').then(r => r.json()).then(data => {
-      if (data && typeof data.baseFare === 'number') {
-        setPricingConfig({
-          baseFare: data.baseFare,
-          rates: {
-            economy: data.economyPerKm,
-            vip: data.vipPerKm,
-            luxury: data.luxuryPerKm,
-            van: data.vanPerKm,
-            electric: data.electricPerKm,
-          },
-        });
-      }
-    }).catch(() => { /* use defaults */ });
-  }, []);
+  const [apiPricing, setApiPricing] = useState<Record<string, { price: number; ratePerKm: number }> | null>(null);
 
   // Calculate distance when both cities selected
   const fetchDistance = useCallback(async () => {
     if (!heroOrigin.city || !heroDest.city || heroOrigin.city === heroDest.city) {
       setDistanceData(null);
       setPrice(null);
+      setApiPricing(null);
       setDistanceError('');
       return;
     }
@@ -127,12 +102,22 @@ export function HeroSection() {
         durationFormatted: data.durationFormatted,
       });
 
+      // Use server-calculated pricing (same logic as map route API)
+      if (data.pricing) {
+        setApiPricing(data.pricing);
+      } else {
+        setApiPricing(null);
+      }
+
       // Push geocoded coordinates to store so the map auto-populates
       if (data.origin?.lat && data.origin?.lng && data.destination?.lat && data.destination?.lng) {
         setHeroRouteSelection({
           origin: { name: data.origin.name || originQuery, lat: data.origin.lat, lng: data.origin.lng },
           destination: { name: data.destination.name || destQuery, lat: data.destination.lat, lng: data.destination.lng },
           timestamp: Date.now(),
+          mapPricing: null,
+          mapDistanceKm: null,
+          activeRouteIndex: 0,
         });
 
         // Auto-scroll to map section after a short delay
@@ -155,18 +140,22 @@ export function HeroSection() {
     }
   }, [heroOrigin.city, heroDest.city, fetchDistance]);
 
-  // Calculate price when distance or car type changes
+  // Update price when car type changes or when map pricing arrives
+  // Prefer map pricing (accurate OSRM road distance) over distance API pricing
   useEffect(() => {
-    if (distanceData) {
-      const rates = pricingConfig?.rates || RATES;
-      const base = pricingConfig?.baseFare ?? BASE_FARE;
-      const rate = rates[heroCarType] || 3000;
-      const calcPrice = Math.round(base + distanceData.distanceKm * rate);
-      setPrice(calcPrice);
+    const mapP = heroRouteSelection.mapPricing;
+    const routeIdx = heroRouteSelection.activeRouteIndex || 0;
+
+    if (mapP && mapP[routeIdx]?.[heroCarType]) {
+      // Use accurate map-based pricing
+      setPrice(mapP[routeIdx][heroCarType].price);
+    } else if (apiPricing && apiPricing[heroCarType]) {
+      // Fallback to distance API pricing
+      setPrice(apiPricing[heroCarType].price);
     } else {
       setPrice(null);
     }
-  }, [distanceData, heroCarType, pricingConfig]);
+  }, [apiPricing, heroCarType, heroRouteSelection.mapPricing, heroRouteSelection.activeRouteIndex]);
 
   const handleQuickBook = () => {
     // Copy hero selections to booking form and open modal at step 1 (time selection)

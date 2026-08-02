@@ -74,6 +74,10 @@ export interface HeroRouteSelection {
   origin: { name: string; lat: number; lng: number } | null;
   destination: { name: string; lat: number; lng: number } | null;
   timestamp: number; // to avoid re-triggering on same data
+  // Pricing from map route API (more accurate than distance API)
+  mapPricing: Record<number, Record<string, { price: number; ratePerKm: number }>> | null;
+  mapDistanceKm: number | null;
+  activeRouteIndex: number;
 }
 
 interface AppState {
@@ -156,9 +160,9 @@ const initialBookingForm: BookingFormData = {
 
 export const useAppStore = create<AppState>((set) => ({
   // Hero route selection (shared with InteractiveMap)
-  heroRouteSelection: { origin: null, destination: null, timestamp: 0 },
-  setHeroRouteSelection: (data) => set({ heroRouteSelection: data }),
-  clearHeroRouteSelection: () => set({ heroRouteSelection: { origin: null, destination: null, timestamp: 0 } }),
+  heroRouteSelection: { origin: null, destination: null, timestamp: 0, mapPricing: null, mapDistanceKm: null, activeRouteIndex: 0 },
+  setHeroRouteSelection: (data) => set((s) => ({ heroRouteSelection: { ...s.heroRouteSelection, ...data } })),
+  clearHeroRouteSelection: () => set({ heroRouteSelection: { origin: null, destination: null, timestamp: 0, mapPricing: null, mapDistanceKm: null, activeRouteIndex: 0 } }),
 
   // Booking
   booking: {

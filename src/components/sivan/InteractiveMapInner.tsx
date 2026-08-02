@@ -454,6 +454,12 @@ export default function InteractiveMapInner() {
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const [identifyingPlace, setIdentifyingPlace] = useState<'origin' | 'dest' | null>(null);
 
+  // Wrapper to sync active route with store (so hero pricing stays in sync)
+  const handleSetActiveRoute = useCallback((index: number) => {
+    setActiveRoute(index);
+    useAppStore.getState().setHeroRouteSelection({ activeRouteIndex: index });
+  }, []);
+
   // Auto-populate map when hero form fills in origin & destination
   useEffect(() => {
     if (
@@ -472,9 +478,9 @@ export default function InteractiveMapInner() {
       setDestSearch(hDest.name);
       setSelectionStep('ready');
       setRouteData(null);
-      setActiveRoute(0);
+      handleSetActiveRoute(0);
     }
-  }, [heroRouteSelection]);
+  }, [heroRouteSelection, handleSetActiveRoute]);
 
   // Identify place name using VLM when clicking on map
   const identifyPlace = useCallback(async (lat: number, lng: number, type: 'origin' | 'dest') => {
@@ -507,7 +513,7 @@ export default function InteractiveMapInner() {
       if (selectionStep === 'origin') {
         setOrigin({ lat, lng });
         setRouteData(null);
-        setActiveRoute(0);
+        handleSetActiveRoute(0);
         setSelectionStep('destination');
         identifyPlace(lat, lng, 'origin');
       } else if (selectionStep === 'destination') {
@@ -521,7 +527,7 @@ export default function InteractiveMapInner() {
         clearSelection();
       }
     },
-    [selectionStep, origin, identifyPlace]
+    [selectionStep, origin, identifyPlace, handleSetActiveRoute]
   );
 
   // Search function
@@ -612,6 +618,14 @@ export default function InteractiveMapInner() {
           const data = await res.json();
           setRouteData(data);
 
+          // Push accurate map pricing back to store so hero section matches
+          if (data.pricing && data.routes?.length > 0) {
+            useAppStore.getState().setHeroRouteSelection({
+              mapPricing: data.pricing,
+              mapDistanceKm: data.routes[0].distanceKm,
+            });
+          }
+
           // Always update names from route API (may be more accurate)
           if (data.origin?.name) {
             setOrigin((prev) => prev ? { ...prev, name: data.origin.name } : prev);
@@ -639,7 +653,7 @@ export default function InteractiveMapInner() {
     setDestination(null);
     setRouteData(null);
     setRouteError('');
-    setActiveRoute(0);
+    handleSetActiveRoute(0);
     setOriginSearch('');
     setDestSearch('');
     setOriginResults([]);
@@ -658,7 +672,7 @@ export default function InteractiveMapInner() {
     setOriginSearch(destSearch);
     setDestSearch(tmpOriginSearch);
     setRouteData(null);
-    setActiveRoute(0);
+    handleSetActiveRoute(0);
   };
 
   // Build polylines with explicit type casting and memoization
@@ -1155,7 +1169,7 @@ export default function InteractiveMapInner() {
                             color={ROUTE_COLORS[i]}
                             label={ROUTE_LABELS[i]}
                             isActive={activeRoute === i}
-                            onClick={() => setActiveRoute(i)}
+                            onClick={() => handleSetActiveRoute(i)}
                           />
                         ))}
                       </div>

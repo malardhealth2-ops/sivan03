@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import cityCoords from '@/data/city-coords.json';
+import { getPricingConfig, calculateFare } from '@/lib/pricing';
 
 // In-memory caches
 const geoCache = new Map<string, { lat: number; lng: number }>();
@@ -195,6 +196,14 @@ export async function GET(request: NextRequest) {
       source = 'estimate';
     }
 
+    // Calculate pricing using the same function as the map route API
+    const pricingConfig = await getPricingConfig();
+    const pricing: Record<string, { price: number; ratePerKm: number }> = {};
+    for (const type of ['economy', 'vip', 'luxury', 'van', 'electric']) {
+      const fare = calculateFare(pricingConfig, type, distanceKm);
+      pricing[type] = { price: fare.price, ratePerKm: fare.ratePerKm };
+    }
+
     return NextResponse.json({
       origin: { name: origin, lat: originGeo.lat, lng: originGeo.lng },
       destination: { name: destination, lat: destGeo.lat, lng: destGeo.lng },
@@ -202,6 +211,8 @@ export async function GET(request: NextRequest) {
       durationMin,
       durationFormatted: formatDuration(durationMin),
       source,
+      pricing,
+      minFare: pricingConfig.minFare,
     });
   } catch {
     return NextResponse.json({ error: 'خطا در محاسبه فاصله' }, { status: 500 });
