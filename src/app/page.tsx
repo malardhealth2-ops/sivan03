@@ -23,11 +23,13 @@ import { useAppStore } from '@/lib/store';
 
 export default function HomePage() {
   const restoreAuth = useAppStore((s) => s.restoreAuth);
+  const restoreAdmin = useAppStore((s) => s.restoreAdmin);
 
-  // Restore auth state from localStorage on mount
+  // Restore auth & admin state from localStorage on mount
   useEffect(() => {
     restoreAuth();
-  }, [restoreAuth]);
+    restoreAdmin();
+  }, [restoreAuth, restoreAdmin]);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0a0a0a]">

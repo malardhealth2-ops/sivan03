@@ -1719,3 +1719,22 @@ Stage Summary:
 - Files modified: `src/app/api/distance/route.ts`, `src/lib/store.ts`, `src/components/sivan/HeroSection.tsx`, `src/components/sivan/InteractiveMapInner.tsx`
 - Both pricing displays now use the same `calculateFare` function from `@/lib/pricing`
 - Map's more accurate OSRM distance overrides distance API's estimate via store bridge
+
+---
+Task ID: 14
+Agent: main
+Task: Fix admin panel session lost on page refresh
+
+Work Log:
+- Identified root cause: admin state in Zustand had no localStorage persistence (unlike user auth which was already fixed)
+- Added localStorage write on `adminLogin` (saves `{username}` to `sivan_admin` key)
+- Added localStorage clear on `adminLogout`
+- Added `restoreAdmin()` function to AppState interface and store implementation
+- Called `restoreAdmin()` from `page.tsx` useEffect on mount (alongside `restoreAuth()`)
+- Also fixed `adminLogin` to set `isAdminOpen: true` when logging in (previously only set `isLoggedIn`)
+- Verified: after setting localStorage and reloading, admin panel auto-opens with dashboard data
+
+Stage Summary:
+- Files modified: `src/lib/store.ts`, `src/app/page.tsx`
+- Admin session now persists across page refreshes via localStorage
+- Same pattern as user auth persistence (already implemented earlier)

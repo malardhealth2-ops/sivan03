@@ -125,6 +125,7 @@ interface AppState {
   adminLogout: () => void;
   setLoginError: (error: string) => void;
   setAdminActiveTab: (tab: AdminState['activeTab']) => void;
+  restoreAdmin: () => void;
 
   // Active section for navigation
   activeSection: string;
@@ -232,13 +233,30 @@ export const useAppStore = create<AppState>((set) => ({
   setAdminOpen: (open) => set((s) => ({ admin: { ...s.admin, isAdminOpen: open } })),
   adminLogin: (username, password) => {
     if (username && password) {
-      set((s) => ({ admin: { ...s.admin, isLoggedIn: true, adminUsername: username, loginError: '' } }));
+      set((s) => ({ admin: { ...s.admin, isLoggedIn: true, isAdminOpen: true, adminUsername: username, loginError: '' } }));
+      // Persist to localStorage so admin session survives page refreshes
+      try { localStorage.setItem('sivan_admin', JSON.stringify({ username })); } catch { /* ignore */ }
       return true;
     }
     set((s) => ({ admin: { ...s.admin, loginError: 'نام کاربری یا رمز عبور اشتباه است' } }));
     return false;
   },
-  adminLogout: () => set((s) => ({ admin: { ...s.admin, isLoggedIn: false, isAdminOpen: false, adminUsername: '', activeTab: 'dashboard' } })),
+  adminLogout: () => {
+    try { localStorage.removeItem('sivan_admin'); } catch { /* ignore */ }
+    set((s) => ({ admin: { ...s.admin, isLoggedIn: false, isAdminOpen: false, adminUsername: '', activeTab: 'dashboard' } }));
+  },
+  /** Restore admin session from localStorage (call on app mount). */
+  restoreAdmin: () => {
+    try {
+      const saved = localStorage.getItem('sivan_admin');
+      if (saved) {
+        const { username } = JSON.parse(saved);
+        if (username) {
+          set((s) => ({ admin: { ...s.admin, isLoggedIn: true, isAdminOpen: true, adminUsername: username, loginError: '' } }));
+        }
+      }
+    } catch { /* ignore */ }
+  },
   setLoginError: (error) => set((s) => ({ admin: { ...s.admin, loginError: error } })),
   setAdminActiveTab: (tab) => set((s) => ({ admin: { ...s.admin, activeTab: tab } })),
 
