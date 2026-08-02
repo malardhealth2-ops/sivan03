@@ -245,14 +245,16 @@ export const useAppStore = create<AppState>((set) => ({
     try { localStorage.removeItem('sivan_admin'); } catch { /* ignore */ }
     set((s) => ({ admin: { ...s.admin, isLoggedIn: false, isAdminOpen: false, adminUsername: '', activeTab: 'dashboard' } }));
   },
-  /** Restore admin session from localStorage (call on app mount). */
+  /** Restore admin session from localStorage (call on app mount).
+   *  Only restores the login STATE — does NOT re-open the admin panel.
+   *  The user must explicitly open the panel again after refresh. */
   restoreAdmin: () => {
     try {
       const saved = localStorage.getItem('sivan_admin');
       if (saved) {
         const { username } = JSON.parse(saved);
         if (username) {
-          set((s) => ({ admin: { ...s.admin, isLoggedIn: true, isAdminOpen: true, adminUsername: username, loginError: '' } }));
+          set((s) => ({ admin: { ...s.admin, isLoggedIn: true, isAdminOpen: false, adminUsername: username, loginError: '' } }));
         }
       }
     } catch { /* ignore */ }

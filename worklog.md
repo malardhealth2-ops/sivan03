@@ -1760,3 +1760,20 @@ Stage Summary:
 - Blog generator v5 is running on port 3005 with real image search mode
 - All 3 requirements met: real images, persistent generation, enhanced SEO
 - Test article: "شیراز؛ جاذبه‌های گردشگری شهر گل و شعر" with real photo from web
+
+---
+Task ID: fix-admin-refresh-redirect
+Agent: main
+Task: Fix admin panel opening on every page refresh
+
+Work Log:
+- Identified bug in `restoreAdmin()` in `src/lib/store.ts`
+- The function was setting `isAdminOpen: true` when restoring admin session from localStorage
+- This caused the admin panel to open on every page refresh, regardless of which page the user was on
+- Fixed by changing `isAdminOpen: true` to `isAdminOpen: false` in `restoreAdmin()`
+- Admin login STATE is still persisted and restored, but the panel stays closed until user explicitly opens it
+
+Stage Summary:
+- `restoreAdmin()` now only restores `isLoggedIn: true` + `adminUsername`, NOT `isAdminOpen`
+- User stays on whatever page they're on after refresh; admin panel does not auto-open
+- User can open admin panel via the Navbar button, and it will show them as logged in
