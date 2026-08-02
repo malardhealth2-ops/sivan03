@@ -1641,3 +1641,38 @@ Work Log:
 Stage Summary:
 - All 5 service types display their per-km price prominently on each card
 - Prices formatted in Persian locale with comma separators
+
+---
+Task ID: auth-persist
+Agent: main
+Task: Fix user logged out on page refresh
+
+Work Log:
+- Root cause: Zustand store was in-memory only; auth state lost on every refresh
+- Added localStorage persistence to `setAuthUser()` in store.ts — saves user object to `sivan_auth_user` key
+- Added `restoreAuth()` method that reads localStorage and restores auth state
+- Added `localStorage.removeItem` in `authLogout()` to clear persisted session
+- Called `restoreAuth()` in page.tsx via useEffect on mount
+
+Stage Summary:
+- Auth session now persists across page refreshes and tab reopens
+- Logout properly clears localStorage
+- No backend changes needed (stateless auth works with client-side persistence)
+
+---
+Task ID: register-phone
+Agent: main
+Task: Add required phone number to registration
+
+Work Log:
+- Added `phone` local state to AuthModal.tsx registration form
+- Added phone input field with Phone icon, LTR direction, type=tel, maxLength=11
+- Added client-side validation: required + regex `/^09\d{9}$/`
+- Updated signup API call to include `phone` field
+- Updated /api/auth/signup route: phone is now required (not optional)
+- Server-side validation: checks phone exists, validates format, checks uniqueness
+
+Stage Summary:
+- Registration form now requires: username, full name, phone (09xxxxxxxxx), password, confirm password
+- Phone validated both client-side and server-side
+- Duplicate phone numbers are rejected with clear error message

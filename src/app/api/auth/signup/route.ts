@@ -18,6 +18,12 @@ export async function POST(request: NextRequest) {
     if (!fullName || typeof fullName !== 'string' || fullName.trim().length < 2) {
       return NextResponse.json({ error: 'نام و نام خانوادگی الزامی است' }, { status: 400 });
     }
+    if (!phone || typeof phone !== 'string') {
+      return NextResponse.json({ error: 'شماره موبایل الزامی است' }, { status: 400 });
+    }
+    if (!/^09\d{9}$/.test(phone.trim())) {
+      return NextResponse.json({ error: 'شماره موبایل باید با 09 شروع شده و ۱۱ رقم باشد' }, { status: 400 });
+    }
     if (!password || typeof password !== 'string' || password.length < 4) {
       return NextResponse.json({ error: 'رمز عبور باید حداقل ۴ کاراکتر باشد' }, { status: 400 });
     }
@@ -28,12 +34,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'این نام کاربری قبلاً گرفته شده است' }, { status: 400 });
     }
 
-    // If phone provided, check uniqueness
-    if (phone) {
-      const existingPhone = await db.user.findUnique({ where: { phone } });
-      if (existingPhone) {
-        return NextResponse.json({ error: 'این شماره موبایل قبلاً ثبت شده است' }, { status: 400 });
-      }
+    // Check phone uniqueness
+    const existingPhone = await db.user.findUnique({ where: { phone: phone.trim() } });
+    if (existingPhone) {
+      return NextResponse.json({ error: 'این شماره موبایل قبلاً ثبت شده است' }, { status: 400 });
     }
 
     // Create user (passenger only)
@@ -42,7 +46,7 @@ export async function POST(request: NextRequest) {
         username: username.trim(),
         fullName: fullName.trim(),
         password,
-        phone: phone || null,
+        phone: phone.trim(),
         email: email || null,
         role: 'passenger',
         isVerified: true,

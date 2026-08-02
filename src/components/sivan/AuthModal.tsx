@@ -9,6 +9,7 @@ import {
   LogIn,
   Eye,
   EyeOff,
+  Phone,
 } from 'lucide-react';
 import {
   Dialog,
@@ -40,6 +41,7 @@ export function AuthModal() {
   // Local form state
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -47,6 +49,7 @@ export function AuthModal() {
   const resetForm = () => {
     setUsername('');
     setFullName('');
+    setPhone('');
     setPassword('');
     setConfirmPassword('');
     setError('');
@@ -125,6 +128,14 @@ export function AuthModal() {
       setError('نام و نام خانوادگی را وارد کنید');
       return;
     }
+    if (!phone.trim()) {
+      setError('شماره موبایل را وارد کنید');
+      return;
+    }
+    if (!/^09\d{9}$/.test(phone.trim())) {
+      setError('شماره موبایل باید با 09 شروع شده و ۱۱ رقم باشد');
+      return;
+    }
     if (!password) {
       setError('رمز عبور را وارد کنید');
       return;
@@ -146,6 +157,7 @@ export function AuthModal() {
         body: JSON.stringify({
           username: username.trim(),
           fullName: fullName.trim(),
+          phone: phone.trim(),
           password,
         }),
       });
@@ -242,6 +254,27 @@ export function AuthModal() {
                     className="bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#555] h-11 focus:border-[#D4AF37]/50 rounded-xl"
                     disabled={loading}
                   />
+                </div>
+              )}
+
+              {/* Phone (register only) */}
+              {!isLogin && (
+                <div className="space-y-2">
+                  <Label className="text-[#a1a1aa] text-sm">شماره موبایل</Label>
+                  <div className="relative">
+                    <Phone className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#666]" />
+                    <Input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="09123456789"
+                      className="pr-10 bg-[#0a0a0a] border-[#333] text-[#fafafa] placeholder:text-[#555] h-11 focus:border-[#D4AF37]/50 rounded-xl"
+                      dir="ltr"
+                      type="tel"
+                      maxLength={11}
+                      autoComplete="tel"
+                      disabled={loading}
+                    />
+                  </div>
                 </div>
               )}
 

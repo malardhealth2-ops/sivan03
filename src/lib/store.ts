@@ -91,6 +91,7 @@ interface AppState {
   setAuthError: (error: string) => void;
   setAuthUser: (user: AuthUser | null) => void;
   setAuthVerified: (val: boolean) => void;
+  restoreAuth: () => void;
   authLogout: () => void;
 
   // Driver register modal
@@ -168,9 +169,28 @@ export const useAppStore = create<AppState>((set) => ({
   setAuthFullName: (fullName) => set((s) => ({ auth: { ...s.auth, fullName } })),
   setAuthPhone: (phone) => set((s) => ({ auth: { ...s.auth, phone } })),
   setAuthError: (error) => set((s) => ({ auth: { ...s.auth, error } })),
-  setAuthUser: (user) => set((s) => ({ auth: { ...s.auth, user } })),
+  setAuthUser: (user) => {
+    set((s) => ({ auth: { ...s.auth, user } }));
+    // Persist to localStorage so the session survives page refreshes
+    if (user) {
+      try { localStorage.setItem('sivan_auth_user', JSON.stringify(user)); } catch { /* ignore */ }
+    }
+  },
   setAuthVerified: (val) => set((s) => ({ auth: { ...s.auth, isVerified: val } })),
-  authLogout: () => set((s) => ({ auth: { ...s.auth, isOpen: false, username: '', password: '', fullName: '', phone: '', error: '', user: null, isVerified: false }, userPanelOpen: false })),
+  /** Restore auth user from localStorage (call on app mount). */
+  restoreAuth: () => {
+    try {
+      const saved = localStorage.getItem('sivan_auth_user');
+      if (saved) {
+        const user: AuthUser = JSON.parse(saved);
+        set((s) => ({ auth: { ...s.auth, user, isVerified: true } }));
+      }
+    } catch { /* ignore */ }
+  },
+  authLogout: () => {
+    try { localStorage.removeItem('sivan_auth_user'); } catch { /* ignore */ }
+    set((s) => ({ auth: { ...s.auth, isOpen: false, username: '', password: '', fullName: '', phone: '', error: '', user: null, isVerified: false }, userPanelOpen: false }));
+  },
 
   // Driver register
   driverRegister: { isOpen: false },

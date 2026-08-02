@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { useEffect } from 'react';
 import { Navbar } from '@/components/sivan/Navbar';
 import { HeroSection } from '@/components/sivan/HeroSection';
 import { PopularRoutes } from '@/components/sivan/PopularRoutes';
@@ -18,9 +18,17 @@ import { ContactModal } from '@/components/sivan/ContactModal';
 import { AdminPanel } from '@/components/sivan/AdminPanel';
 import { UserPanel } from '@/components/sivan/UserPanel';
 import { InteractiveMap } from '@/components/sivan/InteractiveMap';
+import { useAppStore } from '@/lib/store';
 
 
 export default function HomePage() {
+  const restoreAuth = useAppStore((s) => s.restoreAuth);
+
+  // Restore auth state from localStorage on mount
+  useEffect(() => {
+    restoreAuth();
+  }, [restoreAuth]);
+
   return (
     <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
       <Navbar />
