@@ -26,7 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { TRIP_TYPE_LABELS } from '@/lib/pricing';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, type HeroRouteSelection } from '@/lib/store';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -437,6 +437,10 @@ export default function InteractiveMapInner() {
   const [routeError, setRouteError] = useState('');
   const [activeRoute, setActiveRoute] = useState(0);
 
+  // Subscribe to hero route selection from the quick booking form
+  const heroRouteSelection = useAppStore((s) => s.heroRouteSelection);
+  const lastHeroTimestamp = useRef<number>(0);
+
   // Search state
   const [originSearch, setOriginSearch] = useState('');
   const [destSearch, setDestSearch] = useState('');
@@ -449,6 +453,28 @@ export default function InteractiveMapInner() {
   const [searchLoading, setSearchLoading] = useState<'origin' | 'dest' | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const [identifyingPlace, setIdentifyingPlace] = useState<'origin' | 'dest' | null>(null);
+
+  // Auto-populate map when hero form fills in origin & destination
+  useEffect(() => {
+    if (
+      heroRouteSelection.timestamp > 0 &&
+      heroRouteSelection.timestamp !== lastHeroTimestamp.current &&
+      heroRouteSelection.origin &&
+      heroRouteSelection.destination
+    ) {
+      lastHeroTimestamp.current = heroRouteSelection.timestamp;
+      const { origin: hOrigin, destination: hDest } = heroRouteSelection;
+
+      // Set origin and destination on the map
+      setOrigin({ lat: hOrigin.lat, lng: hOrigin.lng, name: hOrigin.name });
+      setOriginSearch(hOrigin.name);
+      setDestination({ lat: hDest.lat, lng: hDest.lng, name: hDest.name });
+      setDestSearch(hDest.name);
+      setSelectionStep('ready');
+      setRouteData(null);
+      setActiveRoute(0);
+    }
+  }, [heroRouteSelection]);
 
   // Identify place name using VLM when clicking on map
   const identifyPlace = useCallback(async (lat: number, lng: number, type: 'origin' | 'dest') => {
@@ -619,6 +645,8 @@ export default function InteractiveMapInner() {
     setOriginResults([]);
     setDestResults([]);
     setSelectionStep('origin');
+    lastHeroTimestamp.current = 0;
+    useAppStore.getState().clearHeroRouteSelection();
   };
 
   const swapPoints = () => {
@@ -680,6 +708,23 @@ export default function InteractiveMapInner() {
         >
           {/* Search & Controls Bar */}
           <div className="relative z-10 bg-[#1a1a1a]/90 backdrop-blur-xl rounded-2xl border border-[#D4AF37]/20 p-4 sm:p-6">
+            {/* Auto-populated indicator */}
+            <AnimatePresence>
+              {heroRouteSelection.timestamp > 0 && origin && destination && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="mb-3"
+                >
+                  <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs">
+                    <Car className="h-3 w-3 ml-1" />
+                    مسیر از رزرو سریع منتقل شد
+                  </Badge>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Selection Step Indicator */}
             <div className="flex items-center gap-3 mb-4">
               <div className="flex items-center gap-2">

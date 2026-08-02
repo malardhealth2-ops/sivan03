@@ -64,6 +64,7 @@ export function HeroSection() {
     updateBookingForm,
     setBookingStep,
     setEstimatedPrice,
+    setHeroRouteSelection,
   } = useAppStore();
 
   const [heroOrigin, setHeroOrigin] = useState({ province: '', city: '' });
@@ -125,6 +126,20 @@ export function HeroSection() {
         durationMin: data.durationMin,
         durationFormatted: data.durationFormatted,
       });
+
+      // Push geocoded coordinates to store so the map auto-populates
+      if (data.origin?.lat && data.origin?.lng && data.destination?.lat && data.destination?.lng) {
+        setHeroRouteSelection({
+          origin: { name: data.origin.name || originQuery, lat: data.origin.lat, lng: data.origin.lng },
+          destination: { name: data.destination.name || destQuery, lat: data.destination.lat, lng: data.destination.lng },
+          timestamp: Date.now(),
+        });
+
+        // Auto-scroll to map section after a short delay
+        setTimeout(() => {
+          document.getElementById('map')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 600);
+      }
     } catch (err) {
       setDistanceError(err instanceof Error ? err.message : 'خطا در محاسبه فاصله');
       setDistanceData(null);

@@ -70,7 +70,18 @@ interface AdminState {
   activeTab: 'dashboard' | 'trips' | 'passengers' | 'drivers' | 'content' | 'blog' | 'pricing' | 'emails' | 'notifications' | 'settings';
 }
 
+export interface HeroRouteSelection {
+  origin: { name: string; lat: number; lng: number } | null;
+  destination: { name: string; lat: number; lng: number } | null;
+  timestamp: number; // to avoid re-triggering on same data
+}
+
 interface AppState {
+  // Hero route selection (shared with InteractiveMap)
+  heroRouteSelection: HeroRouteSelection;
+  setHeroRouteSelection: (data: HeroRouteSelection) => void;
+  clearHeroRouteSelection: () => void;
+
   // Booking
   booking: BookingState;
   setBookingStep: (step: number) => void;
@@ -144,6 +155,11 @@ const initialBookingForm: BookingFormData = {
 };
 
 export const useAppStore = create<AppState>((set) => ({
+  // Hero route selection (shared with InteractiveMap)
+  heroRouteSelection: { origin: null, destination: null, timestamp: 0 },
+  setHeroRouteSelection: (data) => set({ heroRouteSelection: data }),
+  clearHeroRouteSelection: () => set({ heroRouteSelection: { origin: null, destination: null, timestamp: 0 } }),
+
   // Booking
   booking: {
     currentStep: -1,

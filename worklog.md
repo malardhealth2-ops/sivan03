@@ -1676,3 +1676,24 @@ Stage Summary:
 - Registration form now requires: username, full name, phone (09xxxxxxxxx), password, confirm password
 - Phone validated both client-side and server-side
 - Duplicate phone numbers are rejected with clear error message
+
+---
+Task ID: 12
+Agent: main
+Task: Auto-populate map when quick booking origin/destination are filled
+
+Work Log:
+- Added `HeroRouteSelection` interface and store state (`heroRouteSelection`, `setHeroRouteSelection`, `clearHeroRouteSelection`) to `src/lib/store.ts`
+- Updated `HeroSection.tsx` to push geocoded origin/destination coordinates to store when `/api/distance` returns successfully
+- Added auto-scroll to map section (`document.getElementById('map')?.scrollIntoView`) after 600ms delay
+- Updated `InteractiveMapInner.tsx` to subscribe to `heroRouteSelection` from store
+- Added `useEffect` that sets origin/destination markers, search inputs, and `selectionStep='ready'` when hero route data arrives (uses timestamp to prevent re-triggering)
+- Added green badge "مسیر از رزرو سریع منتقل شد" indicator on map when auto-populated
+- Updated `clearSelection()` to also clear hero route selection from store
+- Existing route-fetching effect in InteractiveMapInner automatically triggers when origin/destination change (no additional code needed)
+- Verified end-to-end: selected قم → اصفهان in hero form, map auto-populated with markers, route lines, pricing, and scroll
+
+Stage Summary:
+- Files modified: `src/lib/store.ts`, `src/components/sivan/HeroSection.tsx`, `src/components/sivan/InteractiveMapInner.tsx`
+- The `/api/distance` endpoint already returns coordinates (`origin.lat/lng`, `destination.lat/lng`), which are now shared with the map via Zustand store
+- Auto-scroll ensures user sees the map after selecting cities in quick booking
