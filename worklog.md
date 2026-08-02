@@ -1603,3 +1603,41 @@ Stage Summary:
 - Blog generator state now persists across restarts/deployments
 - Scheduled generation continues seamlessly from where it left off
 - Custom topic generation does not interfere with the auto-rotation cycle
+
+---
+Task ID: dup-detection
+Agent: main
+Task: Add duplicate article detection before generation/publishing
+
+Work Log:
+- Added `isDuplicateTopic(topic)` function to blog-generator (v4):
+  - Queries all published posts' titles and tags from DB
+  - Normalizes topic keyword + title into a set of meaningful words (length > 2)
+  - Compares against each existing post's words
+  - Returns true if >50% word overlap AND >= 2 shared words
+- Added `pickNonDuplicateTopic()` that tries up to 20 times to find a non-duplicate topic
+- Auto-generation now uses `pickNonDuplicateTopic()` instead of `pickTopic()`
+- Custom topic generation also checks for duplicates and returns error if duplicate
+- Added post-generation title check: after LLM generates the article, compares the generated title against existing posts
+- Restarted blog-generator service on port 3005
+
+Stage Summary:
+- Duplicate detection at 3 levels: topic selection, custom topic validation, generated title verification
+- Auto-generation skips duplicate topics automatically (up to 20 attempts)
+- Custom generation returns clear error: "موضوع مشابهی قبلاً منتشر شده است"
+
+---
+Task ID: services-prices
+Agent: main
+Task: Add per-km prices to services section cards
+
+Work Log:
+- Added `pricePerKm` field to each service in ServicesSection.tsx
+- Prices: اقتصادی=13000, ویژه=18000, لوکس=30000, سوپرلوکس=45000, خانوادگی=40000
+- Added `formatPrice()` using `Intl.NumberFormat('fa-IR')` for Persian number formatting
+- Added gold-colored price display between title and description in each card
+- Price shown as: `۱۳,۰۰۰ تومان / کیلومتر` in large bold gold text
+
+Stage Summary:
+- All 5 service types display their per-km price prominently on each card
+- Prices formatted in Persian locale with comma separators

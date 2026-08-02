@@ -17,6 +17,7 @@ const services: {
   features: string[];
   badge: string;
   tripType: TripType;
+  pricePerKm: number;
 }[] = [
   {
     id: 1,
@@ -27,6 +28,7 @@ const services: {
     features: ['قیمت مناسب', 'خودرو تمیز', 'راننده مجرب', 'پرداخت آسان'],
     badge: 'اقتصادی',
     tripType: 'economy',
+    pricePerKm: 13000,
   },
   {
     id: 2,
@@ -37,6 +39,7 @@ const services: {
     features: ['خودروهای لوکس', 'صندلی چرم', 'WiFi رایگان', 'آب معدنی'],
     badge: 'پرفروش',
     tripType: 'vip',
+    pricePerKm: 18000,
   },
   {
     id: 3,
@@ -47,6 +50,7 @@ const services: {
     features: ['خودرو اختصاصی', 'بدون توقف', 'مسیر مستقیم', 'حریم خصوصی'],
     badge: 'لوکس',
     tripType: 'luxury',
+    pricePerKm: 30000,
   },
   {
     id: 4,
@@ -57,6 +61,7 @@ const services: {
     features: ['خودرو پریمیوم', 'امکانات ویژه', 'بارجیو', 'خدمات VIP'],
     badge: 'سوپر لوکس',
     tripType: 'electric',
+    pricePerKm: 45000,
   },
   {
     id: 5,
@@ -67,8 +72,13 @@ const services: {
     features: ['فضای جادار', 'مناسب خانواده', 'باربرداری', 'صندلی راحت'],
     badge: 'خانوادگی',
     tripType: 'van',
+    pricePerKm: 40000,
   },
 ];
+
+function formatPrice(amount: number): string {
+  return new Intl.NumberFormat('fa-IR').format(amount);
+}
 
 const containerVariants = {
   hidden: {},
@@ -138,9 +148,20 @@ export function ServicesSection() {
                 </div>
 
                 <CardContent className="p-5 sm:p-6 flex flex-col flex-1">
-                  <h3 className="text-lg sm:text-xl font-bold text-[#fafafa] mb-3">
+                  <h3 className="text-lg sm:text-xl font-bold text-[#fafafa] mb-2">
                     {service.title}
                   </h3>
+
+                  {/* Price per km */}
+                  <div className="flex items-baseline gap-1 mb-3">
+                    <span className="text-2xl sm:text-3xl font-extrabold text-[#D4AF37]">
+                      {formatPrice(service.pricePerKm)}
+                    </span>
+                    <span className="text-xs sm:text-sm text-[#a1a1aa]">
+                      تومان / کیلومتر
+                    </span>
+                  </div>
+
                   <p className="text-[#a1a1aa] text-sm leading-relaxed mb-4 flex-1">
                     {service.description}
                   </p>

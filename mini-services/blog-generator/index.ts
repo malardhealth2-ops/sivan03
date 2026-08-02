@@ -206,6 +206,89 @@ async function saveState(): Promise<void> {
   }
 }
 
+/**
+ * Check if a topic is too similar to any existing published post.
+ * Compares the topic's keyword words against post titles and tags.
+ * Returns true if a duplicate is detected (>50% word overlap with an existing post).
+ */
+async function isDuplicateTopic(topic: Topic): Promise<boolean> {
+  try {
+    // Get all published post titles and tags
+    const existingPosts = await db.blogPost.findMany({
+      where: { status: 'published' },
+      select: { title: true, tags: true },
+    });
+    if (existingPosts.length === 0) return false;
+
+    // Normalize the topic keyword into a set of meaningful words
+    const topicWords = new Set(
+      topic.keyword
+        .replace(/[«»"'!?.,:;()\[\]{}،؛؟]/g, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length > 2)
+        .map((w) => w.trim())
+    );
+    // Also add key words from the title
+    const titleWords = new Set(
+      topic.title
+        .replace(/[«»"'!?.,:;()\[\]{}،؛؟]/g, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length > 2)
+        .map((w) => w.trim())
+    );
+    // Merge both sets for comparison
+    const allTopicWords = new Set([...topicWords, ...titleWords]);
+    if (allTopicWords.size === 0) return false;
+
+    for (const post of existingPosts) {
+      // Normalize post title and tags into a set of words
+      const postText = `${post.title} ${post.tags || ''}`;
+      const postWords = new Set(
+        postText
+          .replace(/[«»"'!?.,:;()\[\]{}،؛؟\[\]]/g, ' ')
+          .split(/\s+/)
+          .filter((w) => w.length > 2)
+          .map((w) => w.trim())
+      );
+
+      // Count overlapping words
+      let overlap = 0;
+      for (const w of allTopicWords) {
+        if (postWords.has(w)) overlap++;
+      }
+      const similarity = overlap / allTopicWords.size;
+      // If more than 50% of the topic's key words match, consider it duplicate
+      if (similarity >= 0.5 && overlap >= 2) {
+        console.log(`[blog-generator] duplicate detected: topic "${topic.title}" overlaps ${Math.round(similarity * 100)}% with existing post "${post.title}" (shared words: ${overlap}/${allTopicWords.size})`);
+        return true;
+      }
+    }
+    return false;
+  } catch (err) {
+    console.error('[blog-generator] duplicate check failed:', err);
+    return false; // on error, allow generation
+  }
+}
+
+/**
+ * Pick a non-duplicate topic. Tries up to MAX_PICK_ATTEMPTS times to find
+ * a topic that doesn't overlap with existing posts. If all attempts fail,
+ * returns the last picked topic anyway (so generation doesn't block forever).
+ */
+const MAX_PICK_ATTEMPTS = 20;
+
+async function pickNonDuplicateTopic(): Promise<Topic> {
+  for (let attempt = 0; attempt < MAX_PICK_ATTEMPTS; attempt++) {
+    const topic = pickTopic();
+    const dup = await isDuplicateTopic(topic);
+    if (!dup) return topic;
+    console.log(`[blog-generator] attempt ${attempt + 1}: topic "${topic.title}" is duplicate, trying next...`);
+  }
+  // All attempts exhausted — return last picked topic to avoid infinite loop
+  console.log('[blog-generator] all pick attempts exhausted, using last topic');
+  return pickTopic();
+}
+
 function pickTopic(): Topic {
   const category = CATEGORY_ORDER[cycleIndex % CATEGORY_ORDER.length];
   cycleIndex++;
@@ -470,13 +553,25 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
   lastError = null;
 
   const isCustom = !!customTopic && customTopic.trim().length > 0;
-  const topic: Topic = isCustom
-    ? {
-        title: customTopic!.trim().slice(0, 200),
-        keyword: deriveKeyword(customTopic!),
-        category: classifyTopic(customTopic!),
-      }
-    : pickTopic();
+  let topic: Topic;
+
+  if (isCustom) {
+    topic = {
+      title: customTopic!.trim().slice(0, 200),
+      keyword: deriveKeyword(customTopic!),
+      category: classifyTopic(customTopic!),
+    };
+    // Check custom topic for duplicates too
+    const customDup = await isDuplicateTopic(topic);
+    if (customDup) {
+      console.log(`[blog-generator] custom topic "${topic.title}" is duplicate, rejecting`);
+      isGenerating = false;
+      return { ok: false, error: 'موضوع مشابهی قبلاً منتشر شده است' };
+    }
+  } else {
+    // Auto-generation: pick a topic that isn't duplicate
+    topic = await pickNonDuplicateTopic();
+  }
   console.log(`[blog-generator] generating article for topic: ${topic.title} (keyword: ${topic.keyword}, category: ${topic.category}${isCustom ? ', CUSTOM' : ''})`);
 
   const systemPrompt =
@@ -546,6 +641,15 @@ async function generateArticle(customTopic?: string): Promise<{ ok: boolean; tit
     lastError = 'Could not parse article';
     isGenerating = false;
     return { ok: false, error: 'Could not parse article' };
+  }
+
+  // Double-check: compare the generated title against existing posts
+  const titleDup = await isDuplicateTopic({ title: parsed.title, keyword: topic.keyword, category: topic.category });
+  if (titleDup) {
+    console.log(`[blog-generator] generated title "${parsed.title}" is duplicate, discarding`);
+    lastError = 'Generated article title is duplicate';
+    isGenerating = false;
+    return { ok: false, error: 'Generated article is too similar to an existing post' };
   }
 
   const slug = makeSlug(parsed.title);

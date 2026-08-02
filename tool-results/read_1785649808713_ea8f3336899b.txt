@@ -1,0 +1,766 @@
+     1→/**
+     2→ * Sivan AI Blog Generator (v4 — persistent state)
+     3→ * ==================================================
+     4→ *
+     5→ * Automatically generates and publishes a new SEO-optimized blog article (with
+     6→ * an AI-generated cover image and justified Persian HTML text) every 6 hours
+     7→ * using the z-ai-web-dev-sdk (LLM chat completions + image generation).
+     8→ *
+     9→ * **v4 key change**: Generation state (cycleIndex, categoryTopicIndex,
+    10→ * lastAutoGenAt) is persisted in the BlogGeneratorState DB table so that
+    11→ * restarts / deploys do NOT break the scheduling. On startup the service
+    12→ * restores where it left off and schedules the next generation based on
+    13→ * how much time has elapsed since the last auto-generation.
+    14→ *
+    15→ * Topics are diversified across 7 categories so the blog has a balanced mix.
+    16→ *
+    17→ * Cover images are category-aware: tourist destinations get landscape/scenery
+    18→ * prompts, luxury-car articles get interior/detail shots, etc.
+    19→ *
+    20→ * Runs as a Bun mini-service on port 3005.
+    21→ *
+    22→ * Endpoints:
+    23→ *   GET  /health    -> { ok, service, port, lastGeneratedAt, totalPosts, nextGenInMs }
+    24→ *   POST /generate  -> triggers generateArticle() immediately (fire-and-forget)
+    25→ *   GET  /status    -> { running, lastGeneratedAt, lastError, totalPosts, nextGenInMs }
+    26→ *   POST /generate-custom -> generate from admin-supplied topic (fire-and-forget)
+    27→ */
+    28→
+    29→import { PrismaClient } from '@prisma/client';
+    30→import ZAI from 'z-ai-web-dev-sdk';
+    31→import fs from 'fs';
+    32→import path from 'path';
+    33→
+    34→const PORT = 3005;
+    35→const DB_URL = 'file:/home/z/my-project/db/custom.db';
+    36→const BLOG_IMG_DIR = '/home/z/my-project/public/images/blog';
+    37→const GENERATION_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+    38→const MIN_POSTS_FOR_IMMEDIATE_SKIP = 3;
+    39→
+    40→const db = new PrismaClient({ datasources: { db: { url: DB_URL } } });
+    41→let zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
+    42→
+    43→// Runtime status (visible to admin via /status)
+    44→let isGenerating = false;
+    45→let lastGeneratedAt: string | null = null;
+    46→let lastError: string | null = null;
+    47→let nextGenAt: Date | null = null; // when the next scheduled generation will fire
+    48→
+    49→// Diversified topic pool. Each topic carries:
+    50→//   - title:   the article's working title (LLM may refine it)
+    51→//   - keyword: the SEO focus keyword the LLM must weave in
+    52→//   - category: drives which cover-image scene pool is used
+    53→type TopicCategory =
+    54→  | 'tourism'
+    55→  | 'luxury-cars'
+    56→  | 'luxury-vs-economy'
+    57→  | 'travel-guide'
+    58→  | 'travel-tips'
+    59→  | 'safety'
+    60→  | 'sivan-brand';
+    61→
+    62→interface Topic {
+    63→  title: string;
+    64→  keyword: string;
+    65→  category: TopicCategory;
+    66→}
+    67→
+    68→const TOPICS: Topic[] = [
+    69→  // ---- گردشگری و مناطق زیبای ایران (tourism) ----
+    70→  { title: 'جاذبه‌های گردشگری مشهد که هر مسافری باید ببیند', keyword: 'جاذبه‌های گردشگری مشهد', category: 'tourism' },
+    71→  { title: 'زیبایی‌های شیراز؛ شهر گل و شب‌نما', keyword: 'جاذبه‌های گردشگری شیراز', category: 'tourism' },
+    72→  { title: 'اصفهان شهر نصف جهان؛ راهنمای گردشگری', keyword: 'گردشگری اصفهان', category: 'tourism' },
+    73→  { title: 'تابستان در نوشهر و چالوس؛ بهترین مسیر فرار از گرما', keyword: 'گردشگری نوشهر و چالوس', category: 'tourism' },
+    74→  { title: 'جزیره کیش؛ بهشت گردشگری در خلیج فارس', keyword: 'گردشگری کیش', category: 'tourism' },
+    75→  { title: 'جزیره قشم و عجایب طبیعی آن', keyword: 'گردشگری قشم', category: 'tourism' },
+    76→  { title: 'ماسوله؛ روستای پلکانی تاریخ ایران', keyword: 'گردشگری ماسوله', category: 'tourism' },
+    77→  { title: 'تبریز در یک روز؛ بازار، مسجد کبود و قهوه‌خانه‌ها', keyword: 'گردشگری تبریز', category: 'tourism' },
+    78→  { title: 'دریاچه نمک مهابان و عجایب مسیر تهران-قم', keyword: 'دریاچه نمک قم', category: 'tourism' },
+    79→  { title: 'بهترین فصل سفر به شمال ایران برای دیدن طبیعت', keyword: 'بهترین فصل سفر به شمال', category: 'tourism' },
+    80→  { title: 'یزد شهر بادگیرها و کویر نقره‌ای', keyword: 'گردشگری یزد', category: 'tourism' },
+    81→  { title: 'کرمان و دل کویر؛ راهنمای سفر به گنبد فتح‌آباد', keyword: 'گردشگری کرمان', category: 'tourism' },
+    82→
+    83→  // ---- خودروهای لوکس و مزایا (luxury-cars) ----
+    84→  { title: 'امکانات خودرو لوکس که کیفیت سفر را متحول می‌کند', keyword: 'امکانات خودرو لوکس', category: 'luxury-cars' },
+    85→  { title: 'چرا صندلی چرمی در سفرهای طولانی مهم است؟', keyword: 'صندلی چرمی خودرو لوکس', category: 'luxury-cars' },
+    86→  { title: 'عایق صدا در خودرو لوکس و تأثیر آن بر آرامش سفر', keyword: 'عایق صدا خودرو', category: 'luxury-cars' },
+    87→  { title: 'سیستم تهویه مطبوع در خودروهای لوکس؛ فراتر از کولر', keyword: 'تهویه خودرو لوکس', category: 'luxury-cars' },
+    88→  { title: 'مرسدس بنز کلاس E؛ پادشاه جاده‌های ایران', keyword: 'مرسدس بنز کلاس E', category: 'luxury-cars' },
+    89→  { title: 'بی‌ام‌و سری ۵؛ ترکیب اسپرت و لوکس برای سفر', keyword: 'بی ام و سری 5', category: 'luxury-cars' },
+    90→  { title: 'آئودی A6 و جذابیت طراحی آلمان در جاده‌های ایران', keyword: 'آئودی A6', category: 'luxury-cars' },
+    91→  { title: 'تویوتا لندکروزر؛ بهترین همراه جاده‌های کوهستانی', keyword: 'تویوتا لندکروزر', category: 'luxury-cars' },
+    92→  { title: 'هیوندای سوناتا؛ لوکس اما اقتصادی برای سفر خانوادگی', keyword: 'هیوندای سوناتا', category: 'luxury-cars' },
+    93→  { title: 'سیستم تعلیق در خودروهای لوکس و راحتی سرنشینان', keyword: 'سیستم تعلیق خودرو', category: 'luxury-cars' },
+    94→  { title: 'ایمنی فعال در خودروهای لوکس؛ از ترمز ABS تا کیسه هوا', keyword: 'ایمنی خودرو لوکس', category: 'luxury-cars' },
+    95→  { title: 'طراحی داخلی خودرو لوکس؛ فضایی که خستگی را فراموش می‌کنید', keyword: 'طراحی داخلی خودرو لوکس', category: 'luxury-cars' },
+    96→
+    97→  // ---- مقایسه لوکس و اقتصادی (luxury-vs-economy) ----
+    98→  { title: 'خودرو لوکس یا اقتصادی؟ کدام برای سفر بین شهری بهتر است', keyword: 'خودرو لوکس یا اقتصادی', category: 'luxury-vs-economy' },
+    99→  { title: 'هزینه پنهان سفر با خودرو اقتصادی که نمی‌بینید', keyword: 'هزینه سفر خودرو اقتصادی', category: 'luxury-vs-economy' },
+   100→  { title: 'چرا خودرو لوکس در جاده‌های طولانی ارزشش را دارد؟', keyword: 'ارزش خودرو لوکس سفر', category: 'luxury-vs-economy' },
+   101→  { title: 'مقایسه راحتی خودرو لوکس و پراید در سفر تهران-مشهد', keyword: 'راحتی خودرو لوکس پراید', category: 'luxury-vs-economy' },
+   102→  { title: 'خستگی راننده در خودرو اقتصادی vs خودرو لوکس', keyword: 'خستگی راننده خودرو', category: 'luxury-vs-economy' },
+   103→  { title: 'ایمنی خودرو لوکس در برابر خودرو اقتصادی؛ تفاوت فاجعه‌بار', keyword: 'ایمنی لوکس اقتصادی', category: 'luxury-vs-economy' },
+   104→  { title: 'فضای داخلی و چمدان؛ برتری خودرو لوکس در سفر خانوادگی', keyword: 'فضای داخلی خودرو سفر', category: 'luxury-vs-economy' },
+   105→
+   106→  // ---- راهنمای سفر شهر به شهر (travel-guide) ----
+   107→  { title: 'راهنمای کامل سفر تهران به مشهد با خودرو', keyword: 'سفر تهران به مشهد', category: 'travel-guide' },
+   108→  { title: 'سفر تهران به اصفهان؛ مسیر، توقف‌ها و جاذبه‌ها', keyword: 'سفر تهران به اصفهان', category: 'travel-guide' },
+   109→  { title: 'سفر تهران به شیراز از جاده قدیم و جدید', keyword: 'سفر تهران به شیراز', category: 'travel-guide' },
+   110→  { title: 'سفر تهران به رشت و انزلی؛ راهنمای جاده هراز', keyword: 'سفر تهران به رشت', category: 'travel-guide' },
+   111→  { title: 'سفر تهران به تبریز از جاده قزوین-زنجان', keyword: 'سفر تهران به تبریز', category: 'travel-guide' },
+   112→  { title: 'مسیر تهران به کیش؛ پرواز یا سفر زمینی؟', keyword: 'سفر تهران به کیش', category: 'travel-guide' },
+   113→
+   114→  // ---- نکات عملی سفر (travel-tips) ----
+   115→  { title: 'راهنمای بسته‌بندی چمدان برای سفر بین شهری', keyword: 'بسته‌بندی چمدان سفر', category: 'travel-tips' },
+   116→  { title: 'مدیریت خستگی در سفرهای طولانی بین شهری', keyword: 'خستگی در سفر بین شهری', category: 'travel-tips' },
+   117→  { title: 'بهترین زمان استراحت در جاده؛ هر چند ساعت یک‌بار؟', keyword: 'استراحت در جاده', category: 'travel-tips' },
+   118→  { title: 'سفر با کودکان؛ راهنمای آرامش خانواده در جاده', keyword: 'سفر با کودکان', category: 'travel-tips' },
+   119→  { title: 'چگونه زمان سفر را برای ترافیک کمتر برنامه‌ریزی کنیم', keyword: 'زمان سفر ترافیک', category: 'travel-tips' },
+   120→
+   121→  // ---- ایمنی سفر (safety — intentionally small) ----
+   122→  { title: 'نکات کلیدی ایمنی سفر بین شهری در شب', keyword: 'ایمنی سفر شب', category: 'safety' },
+   123→  { title: 'چک‌لیست ایمنی خودرو پیش از سفر طولانی', keyword: 'چک لیست ایمنی خودرو', category: 'safety' },
+   124→
+   125→  // ---- برند سیوان (sivan-brand) ----
+   126→  { title: 'چرا تاکسی ویژه سیوان انتخاب هوشمندانه‌ای است', keyword: 'تاکسی ویژه سیوان', category: 'sivan-brand' },
+   127→  { title: 'تفاوت تاکسی دربستی سیوان با آژانس‌های معمولی', keyword: 'تاکسی دربستی سیوان', category: 'sivan-brand' },
+   128→  { title: 'هزینه سفر با تاکسی VIP چگونه محاسبه می‌شود', keyword: 'هزینه تاکسی VIP', category: 'sivan-brand' },
+   129→];
+   130→
+   131→// Weighted category rotation so the blog has a balanced mix.
+   132→const CATEGORY_ORDER: TopicCategory[] = [
+   133→  'tourism',
+   134→  'luxury-cars',
+   135→  'luxury-vs-economy',
+   136→  'travel-guide',
+   137→  'tourism',
+   138→  'luxury-cars',
+   139→  'travel-tips',
+   140→  'luxury-vs-economy',
+   141→  'tourism',
+   142→  'luxury-cars',
+   143→  'sivan-brand',
+   144→  'travel-guide',
+   145→  'safety',
+   146→];
+   147→
+   148→// ---- Persistent state management ----
+   149→let cycleIndex = 0;
+   150→const categoryTopicIndex: Record<TopicCategory, number> = {
+   151→  tourism: 0,
+   152→  'luxury-cars': 0,
+   153→  'luxury-vs-economy': 0,
+   154→  'travel-guide': 0,
+   155→  'travel-tips': 0,
+   156→  safety: 0,
+   157→  'sivan-brand': 0,
+   158→};
+   159→
+   160→/** Restore generation state from the DB (called once on startup). */
+   161→async function restoreState(): Promise<void> {
+   162→  try {
+   163→    let state = await db.blogGeneratorState.findUnique({ where: { id: 'main' } });
+   164→    if (!state) {
+   165→      // First run ever — create the row with defaults.
+   166→      state = await db.blogGeneratorState.create({ data: { id: 'main' } });
+   167→      console.log('[blog-generator] created initial DB state row');
+   168→    }
+   169→    cycleIndex = state.cycleIndex;
+   170→    const parsed = JSON.parse(state.categoryTopicIndex || '{}');
+   171→    for (const cat of Object.keys(categoryTopicIndex) as TopicCategory[]) {
+   172→      if (typeof parsed[cat] === 'number') {
+   173→        categoryTopicIndex[cat] = parsed[cat];
+   174→      }
+   175→    }
+   176→    if (state.lastAutoGenAt) {
+   177→      lastGeneratedAt = state.lastAutoGenAt.toISOString();
+   178→    }
+   179→    console.log(`[blog-generator] state restored: cycleIndex=${cycleIndex}, categoryTopicIndex=${JSON.stringify(categoryTopicIndex)}, lastAutoGenAt=${lastGeneratedAt || 'never'}, totalAutoGenerated=${state.totalAutoGenerated}`);
+   180→  } catch (err) {
+   181→    console.error('[blog-generator] failed to restore state from DB, starting fresh:', err);
+   182→  }
+   183→}
+   184→
+   185→/** Persist current generation state to the DB (called after each auto-generation). */
+   186→async function saveState(): Promise<void> {
+   187→  try {
+   188→    await db.blogGeneratorState.upsert({
+   189→      where: { id: 'main' },
+   190→      update: {
+   191→        cycleIndex,
+   192→        categoryTopicIndex: JSON.stringify(categoryTopicIndex),
+   193→        lastAutoGenAt: lastGeneratedAt ? new Date(lastGeneratedAt) : null,
+   194→        totalAutoGenerated: { increment: 1 },
+   195→      },
+   196→      create: {
+   197→        id: 'main',
+   198→        cycleIndex,
+   199→        categoryTopicIndex: JSON.stringify(categoryTopicIndex),
+   200→        lastAutoGenAt: lastGeneratedAt ? new Date(lastGeneratedAt) : null,
+   201→      },
+   202→    });
+   203→    console.log('[blog-generator] state saved to DB');
+   204→  } catch (err) {
+   205→    console.error('[blog-generator] failed to save state to DB:', err);
+   206→  }
+   207→}
+   208→
+   209→function pickTopic(): Topic {
+   210→  const category = CATEGORY_ORDER[cycleIndex % CATEGORY_ORDER.length];
+   211→  cycleIndex++;
+   212→  const pool = TOPICS.filter((t) => t.category === category);
+   213→  const idx = categoryTopicIndex[category] % pool.length;
+   214→  categoryTopicIndex[category]++;
+   215→  return pool[idx];
+   216→}
+   217→
+   218→function makeSlug(title: string): string {
+   219→  const base = title
+   220→    .replace(/[«»"'!?.,:;()\[\]{}]/g, '')
+   221→    .replace(/\s+/g, '-')
+   222→    .replace(/-+/g, '-')
+   223→    .trim()
+   224→    .slice(0, 60);
+   225→  const suffix = Date.now().toString(36).slice(-6);
+   226→  return `${base}-${suffix}`;
+   227→}
+   228→
+   229→function parseArticle(raw: string): {
+   230→  title: string;
+   231→  excerpt: string;
+   232→  html: string;
+   233→  tags: string[];
+   234→  metaDescription: string;
+   235→} | null {
+   236→  if (!raw) return null;
+   237→  const lines = raw.split('\n');
+   238→
+   239→  let title = '';
+   240→  let excerpt = '';
+   241→  let metaDescription = '';
+   242→  let tags: string[] = [];
+   243→  const htmlLines: string[] = [];
+   244→
+   245→  for (const line of lines) {
+   246→    const trimmed = line.trim();
+   247→    if (!trimmed) continue;
+   248→    if (trimmed.startsWith('عنوان:')) {
+   249→      title = trimmed.slice(6).trim().replace(/^["'«]|["'»]$/g, '');
+   250→    } else if (trimmed.startsWith('خلاصه:')) {
+   251→      excerpt = trimmed.slice(6).trim().replace(/^["'«]|["'»]$/g, '');
+   252→    } else if (trimmed.startsWith('متا:')) {
+   253→      metaDescription = trimmed.slice(4).trim().replace(/^["'«]|["'»]$/g, '');
+   254→    } else if (trimmed.startsWith('برچسب‌ها:')) {
+   255→      const rest = trimmed.replace(/^برچسب‌ها:\s*/, '');
+   256→      tags = rest
+   257→        .split(',')
+   258→        .map((t) => t.trim().replace(/^["'«]|["'»]$/g, ''))
+   259→        .filter(Boolean)
+   260→        .slice(0, 6);
+   261→    } else {
+   262→      htmlLines.push(trimmed);
+   263→    }
+   264→  }
+   265→
+   266→  let html = htmlLines.join('\n').trim();
+   267→  if (!html) return null;
+   268→
+   269→  if (!/<[a-z][\s\S]*>/i.test(html)) {
+   270→    html = html
+   271→      .split(/\n{2,}/)
+   272→      .map((p) => `<p>${p.replace(/\n/g, '<br/>')}</p>`)
+   273→      .join('\n');
+   274→  }
+   275→
+   276→  if (!title) {
+   277→    const h = html.match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i);
+   278→    title = h ? h[1].replace(/<[^>]+>/g, '').trim() : html.slice(0, 60).replace(/<[^>]+>/g, '');
+   279→  }
+   280→  if (!excerpt) {
+   281→    const firstP = html.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+   282→    excerpt = firstP ? firstP[1].replace(/<[^>]+>/g, '').trim().slice(0, 180) : title;
+   283→  }
+   284→  if (!metaDescription) {
+   285→    metaDescription = excerpt.slice(0, 155);
+   286→  }
+   287→  if (tags.length === 0) {
+   288→    tags = ['سفر', 'تاکسی VIP', 'سیوان'];
+   289→  }
+   290→
+   291→  return { title, excerpt, html, tags, metaDescription };
+   292→}
+   293→
+   294→// Category-aware cover-image scene pools.
+   295→const COVER_SCENES: Record<TopicCategory, string[]> = {
+   296→  tourism: [
+   297→    'a breathtaking aerial view of an Iranian tourist destination at golden hour, mountains and traditional Persian architecture, warm cinematic light, professional travel photography, no text, no watermark',
+   298→    'a scenic Iranian mountain road winding through lush green forests in spring, soft morning mist, cinematic landscape photography, vibrant, professional, no text, no watermark',
+   299→    'a beautiful Persian historic mosque and garden at sunset, golden light reflecting on tile work, cinematic travel photography, professional, elegant, no text, no watermark',
+   300→    'a coastal road along the Persian Gulf at twilight, palm trees, calm sea, cinematic warm tones, professional travel photography, no text, no watermark',
+   301→    'a desert landscape in central Iran at sunset, sand dunes and distant mountains, dramatic orange sky, cinematic travel photography, professional, no text, no watermark',
+   302→  ],
+   303→  'luxury-cars': [
+   304→    'a luxurious black leather car interior with ambient golden lighting, premium dashboard, elegant stitching, professional automotive photography, cinematic, moody, high quality, no text, no watermark',
+   305→    'a close-up of a luxury car front grille and LED headlights at night, rain droplets, cinematic lighting, professional automotive photography, elegant, no text, no watermark',
+   306→    'a sleek black luxury sedan parked in a dimly lit upscale setting, dramatic side lighting, reflective floor, professional automotive photography, cinematic, no text, no watermark',
+   307→    'a luxury car wheel and leather seat detail shot, warm ambient lighting, professional automotive photography, cinematic, elegant, no text, no watermark',
+   308→  ],
+   309→  'luxury-vs-economy': [
+   310→    'a side-by-side comparison of a sleek black luxury sedan and a small white economy car on a clean showroom floor, dramatic lighting, professional automotive photography, cinematic, no text, no watermark',
+   311→    'a split-image of a luxury car premium interior versus a basic economy car interior, warm vs cool lighting, professional automotive photography, cinematic, no text, no watermark',
+   312→    'a black luxury sedan overtaking a small economy car on an open highway at sunset, motion blur, cinematic automotive photography, professional, no text, no watermark',
+   313→  ],
+   314→  'travel-guide': [
+   315→    'a scenic Iranian highway stretching toward distant mountains at golden hour, a luxury sedan driving, cinematic travel photography, professional, warm tones, no text, no watermark',
+   316→    'a winding mountain road in northern Iran with a black luxury car, lush green forest, soft morning light, cinematic travel photography, professional, no text, no watermark',
+   317→    'a long open desert highway in central Iran at sunset, a luxury sedan in the distance, dramatic sky, cinematic travel photography, professional, no text, no watermark',
+   318→  ],
+   319→  'travel-tips': [
+   320→    'a neatly packed travel suitcase with essentials beside a luxury car trunk, warm soft lighting, professional lifestyle photography, cinematic, elegant, no text, no watermark',
+   321→    'a family loading luggage into a luxury SUV in front of a modern home, warm morning light, professional lifestyle photography, cinematic, no text, no watermark',
+   322→    'a steaming cup of coffee and a map on a luxury car dashboard, road trip mood, warm cinematic lighting, professional photography, no text, no watermark',
+   323→  ],
+   324→  safety: [
+   325→    'a black luxury sedan parked safely at a highway rest stop at dusk, warm interior light, calm mood, professional automotive photography, cinematic, no text, no watermark',
+   326→    'a dashboard view of a luxury car at night showing modern safety dashboard lights, cinematic moody lighting, professional automotive photography, no text, no watermark',
+   327→  ],
+   328→  'sivan-brand': [
+   329→    'a fleet of sleek black luxury sedans lined up at night under golden lights, professional automotive photography, cinematic, elegant, premium, no text, no watermark',
+   330→    'a professional chauffeur opening the door of a black luxury sedan for a passenger, upscale setting, warm cinematic lighting, professional photography, elegant, no text, no watermark',
+   331→    'a black luxury sedan with a subtle gold accent parked in front of an elegant modern building at dusk, cinematic lighting, professional automotive photography, premium, no text, no watermark',
+   332→  ],
+   333→};
+   334→
+   335→async function generateImagePrompt(title: string, topic: Topic): Promise<string | null> {
+   336→  if (!zai) return null;
+   337→  const styleHint =
+   338→    topic.category === 'luxury-cars' || topic.category === 'luxury-vs-economy'
+   339→      ? 'professional automotive photography, moody cinematic lighting'
+   340→      : topic.category === 'tourism'
+   341→        ? 'professional travel photography, golden-hour cinematic lighting'
+   342→        : topic.category === 'sivan-brand'
+   343→          ? 'professional automotive photography, premium elegant cinematic lighting'
+   344→          : 'professional travel photography, cinematic lighting';
+   345→  try {
+   346→    const completion = await zai.chat.completions.create({
+   347→      messages: [
+   348→        {
+   349→          role: 'user',
+   350→          content: `You are a professional art director for a luxury Persian travel & taxi blog. I will give you the title of a Persian article. Produce ONE single English sentence describing a striking, topic-specific cover photo that visually matches the article's ACTUAL subject.
+   351→
+   352→Rules (very important):
+   353→- The image MUST visually depict the specific subject of the article (the exact place, exact car model, or exact concept) — NOT a generic scene.
+   354→- Translate any Persian place/car name into its English equivalent so the image model understands it (e.g. "Hormuz Island", "Mercedes-Benz E-Class", "Tehran to Mashhad highway").
+   355→- Photorealistic scene description only. No abstract art, no illustrations.
+   356→- Absolutely NO text, words, letters, logos or watermark in the image.
+   357→- Do NOT show clearly visible human faces.
+   358→- Do NOT wrap the answer in quotes or markdown. Do NOT add any explanation or label. Output ONLY the one sentence.
+   359→- Keep the sentence between 20 and 80 words.
+   360→
+   361→Article title (Persian): ${title}
+   362→Article focus keyword (Persian): ${topic.keyword}
+   363→
+   364→End your sentence with exactly: ", ${styleHint}, high quality, no text, no watermark".
+   365→
+   366→Write the one-sentence English image prompt now:`,
+   367→        },
+   368→      ],
+   369→      thinking: { type: 'disabled' },
+   370→    });
+   371→    const raw = (completion?.choices?.[0]?.message?.content || '').trim();
+   372→    if (!raw) return null;
+   373→    const cleaned = raw
+   374→      .replace(/^```[a-z]*\n?/i, '')
+   375→      .replace(/\n?```$/i, '')
+   376→      .replace(/^["'«]|["'»]$/g, '')
+   377→      .replace(/^(prompt|image prompt|description|cover photo)\s*:\s*/i, '')
+   378→      .replace(/\s+/g, ' ')
+   379→      .trim();
+   380→    if (cleaned.length < 15 || cleaned.length > 600) return null;
+   381→    if (!/no text/i.test(cleaned)) {
+   382→      return `${cleaned}, ${styleHint}, high quality, no text, no watermark`;
+   383→    }
+   384→    return cleaned;
+   385→  } catch (err) {
+   386→    console.error('[blog-generator] image-prompt LLM call failed:', err);
+   387→    return null;
+   388→  }
+   389→}
+   390→
+   391→async function generateCoverImage(
+   392→  title: string,
+   393→  slug: string,
+   394→  topic: Topic
+   395→): Promise<string | null> {
+   396→  if (!zai) return null;
+   397→  let prompt = await generateImagePrompt(title, topic);
+   398→  if (prompt) {
+   399→    console.log(`[blog-generator] topic-specific image prompt: "${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}"`);
+   400→  } else {
+   401→    const scenes = COVER_SCENES[topic.category] || COVER_SCENES['travel-guide'];
+   402→    prompt = scenes[Math.floor(Math.random() * scenes.length)];
+   403→    console.log(`[blog-generator] LLM prompt failed; using fallback ${topic.category} scene`);
+   404→  }
+   405→  try {
+   406→    const response = await zai.images.generations.create({
+   407→      prompt,
+   408→      size: '1344x768',
+   409→    });
+   410→    const base64 = response?.data?.[0]?.base64;
+   411→    if (!base64) return null;
+   412→    if (!fs.existsSync(BLOG_IMG_DIR)) fs.mkdirSync(BLOG_IMG_DIR, { recursive: true });
+   413→    const filename = `${slug}.png`;
+   414→    const filepath = path.join(BLOG_IMG_DIR, filename);
+   415→    fs.writeFileSync(filepath, Buffer.from(base64, 'base64'));
+   416→    return `/images/blog/${filename}`;
+   417→  } catch (err) {
+   418→    console.error('[blog-generator] image generation failed:', err);
+   419→    return '/images/luxury-car.png';
+   420→  }
+   421→}
+   422→
+   423→function deriveKeyword(topic: string): string {
+   424→  const stopwords = new Set([
+   425→    'در', 'از', 'به', 'با', 'و', 'یا', 'را', 'است', 'نیست', 'برای', 'تا', 'که',
+   426→    'این', 'آن', 'هر', 'چه', 'چگونه', 'چرا', 'کی', 'کجا', 'کدام', 'هم', 'تاکنون',
+   427→    'یک', 'دو', 'سه', 'نه', 'بله', 'خیر', 'اما', 'اگر', 'چون', 'بنابراین', 'پس',
+   428→    'ترین', 'ها', 'های', 'ای', 'هایی', 'شود', 'شده', 'می', 'کرد', 'کند', 'باشد',
+   429→    'هستند', 'بود', 'بودن', 'ما', 'شما', 'او', 'آنها', 'خود', 'همین', 'مانند',
+   430→  ]);
+   431→  const words = topic
+   432→    .replace(/[«»"'!?.,:;()\[\]{}،؛؟]/g, ' ')
+   433→    .split(/\s+/)
+   434→    .filter((w) => w.length > 1 && !stopwords.has(w));
+   435→  const kw = words.slice(0, 5).join(' ').trim();
+   436→  return kw || topic.slice(0, 40);
+   437→}
+   438→
+   439→function classifyTopic(topic: string): TopicCategory {
+   440→  const t = topic.toLowerCase();
+   441→  if (/(گردشگري|گردشگری|جاذبه|ديدني|دیدنی|طبيعت|طبیعت|تاريخي|تاریخی|معبد|مسجد|كليسا|کلیسا|موزه|بازار|روستا|جزيره|جزیره|ساحل|دريا|دریا|كوه|کوه|جنگل|كوير|کویر|شمال|جنوب|كیش|کیش|قشم|مشهد|شيراز|شیراز|اصفهان|تبريز|تبریز|يزد|رشت|نوشهر|چالوس|كرمان|کرمان|ماسوله)/.test(t)) {
+   442→    return 'tourism';
+   443→  }
+   444→  if (/(مرسدس|بنز|بي ام و|بی ام و|bmw|آئودي|آئودی|audi|تويوتا|تویوتا|لندکروز|لند كروزر|هیونداي|هیوندای|سوناتا|خودروي لوكس|خودروی لوکس|خودرو لوكس|خودرو لوکس|ماشين لوكس|ماشین لوکس|صندلي|صندلی|چرمي|چرمی|تعليق|تعلیق|ايمني فعال|ایمنی فعال|ترمز|كيسه هوا|کیسه هوا|داخلي|داخلی|كابين|کابین|طراحی داخل|امكانات خودرو)/.test(t)) {
+   445→    return 'luxury-cars';
+   446→  }
+   447→  if (/(اقتصادي|اقتصادی|لوكس در برابر|لوکس در برابر|مقايده|مقایسه|پرايد|پراید|تيبا|سايپا|سایپا|ايران خودرو|ایران خودرو|هزينه پنهان|هزینه پنهان|ارزشش|ارزش خودرو|خستگي راننده|خستگی راننده|برتري|برتری)/.test(t)) {
+   448→    return 'luxury-vs-economy';
+   449→  }
+   450→  if (/(بسته بندي|بسته‌بندی|چمدان|خستگي|خستگی|استراحت در جاده|كودكان|کودکان|زمان سفر|ترافيك|ترافیک|نكات عملي|نکات عملی|راهنماي سفر|راهنمای سفر|آمادگي|آمادگی)/.test(t)) {
+   451→    return 'travel-tips';
+   452→  }
+   453→  if (/(امني|ایمنی|بي خطر|بی‌خطر|خطر|تصادف|كاكسه|کاسه|كمربند|کمربند| ايمني سفر|ایمنی سفر|شب|چك ليست|چک‌لیست|چک ليست)/.test(t)) {
+   454→    return 'safety';
+   455→  }
+   456→  if (/(سيوان|سرويس دربستي|سرویس دربستی|آژانس|هزينه تاكسيمون|هزینه تاکسی|قيمت|قیمت|رزرو|اپليكيشن|اپلیکیشن|برند سيوان|برند سوان)/.test(t)) {
+   457→    return 'sivan-brand';
+   458→  }
+   459→  return 'travel-guide';
+   460→}
+   461→
+   462→async function generateArticle(customTopic?: string): Promise<{ ok: boolean; title?: string; slug?: string; error?: string; custom?: boolean }> {
+   463→  if (!zai) {
+   464→    return { ok: false, error: 'ZAI SDK not initialized' };
+   465→  }
+   466→  if (isGenerating) {
+   467→    return { ok: false, error: 'Generation already in progress' };
+   468→  }
+   469→  isGenerating = true;
+   470→  lastError = null;
+   471→
+   472→  const isCustom = !!customTopic && customTopic.trim().length > 0;
+   473→  const topic: Topic = isCustom
+   474→    ? {
+   475→        title: customTopic!.trim().slice(0, 200),
+   476→        keyword: deriveKeyword(customTopic!),
+   477→        category: classifyTopic(customTopic!),
+   478→      }
+   479→    : pickTopic();
+   480→  console.log(`[blog-generator] generating article for topic: ${topic.title} (keyword: ${topic.keyword}, category: ${topic.category}${isCustom ? ', CUSTOM' : ''})`);
+   481→
+   482→  const systemPrompt =
+   483→    'تو یک نویسنده حرفه‌ای محتوای سفر، گردشگری و خودرو هستی که برای وب‌سایت «تاکسی ویژه سیوان» (یک سرویس تاکسی VIP بین شهری در ایران با ناوگان خودروهای لوکس) مطلب می‌نویسی. موضوعات مقاله‌های تو متنوع است: گردشگری و معرفی مناطق زیبای ایران، معرفی خودروهای لوکس و امکانات آن‌ها، مقایسه خودرو لوکس با خودرو اقتصادی، راهنمای سفر بین شهرهای ایران، نکات عملی سفر و گاهی مسائل ایمنی. لحن تو حرفه‌ای، صمیمی و قابل اعتماد است و با مخاطب ایرانی صحبت می‌کنی. مقاله‌هایی که می‌نویسی باکیفیت، مفید، خوانا و سئو-بهینه هستند. تو قوانین سئو (کلمه کلیدی، ساختار هدینگ، متا دیسکریپشن) را به‌خوبی می‌دانی. در هر مقاله، در صورت مرتبط بودن، می‌توانی به‌طور طبیعی و غیرتبلیغاتی به سرویس «تاکسی ویژه سیوان» اشاره کنی.';
+   484→
+   485→  const userPrompt = `یک مقاله کامل، باکیفیت و سئو-بهینه درباره موضوع زیر بنویس:
+   486→
+   487→موضوع: ${topic.title}
+   488→کلمه کلیدی هدف (SEO): ${topic.keyword}
+   489→
+   490→الزامات سئو:
+   491→- کلمه کلیدی هدف باید به‌طور طبیعی در عنوان، پاراگراف اول، چند جای بدنه و برچسب‌ها تکرار شود (بدون کیورد استافینگ).
+   492→- متا دیسکریپشن: ۱۵۰ تا ۱۶۰ کاراکتر، جذاب و شامل کلمه کلیدی.
+   493→- ساختار هدینگ‌ها: یک <h2> اصلی برای عنوان بخش اول، سپس <h2> برای سایر بخش‌ها و <h3> برای زیربخش‌ها.
+   494→
+   495→الزامات محتوایی:
+   496→- محتوا باید فارسی روان و خوانا باشد.
+   497→- بدنه مقاله باید ۷۰۰ تا ۱۰۰۰ کلمه باشد و شامل ۳ تا ۴ بخش با تگ <h2> و پاراگراف‌های کامل با تگ <p> باشد. هر پاراگراف حداقل ۳ جمله باشد.
+   498→- متن پاراگراف‌ها کامل و منسجم باشد تا وقتی justify می‌شود زیبا به نظر برسد (پاراگراف‌های طولانی و متعادل).
+   499→- از <h3> برای زیربخش‌ها استفاده کن.
+   500→- حداقل در یک جای مقاله یک فهرست با <ul> و <li> بیاور (مثلاً نکات کلیدی).
+   501→- حداقل یک بلوک نقل‌قول با <blockquote> برای تاکید بر یک نکته مهم استفاده کن.
+   502→- در پایان یک بخش «نتیجه‌گیری» کوتاه با <h2> اضافه کن.
+   503→- ۴ تا ۵ برچسب مرتبط معرفی کن (شامل کلمه کلیدی هدف).
+   504→
+   505→قالب خروجی (دقیقاً همین ترتیب، بدون علامت‌گذاری اضافه مثل markdown یا \`\`\`):
+   506→عنوان: <عنوان جذاب مقاله — حاوی کلمه کلیدی>
+   507→خلاصه: <خلاصه ۱-۲ جمله‌ای مقاله>
+   508→متا: <متا دیسکریپشن ۱۵۰-۱۶۰ کاراکتر با کلمه کلیدی>
+   509→<بدنه HTML مقاله اینجا — فقط تگ‌های h2, h3, p, ul, li, blockquote, strong>
+   510→برچسب‌ها: <tag1>, <tag2>, <tag3>, <tag4>
+   511→
+   512→مقاله را بنویس:`;
+   513→
+   514→  let raw = '';
+   515→  try {
+   516→    const completion = await zai.chat.completions.create({
+   517→      messages: [
+   518→        { role: 'assistant', content: systemPrompt },
+   519→        { role: 'user', content: userPrompt },
+   520→      ],
+   521→      thinking: { type: 'disabled' },
+   522→    });
+   523→    raw = completion?.choices?.[0]?.message?.content || '';
+   524→  } catch (err) {
+   525→    console.error('[blog-generator] LLM call failed, retrying once:', err);
+   526→    try {
+   527→      const retry = await zai.chat.completions.create({
+   528→        messages: [
+   529→          { role: 'assistant', content: systemPrompt },
+   530→          { role: 'user', content: userPrompt },
+   531→        ],
+   532→        thinking: { type: 'disabled' },
+   533→      });
+   534→      raw = retry?.choices?.[0]?.message?.content || '';
+   535→    } catch (err2) {
+   536→      console.error('[blog-generator] LLM retry failed:', err2);
+   537→      lastError = 'LLM generation failed';
+   538→      isGenerating = false;
+   539→      return { ok: false, error: 'LLM generation failed' };
+   540→    }
+   541→  }
+   542→
+   543→  const parsed = parseArticle(raw);
+   544→  if (!parsed || !parsed.title) {
+   545→    console.error('[blog-generator] failed to parse article from:\n', raw.slice(0, 500));
+   546→    lastError = 'Could not parse article';
+   547→    isGenerating = false;
+   548→    return { ok: false, error: 'Could not parse article' };
+   549→  }
+   550→
+   551→  const slug = makeSlug(parsed.title);
+   552→  const featuredImageUrl = await generateCoverImage(parsed.title, slug, topic);
+   553→
+   554→  try {
+   555→    const post = await db.blogPost.create({
+   556→      data: {
+   557→        title: parsed.title,
+   558→        slug,
+   559→        excerpt: parsed.excerpt,
+   560→        content: parsed.html,
+   561→        featuredImageUrl,
+   562→        status: 'published',
+   563→        publishedAt: new Date(),
+   564→        tags: JSON.stringify(parsed.tags),
+   565→        authorId: null,
+   566→        categoryId: null,
+   567→      },
+   568→    });
+   569→    lastGeneratedAt = new Date().toISOString();
+   570→    console.log(`[blog-generator] ✓ published${isCustom ? ' (CUSTOM)' : ''}: "${post.title}" (slug: ${post.slug}, image: ${featuredImageUrl || 'none'})`);
+   571→
+   572→    // Persist state for auto-generations only (not custom ones, so the cycle
+   573→    // tracking stays accurate for the scheduled rotation).
+   574→    if (!isCustom) {
+   575→      await saveState();
+   576→      // Schedule the next generation
+   577→      nextGenAt = new Date(Date.now() + GENERATION_INTERVAL_MS);
+   578→      console.log(`[blog-generator] next auto-generation scheduled in ${GENERATION_INTERVAL_MS / 3600000}h`);
+   579→    }
+   580→
+   581→    isGenerating = false;
+   582→    return { ok: true, title: post.title, slug: post.slug, custom: isCustom };
+   583→  } catch (err) {
+   584→    console.error('[blog-generator] DB save failed:', err);
+   585→    lastError = 'DB save failed';
+   586→    isGenerating = false;
+   587→    return { ok: false, error: 'DB save failed' };
+   588→  }
+   589→}
+   590→
+   591→/**
+   592→ * On startup, decide when the next generation should happen.
+   593→ *
+   594→ * Strategy:
+   595→ * 1. Restore persisted state (cycleIndex, categoryTopicIndex, lastAutoGenAt)
+   596→ * 2. If fewer than MIN_POSTS_FOR_IMMEDIATE_SKIP published posts exist → generate now (after 5s delay)
+   597→ * 3. If lastAutoGenAt is recorded in DB and it's been >= 6h since then → generate now
+   598→ * 4. If lastAutoGenAt is recorded but it's been < 6h → schedule the remaining time
+   599→ * 5. If no lastAutoGenAt but enough posts exist → start a fresh 6h interval
+   600→ */
+   601→async function scheduleGenerationOnStartup() {
+   602→  try {
+   603→    const count = await db.blogPost.count({ where: { status: 'published' } });
+   604→    console.log(`[blog-generator] current published posts: ${count}`);
+   605→
+   606→    if (count < MIN_POSTS_FOR_IMMEDIATE_SKIP) {
+   607→      console.log(`[blog-generator] only ${count} published posts; generating one now (5s delay)...`);
+   608→      setTimeout(() => generateArticle().catch((e) => console.error(e)), 5000);
+   609→      return;
+   610→    }
+   611→
+   612→    // Check persisted lastAutoGenAt from DB (restored into lastGeneratedAt)
+   613→    if (lastGeneratedAt) {
+   614→      const elapsed = Date.now() - new Date(lastGeneratedAt).getTime();
+   615→      console.log(`[blog-generator] last auto-gen was ${Math.round(elapsed / 60000)}min ago`);
+   616→      if (elapsed >= GENERATION_INTERVAL_MS) {
+   617→        // Overdue — generate now
+   618→        console.log('[blog-generator] overdue — generating now (5s delay)...');
+   619→        setTimeout(() => generateArticle().catch((e) => console.error(e)), 5000);
+   620→        return;
+   621→      }
+   622→      // Not yet due — wait the remaining time
+   623→      const remaining = GENERATION_INTERVAL_MS - elapsed;
+   624→      console.log(`[blog-generator] next generation in ${Math.round(remaining / 60000)}min (remaining from last auto-gen)`);
+   625→      nextGenAt = new Date(Date.now() + remaining);
+   626→      setTimeout(() => {
+   627→        generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
+   628→        // After this first (delayed) generation, set up the recurring interval
+   629→        setInterval(() => {
+   630→          generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
+   631→        }, GENERATION_INTERVAL_MS);
+   632→      }, remaining);
+   633→      return;
+   634→    }
+   635→
+   636→    // No lastAutoGenAt recorded but we have enough posts (edge case: posts
+   637→    // were seeded or created manually, or DB state was lost). Start fresh.
+   638→    console.log(`[blog-generator] no previous auto-gen recorded; starting fresh ${GENERATION_INTERVAL_MS / 3600000}h interval`);
+   639→    nextGenAt = new Date(Date.now() + GENERATION_INTERVAL_MS);
+   640→    setInterval(() => {
+   641→      generateArticle().catch((e) => console.error('[blog-generator] scheduled error:', e));
+   642→    }, GENERATION_INTERVAL_MS);
+   643→  } catch (err) {
+   644→    console.error('[blog-generator] startup scheduling failed:', err);
+   645→    // Fallback: just start a fresh interval
+   646→    setInterval(() => {
+   647→      generateArticle().catch((e) => console.error('[blog-generator] fallback scheduled error:', e));
+   648→    }, GENERATION_INTERVAL_MS);
+   649→  }
+   650→}
+   651→
+   652→async function getTotalPosts(): Promise<number> {
+   653→  try {
+   654→    return await db.blogPost.count({ where: { status: 'published' } });
+   655→  } catch {
+   656→    return 0;
+   657→  }
+   658→}
+   659→
+   660→function getNextGenInMs(): number {
+   661→  if (!nextGenAt) return GENERATION_INTERVAL_MS;
+   662→  const remaining = nextGenAt.getTime() - Date.now();
+   663→  return remaining > 0 ? remaining : 0;
+   664→}
+   665→
+   666→// ---- HTTP server (Bun.serve) ----
+   667→const server = Bun.serve({
+   668→  port: PORT,
+   669→  async fetch(req) {
+   670→    const url = new URL(req.url);
+   671→
+   672→    if (req.method === 'OPTIONS') {
+   673→      return new Response(null, {
+   674→        status: 204,
+   675→        headers: {
+   676→          'Access-Control-Allow-Origin': '*',
+   677→          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+   678→          'Access-Control-Allow-Headers': 'Content-Type',
+   679→        },
+   680→      });
+   681→    }
+   682→
+   683→    const corsHeaders = {
+   684→      'Access-Control-Allow-Origin': '*',
+   685→      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+   686→      'Access-Control-Allow-Headers': 'Content-Type',
+   687→    };
+   688→
+   689→    if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/status')) {
+   690→      const totalPosts = await getTotalPosts();
+   691→      return Response.json(
+   692→        {
+   693→          ok: true,
+   694→          service: 'blog-generator',
+   695→          port: PORT,
+   696→          running: isGenerating,
+   697→          lastGeneratedAt,
+   698→          lastError,
+   699→          totalPosts,
+   700→          nextGenInMs: getNextGenInMs(),
+   701→        },
+   702→        { headers: corsHeaders }
+   703→      );
+   704→    }
+   705→    if (req.method === 'POST' && url.pathname === '/generate') {
+   706→      if (isGenerating) {
+   707→        return Response.json({ started: false, message: 'Generation already in progress' }, { headers: corsHeaders });
+   708→      }
+   709→      generateArticle().catch((e) => console.error('[blog-generator] on-demand error:', e));
+   710→      return Response.json({ started: true }, { headers: corsHeaders });
+   711→    }
+   712→    if (req.method === 'POST' && url.pathname === '/generate-custom') {
+   713→      if (isGenerating) {
+   714→        return Response.json({ started: false, message: 'تولید دیگری در حال انجام است؛ لطفاً صبر کنید' }, { headers: corsHeaders });
+   715→      }
+   716→      let body: any = null;
+   717→      try {
+   718→        body = await req.json();
+   719→      } catch {
+   720→        return Response.json({ started: false, message: 'بدنه درخواست نامعتبر است' }, { status: 400, headers: corsHeaders });
+   721→      }
+   722→      const topic = typeof body?.topic === 'string' ? body.topic.trim() : '';
+   723→      if (!topic || topic.length < 3) {
+   724→        return Response.json({ started: false, message: 'موضوع مقاله باید حداقل ۳ کاراکتر باشد' }, { status: 400, headers: corsHeaders });
+   725→      }
+   726→      if (topic.length > 200) {
+   727→        return Response.json({ started: false, message: 'موضوع مقاله نباید بیشتر از ۲۰۰ کاراکتر باشد' }, { status: 400, headers: corsHeaders });
+   728→      }
+   729→      console.log(`[blog-generator] admin requested custom topic: "${topic}"`);
+   730→      generateArticle(topic).catch((e) => console.error('[blog-generator] custom on-demand error:', e));
+   731→      return Response.json({ started: true, custom: true, topic }, { headers: corsHeaders });
+   732→    }
+   733→    return new Response('Not Found', { status: 404, headers: corsHeaders });
+   734→  },
+   735→});
+   736→
+   737→console.log(`[blog-generator] listening on http://localhost:${PORT}`);
+   738→
+   739→// ---- Bootstrap ----
+   740→(async () => {
+   741→  try {
+   742→    zai = await ZAI.create();
+   743→    console.log('[blog-generator] ZAI SDK initialized');
+   744→  } catch (err) {
+   745→    console.error('[blog-generator] ZAI SDK init failed:', err);
+   746→  }
+   747→
+   748→  // 1. Restore persisted state from DB
+   749→  await restoreState();
+   750→
+   751→  // 2. Schedule generation based on restored state
+   752→  await scheduleGenerationOnStartup();
+   753→})();
+   754→
+   755→process.on('SIGINT', async () => {
+   756→  console.log('[blog-generator] shutting down...');
+   757→  await db.$disconnect();
+   758→  server.stop();
+   759→  process.exit(0);
+   760→});
+   761→process.on('SIGTERM', async () => {
+   762→  await db.$disconnect();
+   763→  server.stop();
+   764→  process.exit(0);
+   765→});
+   766→
