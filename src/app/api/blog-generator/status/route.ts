@@ -1,35 +1,22 @@
 import { NextResponse } from 'next/server';
+import { getStatus } from '@/lib/blog-scheduler';
+import { db } from '@/lib/db';
 
 /**
- * Proxy route for the blog-generator mini-service /status endpoint.
+ * GET /api/blog-generator/status
  *
- * In the cloud-sandbox preview (through the *.space-z.ai gateway), the admin
- * frontend could call /status?XTransformPort=3005 directly. But for local dev
- * (localhost:3000) and for robustness, we proxy through this Next.js route so
- * the same frontend code works everywhere.
- *
- * Route: GET /api/blog-generator/status
- * Forwards to: http://localhost:3005/status
+ * Returns the status of the integrated blog scheduler.
+ * No longer depends on the separate mini-service (port 3005).
  */
 export async function GET() {
   try {
-    const res = await fetch('http://localhost:3005/status', {
-      cache: 'no-store',
-    });
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    const totalPosts = await db.blogPost.count({ where: { status: 'published' } });
+    const status = getStatus();
+    return NextResponse.json({ ...status, totalPosts });
   } catch (err) {
     return NextResponse.json(
-      {
-        ok: false,
-        running: false,
-        lastGeneratedAt: null,
-        lastError: 'سرویس تولید مقاله در دسترس نیست',
-        totalPosts: 0,
-        service: 'blog-generator',
-        message: err instanceof Error ? err.message : 'connection failed',
-      },
-      { status: 503 }
+      { ok: false, running: false, lastGeneratedAt: null, lastError: err instanceof Error ? err.message : 'unknown', totalPosts: 0 },
+      { status: 500 }
     );
   }
 }

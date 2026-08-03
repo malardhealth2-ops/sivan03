@@ -1777,3 +1777,24 @@ Stage Summary:
 - `restoreAdmin()` now only restores `isLoggedIn: true` + `adminUsername`, NOT `isAdminOpen`
 - User stays on whatever page they're on after refresh; admin panel does not auto-open
 - User can open admin panel via the Navbar button, and it will show them as logged in
+
+---
+Task ID: blog-scheduler-integrated
+Agent: main
+Task: Fix blog article generation stopping after deploy — integrate scheduler into Next.js
+
+Work Log:
+- Root cause: blog-generator was a separate mini-service on port 3005 that didn't auto-start on deploy
+- Created `src/lib/blog-scheduler.ts` — integrated scheduler with same logic as mini-service (LLM + real image search + DB persistence)
+- Used async `execFile` instead of blocking `execSync` so the Next.js server is never blocked
+- Created `src/instrumentation.ts` — Next.js server startup hook that initializes the scheduler automatically
+- Updated 3 API routes (`/api/blog-generator/status`, `/generate`, `/generate-custom`) to use the integrated scheduler directly instead of proxying to port 3005
+- No longer depends on a separate mini-service process
+- Verified: server starts → scheduler auto-initializes → status API returns correct data → next generation scheduled
+
+Stage Summary:
+- Blog generation now runs INSIDE the Next.js process
+- `instrumentation.ts` ensures scheduler starts on every server boot (deploy/restart)
+- State persists in DB — resumes where it left off after restart
+- Mini-service on port 3005 is no longer required for auto-generation
+- Admin panel still works via the same API routes

@@ -1,28 +1,25 @@
 import { NextResponse } from 'next/server';
+import { triggerGenerate, getStatus } from '@/lib/blog-scheduler';
 
 /**
- * Proxy route for the blog-generator mini-service /generate endpoint.
+ * POST /api/blog-generator/generate
  *
- * Triggers immediate AI article generation (fire-and-forget on the service
- * side). The admin UI then polls /api/blog-generator/status to see progress.
- *
- * Route: POST /api/blog-generator/generate
- * Forwards to: http://localhost:3005/generate
+ * Triggers immediate article generation using the integrated scheduler.
+ * No longer proxies to port 3005.
  */
 export async function POST() {
   try {
-    const res = await fetch('http://localhost:3005/generate', {
-      method: 'POST',
-    });
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    const status = getStatus();
+    if (status.running) {
+      return NextResponse.json({ started: false, message: 'تولید دیگری در حال انجام است' });
+    }
+    // Fire-and-forget: start generation but return immediately
+    triggerGenerate().catch(e => console.error('[api/generate] error:', e));
+    return NextResponse.json({ started: true });
   } catch (err) {
     return NextResponse.json(
-      {
-        started: false,
-        message: err instanceof Error ? err.message : 'سرویس تولید مقاله در دسترس نیست',
-      },
-      { status: 503 }
+      { started: false, message: err instanceof Error ? err.message : 'خطای ناشناخته' },
+      { status: 500 }
     );
   }
 }
