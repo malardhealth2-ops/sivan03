@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -153,8 +153,8 @@ model Review {
   createdAt   DateTime @default(now())
 
   trip      Trip      @relation(fields: [tripId], references: [id])
-  passenger Passenger? @relation(fields: [reviewerId], references: [id], map: "Review_passenger_reviewerId_fkey")
-  driver    Driver?   @relation(fields: [reviewerId], references: [id], map: "Review_driver_reviewerId_fkey")
+  passenger Passenger? @relation(fields: [reviewerId], references: [id])
+  driver    Driver?   @relation(fields: [reviewerId], references: [id])
 }
 
 model Transaction {
